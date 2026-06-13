@@ -17,13 +17,13 @@ RANLIB= ranlib
 RM= rm -f
 UNAME= uname
 
-# wasmtime: 支持 WASM GC 提案的运行时（v45.0.0 预编译库，用于桌面对 Windows MinGW）
-WASMTIME_DIR = wasmtime/wasmtime-v45.0.0-x86_64-mingw-c-api
+# wasmtime: 支持 WASM GC 提案的运行时（v45.0.1 预编译库，用于桌面对 Windows MinGW）
+WASMTIME_DIR = wasmtime/wasmtime-v45.0.1-x86_64-mingw-c-api
 WASMTIME_INC = -I$(WASMTIME_DIR)/include
 WASMTIME_LIB = $(WASMTIME_DIR)/lib/libwasmtime.a -lbcrypt -luserenv -lole32 -lntdll
 WASMTIME_DLL = $(WASMTIME_DIR)/lib/wasmtime.dll
 # wasmtime Android 预编译库（aarch64）
-WASMTIME_ANDROID_DIR = wasmtime/wasmtime-v45.0.0-aarch64-android-c-api
+WASMTIME_ANDROID_DIR = wasmtime/wasmtime-v45.0.1-aarch64-android-c-api
 
 SYSCFLAGS= -DLUA_DL_DLOPEN -DLUA_COMPAT_MATHLIB -DLUA_COMPAT_MAXN -DLUA_COMPAT_MODULE
 override CFLAGS+= $(SYSCFLAGS) $(MYCFLAGS)
@@ -81,13 +81,13 @@ LBCDUMP_O=	$(BUILDDIR)/lbcdump.o
 LSP_SRV_T=	lxclua-lsp
 LSP_SRV_O=	$(addprefix $(BUILDDIR)/,lspsrv_main.o lspsrv_json.o lspsrv_proto.o lspsrv_doc.o lspsrv_lexer.o lspsrv_kwdb.o lspsrv_complete.o lspsrv_hover.o lspsrv_features.o lspsrv_util.o)
 
-ALL_O= $(BASE_O) $(LUA_O) $(LUAC_O) $(LBCDUMP_O) $(LSP_SRV_O)
+ALL_O= $(BASE_O) $(LUA_O) $(LUAC_O) $(LBCDUMP_O)
 QJS_T= qjs
 QJSC_T= qjsc
 QJSC_O= quickjs/qjsc.o
 QJS_EXE_O= quickjs/qjs.o
 
-ALL_T= $(LUA_A) $(LUA_T) $(LUAC_T) $(LBCDUMP_T) $(LSP_SRV_T)
+ALL_T= $(LUA_A) $(LUA_T) $(LUAC_T) $(LBCDUMP_T)
 
 ALL_A= $(LUA_A)
 
@@ -127,39 +127,43 @@ $(LBCDUMP_T): $(LBCDUMP_O)
 	$(CC) -o $@ $(LDFLAGS) $(LBCDUMP_O)
 
 # ---- LSP Server (lxclua-lsp) ----
+# LSP 服务器不需要 wasmtime 运行时，仅链接基础数学库
+# 禁用 FORTIFY_SOURCE 避免 GCC 15 的 _chk 符号链接失败
+LSP_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE
+LSP_LIBS = -lm
 $(LSP_SRV_T): $(LSP_SRV_O)
-	$(CC) -o $@ $(LDFLAGS) $(LSP_SRV_O) $(LIBS)
+	$(CC) -o $@ $(LDFLAGS) $(LSP_SRV_O) $(LSP_LIBS)
 
 # LSP object compilation rules (src/lspsrv/*.c)
 $(BUILDDIR)/lspsrv_main.o: src/lspsrv/lspsrv_main.c src/lspsrv/lspsrv.h | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
+	$(CC) $(LSP_CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
 
 $(BUILDDIR)/lspsrv_json.o: src/lspsrv/lspsrv_json.c src/lspsrv/lspsrv.h | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
+	$(CC) $(LSP_CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
 
 $(BUILDDIR)/lspsrv_proto.o: src/lspsrv/lspsrv_proto.c src/lspsrv/lspsrv.h | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
+	$(CC) $(LSP_CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
 
 $(BUILDDIR)/lspsrv_doc.o: src/lspsrv/lspsrv_doc.c src/lspsrv/lspsrv.h | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
+	$(CC) $(LSP_CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
 
 $(BUILDDIR)/lspsrv_lexer.o: src/lspsrv/lspsrv_lexer.c src/lspsrv/lspsrv.h | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
+	$(CC) $(LSP_CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
 
 $(BUILDDIR)/lspsrv_kwdb.o: src/lspsrv/lspsrv_kwdb.c src/lspsrv/lspsrv.h | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
+	$(CC) $(LSP_CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
 
 $(BUILDDIR)/lspsrv_complete.o: src/lspsrv/lspsrv_complete.c src/lspsrv/lspsrv.h | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
+	$(CC) $(LSP_CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
 
 $(BUILDDIR)/lspsrv_hover.o: src/lspsrv/lspsrv_hover.c src/lspsrv/lspsrv.h | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
+	$(CC) $(LSP_CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
 
 $(BUILDDIR)/lspsrv_features.o: src/lspsrv/lspsrv_features.c src/lspsrv/lspsrv.h | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
+	$(CC) $(LSP_CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
 
 $(BUILDDIR)/lspsrv_util.o: src/lspsrv/lspsrv_util.c src/lspsrv/lspsrv.h | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
+	$(CC) $(LSP_CFLAGS) $(CMCFLAGS) -Isrc/lspsrv -c $< -o $@
 
 # --- lua2wasm: Lua-to-WASM 编译器 ---
 # 核心模块已编译进 $(LUA_A)，可在 Lua 中通过 require("lua2wasm") 使用
@@ -274,11 +278,17 @@ ios:
 	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_IOS"
 
 Linux linux:
-	$(MAKE) $(ALL) CC="gcc -std=gnu11" CFLAGS="-O2 -fPIC -DNDEBUG -D_DEFAULT_SOURCE" SYSCFLAGS="-DLUA_USE_LINUX" SYSLIBS="-Wl,-E -ldl -lm -lpthread" SYSLDFLAGS="-s"
+	$(MAKE) $(ALL) CC="gcc -std=gnu11" CFLAGS="-O2 -fPIC -DNDEBUG -D_DEFAULT_SOURCE" SYSCFLAGS="-DLUA_USE_LINUX" SYSLIBS="-Wl,-E -ldl -lm -lpthread -lssl -lcrypto" SYSLDFLAGS="-s" \
+	"WASMTIME_DIR=wasmtime/wasmtime-v45.0.1-x86_64-linux-c-api" \
+	"WASMTIME_LIB=wasmtime/wasmtime-v45.0.1-x86_64-linux-c-api/lib/libwasmtime.a" \
+	"WASMTIME_DLL=wasmtime/wasmtime-v45.0.1-x86_64-linux-c-api/lib/libwasmtime.so"
 	strip --strip-unneeded $(LUA_T) $(LUAC_T) || true
 
 termux:
-	$(MAKE) $(ALL) CC="clang -std=c23" CFLAGS="-O2 -fPIC -DNDEBUG" SYSCFLAGS="-DLUA_USE_LINUX -DLUA_USE_DLOPEN" SYSLIBS="-ldl -lm" SYSLDFLAGS="-Wl,--build-id -fuse-ld=lld"
+	$(MAKE) $(ALL) CC="clang -std=c23" CFLAGS="-O2 -fPIC -DNDEBUG" SYSCFLAGS="-DLUA_USE_LINUX -DLUA_USE_DLOPEN" SYSLIBS="-ldl -lm -lssl -lcrypto" SYSLDFLAGS="-Wl,--build-id -fuse-ld=lld" \
+	"WASMTIME_DIR=wasmtime/wasmtime-v45.0.1-aarch64-android-c-api" \
+	"WASMTIME_LIB=wasmtime/wasmtime-v45.0.1-aarch64-android-c-api/lib/libwasmtime.a" \
+	"WASMTIME_DLL=wasmtime/wasmtime-v45.0.1-aarch64-android-c-api/lib/libwasmtime.so"
 	strip --strip-unneeded $(LUA_T) $(LUAC_T) || true
 
 Darwin macos macosx:
@@ -299,6 +309,11 @@ mingw:
 
 lsp:
 	TMPDIR=. TMP=. TEMP=. $(MAKE) "LSP_SRV_T=lxclua-lsp.exe" "SYSLDFLAGS=-s" "SYSLIBS=" lxclua-lsp.exe
+
+lsp-linux:
+	$(MAKE) "LSP_SRV_T=lxclua-lsp" "SYSLDFLAGS=-s" "SYSLIBS=" \
+	"CC=gcc -std=gnu11" "CFLAGS=-O2 -fPIC -DNDEBUG -D_DEFAULT_SOURCE" lxclua-lsp
+	strip --strip-unneeded lxclua-lsp || true
 
 mingw-static:
 	TMPDIR=. TMP=. TEMP=. $(MAKE) "LUA_A=liblua.a" "LUA_T=lxclua.exe" \
@@ -330,7 +345,7 @@ EMRANLIB= $(EMSDK_PATH)/emranlib.bat
 
 wasm:
 	$(MAKE) clean
-	$(MAKE) $(ALL) CC="$(EMCC) -std=c23" \
+	PYTHONUTF8=1 $(MAKE) $(ALL) CC="$(EMCC) -std=c23" \
 	"CFLAGS=-O3 -DNDEBUG -fno-exceptions -DLUA_32BITS=0" \
 	"SYSCFLAGS=-DLUA_USE_LONGJMP -DLUA_COMPAT_MATHLIB -DLUA_COMPAT_MAXN -DLUA_NOJIT" \
 	"SYSLIBS=" \
@@ -350,7 +365,7 @@ wasm:
 # WASM 最小化版本（无文件系统，更小体积）
 wasm-minimal:
 	$(MAKE) clean
-	$(MAKE) $(ALL) CC="$(EMCC) -std=c23" \
+	PYTHONUTF8=1 $(MAKE) $(ALL) CC="$(EMCC) -std=c23" \
 	"CFLAGS=-Os -DNDEBUG -fno-exceptions -DLUA_32BITS=0" \
 	"SYSCFLAGS=-DLUA_USE_LONGJMP -DLUA_COMPAT_MATHLIB -DLUA_COMPAT_MAXN -DLUA_NOJIT" \
 	"SYSLIBS=" \
@@ -362,6 +377,21 @@ wasm-minimal:
 	"CORE_O=$(CORE_O_NOJIT)" \
 	"LIB_O_WASM=$(BUILDDIR)/lwasm3.o $(WASM3_O)" \
 	"LDFLAGS=-sWASM=1 -sEXPORTED_RUNTIME_METHODS=ccall,cwrap -sMODULARIZE=1 -sEXPORT_NAME=LuaModule -sALLOW_MEMORY_GROWTH=1 -sFILESYSTEM=0 -sINVOKE_RUN=0"
+
+# WASM LSP Server (lxclua-lsp.js)
+# 用法: make wasmlsp
+wasmlsp:
+	PYTHONUTF8=1 $(MAKE) $(LSP_SRV_O) CC="$(EMCC) -std=c23" \
+	"CFLAGS=-O3 -DNDEBUG -fno-exceptions" \
+	"CMCFLAGS=-Isrc/core -Isrc/stdlib -Isrc/vm -Isrc/compiler -Isrc/utils -Isrc/wasm -Isrc/bin -Iquickjs -Isrc/lua2wasm" \
+	"SYSCFLAGS=" \
+	"SYSLIBS="
+	$(EMCC) -std=c23 -o lxclua-lsp.js $(LSP_SRV_O) -lm \
+		-sWASM=1 -sSINGLE_FILE=1 \
+		-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,callMain,FS \
+		-sMODULARIZE=1 -sEXPORT_NAME=LuaLSPModule \
+		-sALLOW_MEMORY_GROWTH=1 -sFILESYSTEM=1 \
+		-sINVOKE_RUN=0 -sSTACK_SIZE=5MB -sINITIAL_MEMORY=32MB
 
 # 将 C 文件编译为 WASM 模块（供 wasm3 使用）
 # 用法: 
@@ -531,7 +561,7 @@ LUA_WASM_EXPORTS=\
 	 "_free"]
 
 # Targets that do not create files (not all makes understand .PHONY).
-.PHONY: all $(PLATS) help test clean default o a depend echo wasm wasm-minimal wasm-c wasm-c-all wasm-c-wasi lxclua-wasm release mingw-release linux-release macos-release wasm-release termux-release lsp
+.PHONY: all $(PLATS) help test clean default o a depend echo wasm wasm-minimal wasmlsp wasm-c wasm-c-all wasm-c-wasi lxclua-wasm release mingw-release linux-release macos-release wasm-release termux-release lsp lsp-linux
 
 # 发行版打包配置
 RELEASE_NAME= lxclua
