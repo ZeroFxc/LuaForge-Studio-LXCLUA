@@ -52,7 +52,7 @@ class LuaTextTokenizer {
                 "let", "take", "match", "with", "export", "keyword", "operator",
                 "abstract", "class", "extends", "final", "implements", "interface",
                 "new", "super", "private", "protected", "public", "static",
-                "async", "await", "struct", "superstruct", "concept", "namespace",
+                "async", "await", "struct", "superstruct", "concept", "namespace","trait","use",
                 "using", "requires",
                 "bool", "char", "double", "float", "int", "long", "void"
             )
@@ -76,7 +76,7 @@ class LuaTextTokenizer {
                 Tokens.IMPLEMENTS, Tokens.INTERFACE, Tokens.NEW, Tokens.SUPER,
                 Tokens.PRIVATE, Tokens.PROTECTED, Tokens.PUBLIC, Tokens.STATIC,
                 Tokens.ASYNC, Tokens.AWAIT, Tokens.STRUCT, Tokens.SUPERSTRUCT,
-                Tokens.CONCEPT, Tokens.NAMESPACE, Tokens.USING, Tokens.REQUIRES,
+                Tokens.CONCEPT, Tokens.NAMESPACE,Tokens.TRAIT,Tokens.USE, Tokens.USING, Tokens.REQUIRES,
                 Tokens.BOOL, Tokens.CHAR, Tokens.DOUBLE, Tokens.FLOAT,
                 Tokens.TYPE_INT, Tokens.LONG, Tokens.VOID
             )

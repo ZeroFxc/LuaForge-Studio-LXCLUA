@@ -148,7 +148,10 @@ enum class Tokens {
     SUPERSTRUCT,      // superstruct
     CONCEPT,          // concept
     NAMESPACE,        // namespace
+    TRAIT,
+    USE,
     USING,            // using
+
     REQUIRES,         // requires
 
     // 类型关键字

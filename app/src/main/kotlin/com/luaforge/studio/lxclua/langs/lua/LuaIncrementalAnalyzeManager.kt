@@ -580,7 +580,7 @@ Tokens.HEX_COLOR -> {
                 Tokens.IMPLEMENTS, Tokens.INTERFACE, Tokens.NEW, Tokens.SUPER,
                 Tokens.PRIVATE, Tokens.PROTECTED, Tokens.PUBLIC, Tokens.STATIC,
                 Tokens.ASYNC, Tokens.AWAIT, Tokens.STRUCT, Tokens.SUPERSTRUCT,
-                Tokens.CONCEPT, Tokens.NAMESPACE, Tokens.USING, Tokens.REQUIRES,
+                Tokens.CONCEPT, Tokens.NAMESPACE,Tokens.TRAIT,Tokens.USE, Tokens.USING, Tokens.REQUIRES,
                 Tokens.BOOL, Tokens.CHAR, Tokens.DOUBLE, Tokens.FLOAT,
                 Tokens.TYPE_INT, Tokens.LONG, Tokens.VOID,
                 Tokens.PLUGIN_KEYWORD -> {
