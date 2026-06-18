@@ -572,7 +572,7 @@ Tokens.HEX_COLOR -> {
                 Tokens.UNTIL, Tokens.WHILE, Tokens.DO, Tokens.FUNCTION, Tokens.GOTO,
                 Tokens.NIL, Tokens.NOT, Tokens.IMPORT, Tokens.REQUIRE, Tokens.SWITCH,
                 Tokens.LAMBDA, Tokens.CONTINUE, Tokens.DEFAULT, Tokens.NEWCLASS,
-                Tokens.CASE, Tokens.TRY, Tokens.FINALLY, Tokens.CATCH, Tokens.DEFER, Tokens.WHEN,
+                Tokens.CASE, Tokens.TRY, Tokens.FINALLY, Tokens.CATCH, Tokens.DEFER, Tokens.WHEN, Tokens.GUARD, Tokens.DELETE,
                 Tokens.ASM, Tokens.COMMAND, Tokens.CONST, Tokens.ENUM, Tokens.GLOBAL,
                 Tokens.AS, Tokens.IS, Tokens.INSTANCEOF, Tokens.LET, Tokens.TAKE,
                 Tokens.MATCH, Tokens.WITH, Tokens.EXPORT, Tokens.KEYWORD_KW, Tokens.OPERATOR_KW,

@@ -128,8 +128,11 @@ static const char *const opnames[] = {
   "GETCMDS",
   "GETOPS",
   "ASYNCWRAP",
+  "AWAIT",
   "GENERICWRAP",
   "CHECKTYPE",
+  "MERGE",
+  "REGEX",
   "EXTRAARG",
   NULL
 };

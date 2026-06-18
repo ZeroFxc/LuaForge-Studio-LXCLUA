@@ -45,6 +45,8 @@ import static com.androlua.LuaTokenTypes.GT;
 import static com.androlua.LuaTokenTypes.IF;
 import static com.androlua.LuaTokenTypes.IN;
 import static com.androlua.LuaTokenTypes.LAMBDA;
+import static com.androlua.LuaTokenTypes.GUARD;
+import static com.androlua.LuaTokenTypes.DELETE;
 import static com.androlua.LuaTokenTypes.LBRACK;
 import static com.androlua.LuaTokenTypes.LCURLY;
 import static com.androlua.LuaTokenTypes.LE;
@@ -1204,6 +1206,10 @@ public class LuaLexer {
                             return CATCH;
                         } else if ("finally".equals(text)) {
                             return FINALLY;
+                        } else if ("guard".equals(text)) {
+                            return GUARD;
+                        } else if ("delete".equals(text)) {
+                            return DELETE;
                         } else {
                             return NAME;
                         }

@@ -204,6 +204,7 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   "continue"                { return CONTINUE; }
   "default"                 { return DEFAULT; }
   "defer"                   { return DEFER; }
+  "delete"                  { return DELETE; }
   "do"                      { return DO; }
   "else"                    { return ELSE; }
   "elseif"                  { return ELSEIF; }
@@ -215,6 +216,7 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   "function"                { return FUNCTION; }
   "global"                  { return GLOBAL; }
   "goto"                    { return GOTO; }
+  "guard"                   { return GUARD; }
   "if"                      { return IF; }
   "in"                      { return IN; }
   "as"                      { return AS; }

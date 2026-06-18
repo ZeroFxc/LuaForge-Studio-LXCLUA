@@ -65,6 +65,7 @@ enum class Tokens {
     CONTINUE,
     CASE,
     DEFAULT,
+    DELETE,
     TRY,
     FINALLY,
     CATCH,
@@ -109,6 +110,7 @@ enum class Tokens {
     CLASS_NAME,
     DEFER,
     WHEN,
+    GUARD,
     HEX_COLOR, // 新增：十六进制颜色
 
     // 通用关键字

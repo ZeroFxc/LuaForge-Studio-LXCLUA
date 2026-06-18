@@ -126,6 +126,8 @@ public class Lexer {
             case LAMBDA:
             case DEFER:
             case WHEN:
+            case GUARD:
+            case DELETE:
                 return true;
             default:
                 return false;
@@ -365,6 +367,8 @@ public class Lexer {
                         case GOTO:
                         case LAMBDA:
                         case DEFER:
+                        case GUARD:
+                        case DELETE:
                             //case CATCH:
                             //case FINALLY:
                             //关键字
