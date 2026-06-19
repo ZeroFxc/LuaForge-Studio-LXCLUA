@@ -2077,6 +2077,11 @@ static void field (LexState *ls, ConsControl *cc) {
       break;
     }
     case TK_FUNCTION: {  /* function NAME (params) body end 简写，自动添加 self */
+      /* 如果下一个 token 是 '('，说明是匿名函数表达式，走 default 分支 */
+      if (luaX_lookahead(ls) == '(') {
+        listfield(ls, cc);
+        break;
+      }
       int reg = ls->fs->freereg;
       expdesc tab, key, val;
       int fline = ls->linenumber;
