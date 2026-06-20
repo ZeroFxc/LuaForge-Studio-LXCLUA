@@ -9,6 +9,7 @@ import com.luaforge.studio.lxclua.ai.ChatRequest
 import com.luaforge.studio.lxclua.ai.ChatResponse
 import com.luaforge.studio.lxclua.plugin.PluginManager
 import com.luajava.LuaFunction
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -98,6 +99,9 @@ class PluginAI {
                     response.usage?.totalTokens ?: 0,
                     response.reasoningContent ?: ""
                 )
+            } catch (e: CancellationException) {
+                android.util.Log.i("PluginAI", "[异步] 已取消 | jobId: $jobId")
+                safeCall(callback, false, "", "已取消", "", 0, "")
             } catch (e: Exception) {
                 android.util.Log.e("PluginAI", "[异步] 异常 | jobId: $jobId | ${e.message}", e)
                 safeCall(callback, false, "", e.message ?: "未知错误", "", 0, "")
@@ -134,6 +138,9 @@ class PluginAI {
                         { reasoning -> safeCall(onReasoning, reasoning) }
                     } else null
                 )
+            } catch (e: CancellationException) {
+                android.util.Log.i("PluginAI", "[流式] 已取消 | jobId: $jobId")
+                safeCall(onDone, false, "", "已取消")
             } catch (e: Exception) {
                 android.util.Log.e("PluginAI", "[流式] 异常 | jobId: $jobId | ${e.message}", e)
                 safeCall(onDone, false, "", e.message ?: "流式请求失败")
@@ -191,7 +198,9 @@ class PluginAI {
                         android.util.Log.i("PluginAI", "[流式→编辑器] 完成 | jobId: $jobId | success: ${response.success} | 内容长度: ${response.content?.length ?: 0} | chunks: $chunkCount")
                         safeCall(onDone, response.success, response.content ?: "", response.error ?: "")
                     }
-                )
+                ) catch (e: CancellationException) {
+                android.util.Log.i("PluginAI", "[流式→编辑器] 已取消 | jobId: $jobId")
+                safeCall(onDone, false, "", "已取消")
             } catch (e: Exception) {
                 android.util.Log.e("PluginAI", "[流式→编辑器] 异常 | jobId: $jobId | ${e.message}", e)
                 safeCall(onDone, false, "", e.message ?: "流式请求失败")
@@ -231,6 +240,9 @@ class PluginAI {
                     }
                 }
                 safeCall(onDone, response.success, response.content ?: "", response.error ?: "")
+            } catch (e: CancellationException) {
+                android.util.Log.i("PluginAI", "[一次性→编辑器] 已取消 | jobId: $jobId")
+                safeCall(onDone, false, "", "已取消")
             } catch (e: Exception) {
                 android.util.Log.e("PluginAI", "[一次性→编辑器] 异常 | jobId: $jobId | ${e.message}", e)
                 safeCall(onDone, false, "", e.message ?: "未知错误")

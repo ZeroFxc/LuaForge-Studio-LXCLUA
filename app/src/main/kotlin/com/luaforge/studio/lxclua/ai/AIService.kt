@@ -3,6 +3,8 @@ package com.luaforge.studio.lxclua.ai
 import com.luaforge.studio.lxclua.mcp.MCPManager
 import com.luaforge.studio.lxclua.mcp.MCPToolCallRequest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Connection
@@ -181,6 +183,9 @@ class AIServiceImpl(private val config: AIConfigData) : IAIService {
                     result.error?.contains("DNS", ignoreCase = true) != true) {
                     break  // 非网络错误，不重试
                 }
+            } catch (e: CancellationException) {
+                android.util.Log.i("AIService", "[流式] 用户取消")
+                throw e  // 重新抛出，让协程正常取消
             } catch (e: Exception) {
                 lastError = e.message ?: "未知错误"
                 android.util.Log.e("AIService", "[流式] 第 ${attempt} 次尝试异常: ${e.message}", e)
@@ -211,98 +216,102 @@ class AIServiceImpl(private val config: AIConfigData) : IAIService {
         val httpRequest = httpBuilder
             .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
             .build()
-        val response = client.newCall(httpRequest).execute()
-        android.util.Log.i("AIService", "[流式] HTTP ${response.code}")
-        if (!response.isSuccessful) {
-            val errorBody = response.body?.string() ?: ""
-            android.util.Log.e("AIService", "[流式] HTTP ${response.code}: ${errorBody.take(500)}")
-            return ChatResponse(false, error = "HTTP ${response.code}: ${errorBody.take(500)}")
-        }
-        val body = response.body ?: run {
-            android.util.Log.w("AIService", "[流式] 响应体为空")
-            return ChatResponse(false, error = "响应体为空")
-        }
-        val source = body.source()
-        val fullContent = StringBuilder()
-        // 累积工具调用 delta（按 index 分组）
-        val toolAccumulators = mutableMapOf<Int, ToolCallDeltaAccumulator>()
-        var lineCount = 0
-        while (!source.exhausted()) {
-            val line = source.readUtf8Line() ?: break
-            lineCount++
-            if (line.startsWith("data: ")) {
-                val data = line.removePrefix("data: ").trim()
-                if (data == "[DONE]") {
-                    android.util.Log.i("AIService", "[流式] 收到 [DONE] | 总行数: $lineCount | 内容长度: ${fullContent.length} | 工具调用: ${toolAccumulators.size}")
-                    break
-                }
-                try {
-                    val json = JSONObject(data)
-                    val choices = json.optJSONArray("choices")
-                    if (choices != null && choices.length() > 0) {
-                        val delta = choices.getJSONObject(0).optJSONObject("delta")
-                        val content = if (delta != null && !delta.isNull("content")) {
-                            delta.getString("content")
-                        } else ""
-                        // 提取推理/思考过程
-                        val reasoning = if (delta != null && !delta.isNull("reasoning_content")) {
-                            delta.getString("reasoning_content")
-                        } else null
-                        // 检查是否有 tool_calls
-                        val toolCalls = delta?.optJSONArray("tool_calls")
-                        val hasToolCalls = toolCalls != null && toolCalls.length() > 0
-                        if (content.isNotEmpty()) {
-                            fullContent.append(content)
-                            onChunk(content)
-                        }
-                        if (reasoning != null && reasoning.isNotEmpty()) {
-                            onReasoning?.invoke(reasoning)
-                        }
-                        // 累积工具调用 delta
-                        if (hasToolCalls) {
-                            android.util.Log.i("AIService", "[流式] 收到 tool_calls: ${toolCalls.toString().take(500)}")
-                            for (i in 0 until toolCalls.length()) {
-                                val tc = toolCalls.getJSONObject(i)
-                                val idx = tc.optInt("index", -1)
-                                if (idx < 0) continue
-                                val acc = toolAccumulators.getOrPut(idx) { ToolCallDeltaAccumulator() }
-                                // 第一帧：id、type、function.name
-                                if (!tc.isNull("id")) acc.id = tc.getString("id")
-                                val fn = tc.optJSONObject("function")
-                                if (fn != null) {
-                                    if (!fn.isNull("name") && fn.getString("name").isNotEmpty()) {
-                                        acc.functionName = fn.getString("name")
-                                    }
-                                    if (!fn.isNull("arguments")) {
-                                        acc.functionArgs.append(fn.getString("arguments"))
+
+        // 使用 runInterruptible 包裹阻塞 IO，使协程取消时能中断线程
+        return runInterruptible(Dispatchers.IO) {
+            val response = client.newCall(httpRequest).execute()
+            android.util.Log.i("AIService", "[流式] HTTP ${response.code}")
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string() ?: ""
+                android.util.Log.e("AIService", "[流式] HTTP ${response.code}: ${errorBody.take(500)}")
+                return@runInterruptible ChatResponse(false, error = "HTTP ${response.code}: ${errorBody.take(500)}")
+            }
+            val body = response.body ?: run {
+                android.util.Log.w("AIService", "[流式] 响应体为空")
+                return@runInterruptible ChatResponse(false, error = "响应体为空")
+            }
+            val source = body.source()
+            val fullContent = StringBuilder()
+            // 累积工具调用 delta（按 index 分组）
+            val toolAccumulators = mutableMapOf<Int, ToolCallDeltaAccumulator>()
+            var lineCount = 0
+            while (!source.exhausted()) {
+                val line = source.readUtf8Line() ?: break
+                lineCount++
+                if (line.startsWith("data: ")) {
+                    val data = line.removePrefix("data: ").trim()
+                    if (data == "[DONE]") {
+                        android.util.Log.i("AIService", "[流式] 收到 [DONE] | 总行数: $lineCount | 内容长度: ${fullContent.length} | 工具调用: ${toolAccumulators.size}")
+                        break
+                    }
+                    try {
+                        val json = JSONObject(data)
+                        val choices = json.optJSONArray("choices")
+                        if (choices != null && choices.length() > 0) {
+                            val delta = choices.getJSONObject(0).optJSONObject("delta")
+                            val content = if (delta != null && !delta.isNull("content")) {
+                                delta.getString("content")
+                            } else ""
+                            // 提取推理/思考过程
+                            val reasoning = if (delta != null && !delta.isNull("reasoning_content")) {
+                                delta.getString("reasoning_content")
+                            } else null
+                            // 检查是否有 tool_calls
+                            val toolCalls = delta?.optJSONArray("tool_calls")
+                            val hasToolCalls = toolCalls != null && toolCalls.length() > 0
+                            if (content.isNotEmpty()) {
+                                fullContent.append(content)
+                                onChunk(content)
+                            }
+                            if (reasoning != null && reasoning.isNotEmpty()) {
+                                onReasoning?.invoke(reasoning)
+                            }
+                            // 累积工具调用 delta
+                            if (hasToolCalls) {
+                                android.util.Log.i("AIService", "[流式] 收到 tool_calls: ${toolCalls.toString().take(500)}")
+                                for (i in 0 until toolCalls.length()) {
+                                    val tc = toolCalls.getJSONObject(i)
+                                    val idx = tc.optInt("index", -1)
+                                    if (idx < 0) continue
+                                    val acc = toolAccumulators.getOrPut(idx) { ToolCallDeltaAccumulator() }
+                                    // 第一帧：id、type、function.name
+                                    if (!tc.isNull("id")) acc.id = tc.getString("id")
+                                    val fn = tc.optJSONObject("function")
+                                    if (fn != null) {
+                                        if (!fn.isNull("name") && fn.getString("name").isNotEmpty()) {
+                                            acc.functionName = fn.getString("name")
+                                        }
+                                        if (!fn.isNull("arguments")) {
+                                            acc.functionArgs.append(fn.getString("arguments"))
+                                        }
                                     }
                                 }
                             }
+                            // 非空 delta 但没有 content 时，记录详情
+                            if (content.isEmpty() && !hasToolCalls && reasoning == null && delta != null && delta.length() > 0) {
+                                android.util.Log.d("AIService", "[流式] delta 无content: ${delta.toString().take(200)}")
+                            }
                         }
-                        // 非空 delta 但没有 content 时，记录详情
-                        if (content.isEmpty() && !hasToolCalls && reasoning == null && delta != null && delta.length() > 0) {
-                            android.util.Log.d("AIService", "[流式] delta 无content: ${delta.toString().take(200)}")
-                        }
+                    } catch (_: Exception) {
+                        // 记录无法解析的原始数据
+                        android.util.Log.d("AIService", "[流式] 无法解析: ${data.take(200)}")
                     }
-                } catch (_: Exception) {
-                    // 记录无法解析的原始数据
-                    android.util.Log.d("AIService", "[流式] 无法解析: ${data.take(200)}")
                 }
             }
+            // 将累积的工具调用 delta 转为 ToolCall 列表
+            val toolCalls = toolAccumulators.values.mapNotNull { acc ->
+                val name = acc.functionName
+                val id = acc.id
+                if (name != null && id != null) {
+                    ToolCall(id = id, functionName = name, functionArgs = acc.functionArgs.toString())
+                } else null
+            }
+            if (toolCalls.isNotEmpty()) {
+                android.util.Log.i("AIService", "[流式] 工具调用已累积: ${toolCalls.map { "${it.functionName}(${it.functionArgs})" }}")
+            }
+            android.util.Log.i("AIService", "[流式] 完成 | 内容长度: ${fullContent.length} | 总行数: $lineCount")
+            ChatResponse(true, content = fullContent.toString(), toolCalls = toolCalls.takeIf { it.isNotEmpty() })
         }
-        // 将累积的工具调用 delta 转为 ToolCall 列表
-        val toolCalls = toolAccumulators.values.mapNotNull { acc ->
-            val name = acc.functionName
-            val id = acc.id
-            if (name != null && id != null) {
-                ToolCall(id = id, functionName = name, functionArgs = acc.functionArgs.toString())
-            } else null
-        }
-        if (toolCalls.isNotEmpty()) {
-            android.util.Log.i("AIService", "[流式] 工具调用已累积: ${toolCalls.map { "${it.functionName}(${it.functionArgs})" }}")
-        }
-        android.util.Log.i("AIService", "[流式] 完成 | 内容长度: ${fullContent.length} | 总行数: $lineCount")
-        return ChatResponse(true, content = fullContent.toString(), toolCalls = toolCalls.takeIf { it.isNotEmpty() })
     }
 
     /** 构建请求 JSON 和 HTTP Builder */
@@ -620,6 +629,7 @@ object AIManager {
 
     /** 取消当前正在运行的聊天 */
     fun cancelCurrentChat() {
+        android.util.Log.i("AIManager", "[取消] cancelCurrentChat 被调用, currentChatJob=${currentChatJob}, isActive=${currentChatJob?.isActive}")
         currentChatJob?.cancel()
         currentChatJob = null
     }
