@@ -35,7 +35,7 @@ data class PluginManifest(
     val version: String,
     val description: String = "",
     val author: String = "",
-    val type: String,
+    val type: String = "lua",
     val main: String,
     val mainClass: String? = null,
     val apiVersion: Int = 1,

@@ -105,6 +105,7 @@ public abstract class BasePageAdapter {
      *                  page views.
      * @deprecated Use {@link #startUpdate(ViewGroup)}
      */
+    @Deprecated
     public void startUpdate(View container) {
     }
 
@@ -120,6 +121,7 @@ public abstract class BasePageAdapter {
      * need to be a View, but can be some other container of the page.
      * @deprecated Use {@link #instantiateItem(ViewGroup, int)}
      */
+    @Deprecated
     public Object instantiateItem(View container, int position) {
         throw new UnsupportedOperationException(
                 "Required method instantiateItem was not overridden");
@@ -136,6 +138,7 @@ public abstract class BasePageAdapter {
      *                  {@link #instantiateItem(View, int)}.
      * @deprecated Use {@link #destroyItem(ViewGroup, int, Object)}
      */
+    @Deprecated
     public void destroyItem(View container, int position, Object object) {
         throw new UnsupportedOperationException("Required method destroyItem was not overridden");
     }
@@ -150,6 +153,7 @@ public abstract class BasePageAdapter {
      *                  {@link #instantiateItem(View, int)}.
      * @deprecated Use {@link #setPrimaryItem(ViewGroup, int, Object)}
      */
+    @Deprecated
     public void setPrimaryItem(View container, int position, Object object) {
     }
 
@@ -162,6 +166,7 @@ public abstract class BasePageAdapter {
      *                  page views.
      * @deprecated Use {@link #finishUpdate(ViewGroup)}
      */
+    @Deprecated
     public void finishUpdate(View container) {
     }
 

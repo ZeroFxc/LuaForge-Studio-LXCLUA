@@ -37,6 +37,7 @@ object LuaPluginLoader {
         
         // 2. 注入全局工具对象
         val bridge = PluginBridge(context, plugin.manifest.id)
+        plugin.pluginBridge = bridge  // 保存引用，用于卸载时取消 AI 请求等
         L.pushJavaObject(bridge)
         L.setGlobal("plugin")
 
@@ -71,7 +72,33 @@ object LuaPluginLoader {
         
         plugin.luaState = L
         
-        // 4. 触发插件加载完成事件
+        // 4. 调用 onLoad（如果脚本定义了）
+        if (loadSuccess) {
+            try {
+                L.getGlobal("onLoad")
+                if (L.isFunction(-1)) {
+                    L.getGlobal("debug")
+                    L.getField(-1, "traceback")
+                    L.remove(-2)
+                    L.insert(-2)
+                    val onLoadOk = L.pcall(0, 0, -2)
+                    if (onLoadOk != 0) {
+                        val error = L.toString(-1)
+                        android.util.Log.e("PluginManager", "调用 onLoad 失败 [${plugin.manifest.id}]: $error")
+                        plugin.loadError = "onLoad 执行失败: $error"
+                        loadSuccess = false
+                    }
+                } else {
+                    L.pop(1)  // 弹出非函数值
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PluginManager", "调用 onLoad 异常 [${plugin.manifest.id}]", e)
+                plugin.loadError = "onLoad 异常: ${e.message}"
+                loadSuccess = false
+            }
+        }
+        
+        // 5. 触发插件加载完成事件
         if (loadSuccess) {
             EventManager.fireEvent(PluginEvents.ON_PLUGIN_LOADED, plugin.manifest.id)
         }

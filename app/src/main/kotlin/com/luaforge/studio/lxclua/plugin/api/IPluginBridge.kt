@@ -27,7 +27,11 @@ interface IPluginBridge :
     IPluginBridgeSyntax,
     IPluginBridgeDecoration,
     IPluginBridgeBuild,
-    IPluginBridgeWebUI {
+    IPluginBridgeWebUI,
+    IPluginBridgeAI,
+    IPluginBridgeMCP,
+    IPluginBridgeFloating,
+    IPluginBridgeSystem {
     
     // ==================== 基础功能 ====================
     

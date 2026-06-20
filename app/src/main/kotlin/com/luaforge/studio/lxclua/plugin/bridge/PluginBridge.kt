@@ -120,6 +120,18 @@ class PluginBridge(private val context: Context, private val pluginId: String) {
     
     /** WebUI API */
     val webui = PluginWebUIBridge(pluginId)
+
+    /** AI 功能 API */
+    val ai = PluginAI()
+
+    /** MCP 功能 API */
+    val mcp = PluginMCP(pluginId, context)
+
+    /** 悬浮窗功能 API */
+    val floating = PluginFloating(pluginId)
+
+    /** 系统信息与权限 API */
+    val system = PluginSystem()
     
     // ============ 版本信息 ============
     

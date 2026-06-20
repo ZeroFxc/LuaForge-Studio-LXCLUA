@@ -1,0 +1,11 @@
+{
+  "id": "floating_ai_demo",
+  "name": "悬浮球AI代码生成",
+  "version": "1.0.0",
+  "description": "悬浮球获取当前编辑器代码，输入提示词后由AI生成代码并插入到光标处",
+  "author": "LXC-LUA",
+  "type": "lua",
+  "main": "main.lua",
+  "permissions": ["ai.chat", "ui.editor", "ui.dialog", "system.overlay"],
+  "minApiVersion": 1
+}

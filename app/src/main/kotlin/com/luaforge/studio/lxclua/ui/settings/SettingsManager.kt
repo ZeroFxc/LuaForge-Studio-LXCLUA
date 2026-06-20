@@ -87,6 +87,9 @@ private object PreferencesKeys {
 
     // 【新增】滑动手势开关
     val ENABLE_SWIPE_GESTURE = booleanPreferencesKey("enable_swipe_gesture")
+
+    // 【新增】AI 流式输出开关
+    val AI_STREAM_ENABLED = booleanPreferencesKey("ai_stream_enabled")
 }
 
 // 排序方式枚举
@@ -235,6 +238,9 @@ object SettingsManager {
         // 【新增】加载滑动手势开关
         val enableSwipeGesture = preferences[PreferencesKeys.ENABLE_SWIPE_GESTURE] ?: false
 
+        // 【新增】加载 AI 流式输出开关
+        val aiStreamEnabled = preferences[PreferencesKeys.AI_STREAM_ENABLED] ?: false
+
         val additionalProjectPathsJson = preferences[PreferencesKeys.ADDITIONAL_PROJECT_PATHS] ?: "[]"
         val additionalProjectPaths: List<String> = try {
             val type = object : TypeToken<List<String>>() {}.type
@@ -277,7 +283,8 @@ object SettingsManager {
                 editorWordWrap = editorWordWrap,
                 languageTag = languageTag,
                 hexColorHighlightEnabled = hexColorHighlightEnabled,
-                enableSwipeGesture = enableSwipeGesture  // 【新增】
+                enableSwipeGesture = enableSwipeGesture,  // 【新增】
+                aiStreamEnabled = aiStreamEnabled,         // 【新增】
             )
         )
         settingsLoaded = true
@@ -341,6 +348,9 @@ object SettingsManager {
 
             // 【新增】保存滑动手势开关
             preferences[PreferencesKeys.ENABLE_SWIPE_GESTURE] = currentSettings.enableSwipeGesture
+
+            // 【新增】保存 AI 流式输出开关
+            preferences[PreferencesKeys.AI_STREAM_ENABLED] = currentSettings.aiStreamEnabled
         }
         notifyListeners()
     }
@@ -453,4 +463,5 @@ data class SettingsData(
     val languageTag: String = "zh",
     val hexColorHighlightEnabled: Boolean = false,  // 【新增】十六进制颜色高亮开关
     val enableSwipeGesture: Boolean = false,         // 【新增】滑动手势开关
+    val aiStreamEnabled: Boolean = false,             // 【新增】AI 流式输出开关
 )

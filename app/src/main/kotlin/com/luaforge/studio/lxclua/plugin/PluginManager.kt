@@ -6,6 +6,7 @@ import com.google.gson.Gson
 import com.luaforge.studio.lxclua.R
 import com.luaforge.studio.lxclua.ProjectItem
 import com.luaforge.studio.lxclua.plugin.api.IPlugin
+import com.luaforge.studio.lxclua.plugin.bridge.PluginBridge
 import com.luaforge.studio.lxclua.plugin.data.PluginManifest
 import com.luaforge.studio.lxclua.plugin.loaders.DexPluginLoader
 import com.luaforge.studio.lxclua.plugin.loaders.LuaPluginLoader
@@ -14,10 +15,17 @@ import com.luaforge.studio.lxclua.plugin.state.PluginEvents
 import com.luaforge.studio.lxclua.plugin.state.UIState
 import com.luaforge.studio.lxclua.ui.editor.QuickAction
 import com.luaforge.studio.lxclua.ui.editor.viewmodel.EditorViewModel
+import com.luaforge.studio.lxclua.ai.AIConfigManager
+import com.luaforge.studio.lxclua.ai.AIManager
+import com.luaforge.studio.lxclua.mcp.MCPManager
 import com.luajava.LuaState
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
@@ -32,7 +40,10 @@ class LoadedPlugin(
     val directory: File,
     initialEnabled: Boolean,
     var luaState: LuaState? = null,
-    var dexPlugin: IPlugin? = null
+    var dexPlugin: IPlugin? = null,
+    var pluginBridge: Any? = null,  // PluginBridge 实例引用，用于取消 AI 请求等
+    /** 加载错误信息（null 表示无错误） */
+    var loadError: String? = null
 ) {
     /** Compose 可观察的启用状态，Switch 直接绑定此值，避免列表复用时状态闪烁 */
     val enabled = mutableStateOf(initialEnabled)
@@ -51,9 +62,10 @@ class LoadedPlugin(
         directory: File = this.directory,
         enabled: Boolean = this.enabled.value,
         luaState: LuaState? = this.luaState,
-        dexPlugin: IPlugin? = this.dexPlugin
+        dexPlugin: IPlugin? = this.dexPlugin,
+        pluginBridge: Any? = this.pluginBridge
     ): LoadedPlugin {
-        return LoadedPlugin(manifest, directory, enabled, luaState, dexPlugin)
+        return LoadedPlugin(manifest, directory, enabled, luaState, dexPlugin, pluginBridge)
     }
 }
 
@@ -230,10 +242,17 @@ object PluginManager {
     
     /**
      * 初始化插件管理器
+     * 先加载 AI 配置（同步），再加载插件，确保插件注册的 MCP 服务不会被后续异步 loadConfig 覆盖
      */
     fun init(context: Context) {
         appContext = context.applicationContext
         scanPlugins(context)
+        // 先同步加载 AI 配置，避免插件注册 MCP 服务后被 loadConfig 覆盖
+        runBlocking(Dispatchers.IO) {
+            AIConfigManager.loadConfig(context)
+            AIManager.refresh()
+        }
+        // 配置就绪后再加载插件
         loadEnabledPlugins()
     }
     
@@ -384,11 +403,15 @@ object PluginManager {
         // 检查依赖
         val (depsOk, depsReason) = checkDependencies(plugin)
         if (!depsOk) {
-            android.util.Log.w("PluginManager", "插件 ${manifest.name} 依赖检查失败: $depsReason，跳过加载")
+            val err = "依赖检查失败: $depsReason"
+            android.util.Log.w("PluginManager", "插件 ${manifest.name} $err，跳过加载")
+            plugin.loadError = err
             return
         }
         
-        val type = manifest.type.lowercase(java.util.Locale.getDefault())
+        val type = (manifest.type ?: "lua").lowercase(java.util.Locale.getDefault())
+        // 加载前清除旧错误
+        plugin.loadError = null
         
         try {
             if (type == "lua") {
@@ -397,7 +420,9 @@ object PluginManager {
                 DexPluginLoader.load(plugin, context)
             }
         } catch (e: Exception) {
+            val err = "加载异常: ${e.javaClass.simpleName}: ${e.message}"
             android.util.Log.e("PluginManager", "加载插件失败: ${manifest.name}", e)
+            plugin.loadError = err
         }
     }
     
@@ -408,6 +433,24 @@ object PluginManager {
         val pluginId = plugin.manifest.id
         
         try {
+            // 取消该插件进行中的 AI 请求
+            (plugin.pluginBridge as? PluginBridge)?.ai?.cancelAll()
+            
+            // 调用 Lua 插件的卸载回调
+            val luaState = plugin.luaState
+            if (luaState != null) {
+                try {
+                    luaState.getGlobal("onUnload")
+                    if (luaState.isFunction(-1)) {
+                        luaState.pcall(0, 0, 0)
+                    } else {
+                        luaState.pop(1)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("PluginManager", "调用 onUnload 异常 [${pluginId}]", e)
+                }
+            }
+            
             // 清理 Lua 状态
             plugin.luaState?.close()
             plugin.luaState = null
@@ -418,6 +461,9 @@ object PluginManager {
             
             // 清理该插件注册的 UI 元素
             removePluginUiElements(pluginId)
+            
+            // 清理该插件的悬浮球
+            com.luaforge.studio.lxclua.plugin.floating.FloatingManager.removeBallsByPlugin(pluginId)
             
             // 移除该插件的所有事件监听器
             EventManager.removePluginListeners(pluginId)
@@ -598,12 +644,18 @@ object PluginManager {
                 .apply()
 
             if (enabled) {
-                try {
-                    loadPluginInternal(plugin)
-                    EventManager.fireEvent(PluginEvents.ON_PLUGIN_ENABLED, pluginId)
-                } catch (e: Exception) {
-                    android.util.Log.e("PluginManager", "动态启用插件失败: $pluginId", e)
+                loadPluginInternal(plugin)
+                // 检查加载是否成功：失败则还原启用状态
+                if (plugin.loadError != null) {
+                    android.util.Log.e("PluginManager", "动态启用插件失败: $pluginId - ${plugin.loadError}")
+                    // 还原为未启用
+                    plugin.enabled.value = false
+                    getPrefs(context).edit()
+                        .putBoolean(PREF_ENABLED_PREFIX + pluginId, false)
+                        .apply()
+                    return
                 }
+                EventManager.fireEvent(PluginEvents.ON_PLUGIN_ENABLED, pluginId)
             } else {
                 unloadPluginInternal(plugin)
                 EventManager.fireEvent(PluginEvents.ON_PLUGIN_DISABLED, pluginId)

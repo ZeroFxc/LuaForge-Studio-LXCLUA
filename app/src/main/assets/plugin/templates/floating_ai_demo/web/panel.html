@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 代码生成</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: transparent;
+            padding: 12px;
+            font-size: 14px;
+            color: #333;
+            overflow: hidden;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 13px;
+            resize: vertical;
+            outline: none;
+            font-family: inherit;
+        }
+        textarea:focus { border-color: #FF6B35; }
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        button {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:active { opacity: 0.8; }
+        .btn-send {
+            background: #FF6B35;
+            color: #fff;
+        }
+        .btn-cancel {
+            background: #ccc;
+            color: #333;
+        }
+        .result-area {
+            margin-top: 10px;
+            padding: 8px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            min-height: 40px;
+            font-size: 12px;
+            white-space: pre-wrap;
+            display: none;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .status {
+            font-size: 11px;
+            color: #999;
+            margin-top: 6px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <textarea id="prompt" placeholder="输入提示词，如：添加一个排序函数"></textarea>
+    <div class="btn-row">
+        <button class="btn-cancel" onclick="closePanel()">取消</button>
+        <button class="btn-send" onclick="sendPrompt()">发送</button>
+    </div>
+    <div class="result-area" id="result"></div>
+    <div class="status" id="status">WebUI 模式 - 通过 LXC 桥接与 Lua 通信</div>
+
+    <script>
+        // 监听宿主发来的消息（如 AI 生成结果）
+        window.addEventListener('lxc-message', function(e) {
+            var data = e.detail;
+            if (data.type === 'result') {
+                var resultDiv = document.getElementById('result');
+                resultDiv.style.display = 'block';
+                resultDiv.textContent = '生成结果:\n' + data.code;
+                document.getElementById('status').textContent = 'AI 代码已生成';
+            }
+        });
+
+        function sendPrompt() {
+            var prompt = document.getElementById('prompt').value.trim();
+            if (!prompt) {
+                LXC.toast('请输入提示词');
+                return;
+            }
+            // 通过 LXC.callLua 调用 Lua 全局函数
+            // 注意：需要在 main.lua 中定义 handleWebPrompt 函数
+            var result = LXC.callLua('handleWebPrompt', JSON.stringify({
+                prompt: prompt,
+                timestamp: Date.now()
+            }));
+            document.getElementById('status').textContent = '已发送到 Lua: ' + result;
+            document.getElementById('prompt').value = '';
+        }
+
+        function closePanel() {
+            LXC.navigateBack();
+        }
+    </script>
+</body>
+</html>

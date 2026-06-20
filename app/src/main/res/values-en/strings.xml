@@ -105,7 +105,7 @@
     <string name="error_check_failed">Failed to check file: %s</string>
     <string name="unknown_error">Unknown error</string>
     <string name="file_label">File: %s</string>
-    <string name="author_note">LXC-LUA is dedicated to providing the best mobile development experience for Lua developers, with full support for the LXCLUA 20260531 standard library and common extensions.</string>
+    <string name="author_note">LXC-LUA is dedicated to providing the best mobile development experience for Lua developers, with full support for the LXCLUA 20260619 standard library and common extensions.</string>
     <string name="build_time_label">Build time: %s</string>
     <string name="close">Close</string>
     <string name="copy">Copy</string>
@@ -117,7 +117,7 @@
     <string name="dev_w_role">Developer</string>
     <string name="dev_kotlin_name">Kotlin</string>
     <string name="dev_kotlin_role">Language</string>
-    <string name="dev_lua_name">LXCLUA 20260531</string>
+    <string name="dev_lua_name">LXCLUA 20260619</string>
     <string name="dev_lua_role">Core Engine</string>
     <string name="dev_android_name">Android</string>
     <string name="dev_android_role">Platform</string>
@@ -722,6 +722,8 @@
     <string name="plugin_uninstall_warning">This will delete the plugin directory and all data, including logs and configuration.</string>
     <string name="plugin_uninstall_enabled_hint">This plugin is currently enabled. It will be disabled before uninstalling.</string>
     <string name="plugin_uninstall_btn">Uninstall</string>
+    <string name="plugin_load_error_title">Plugin Load Failed: %s</string>
+    <string name="plugin_copy_error">Copy Error</string>
     <string name="plugin_context_menu_title">Actions: %s</string>
     <string name="plugin_open_webui">Open Web UI</string>
     <string name="plugin_reload">Reload Plugin</string>
@@ -753,4 +755,88 @@
     <string name="plugin_dep_version_low">Version mismatch: %1$s (need &gt;= %2$s, current %3$s)</string>
     <string name="plugin_dep_not_found">Not found: %1$s</string>
     <string name="plugin_dep_disabled">Disabled: %1$s</string>
+
+    <!-- AI Settings -->
+    <string name="settings_ai_config">AI Configuration</string>
+    <string name="settings_ai_enable">Enable AI</string>
+    <string name="settings_ai_enable_desc">Enable AI chat and analysis features for plugins</string>
+    <string name="settings_ai_provider">AI Provider</string>
+    <string name="settings_ai_api_key">API Key</string>
+    <string name="settings_ai_api_key_hint">Enter API key…</string>
+    <string name="settings_ai_custom_endpoint">Custom Endpoint</string>
+    <string name="settings_ai_custom_endpoint_hint">https://api.example.com/v1/chat/completions</string>
+    <string name="settings_ai_model">Model</string>
+    <string name="settings_ai_model_hint">Enter model name…</string>
+    <string name="settings_ai_temperature">Temperature</string>
+    <string name="settings_ai_temperature_desc">Controls randomness. Higher values = more random (0.0 - 2.0)</string>
+    <string name="settings_ai_max_tokens">Max Tokens</string>
+    <string name="settings_ai_max_tokens_desc">Maximum output length per response</string>
+    <string name="settings_ai_system_prompt">System Prompt</string>
+    <string name="settings_ai_system_prompt_hint">Set AI role and behavior…</string>
+    <string name="settings_ai_connection_test">Connection Test</string>
+    <string name="settings_ai_connection_test_desc">Send a test message to verify AI connection</string>
+    <string name="settings_ai_connection_testing">Testing connection…</string>
+    <string name="settings_ai_connection_success">AI connection test successful</string>
+    <string name="settings_ai_connection_failed">AI connection test failed: %s</string>
+    <string name="settings_ai_not_configured">Please configure and enable AI first</string>
+    <string name="settings_ai_stream">AI Stream Output</string>
+    <string name="settings_ai_stream_desc">When enabled, AI responses will be displayed in real-time word by word in the panel</string>
+    <string name="settings_ai_connection_success_toast">Connected | Model: %s | Response: %s</string>
+    <string name="settings_ai_connection_timeout">Connection test timed out (15s). Please check network or API address</string>
+
+    <!-- MCP Settings -->
+    <string name="settings_mcp_config">MCP Configuration</string>
+    <string name="settings_mcp_enable">Enable MCP Service</string>
+    <string name="settings_mcp_enable_desc">Enable Model Context Protocol service connection</string>
+    <string name="settings_mcp_endpoint">MCP Endpoint</string>
+    <string name="settings_mcp_endpoint_hint">http://localhost:8080/mcp</string>
+    <string name="settings_mcp_transport">Transport Type</string>
+    <string name="settings_mcp_connection_test">MCP Connection Test</string>
+    <string name="settings_mcp_connection_test_desc">Verify MCP server connection</string>
+    <string name="settings_mcp_connection_testing">Testing MCP connection…</string>
+    <string name="settings_mcp_connection_success">MCP connection test successful</string>
+    <string name="settings_mcp_connection_failed">MCP connection test failed: %s</string>
+    <string name="settings_mcp_server_list">MCP Server List</string>
+    <string name="settings_mcp_no_servers">No MCP servers. Tap the button below to add one</string>
+    <string name="settings_mcp_local_plugin">Local Plugin</string>
+    <string name="settings_mcp_no_url">No URL configured</string>
+    <string name="settings_mcp_add_server">Add MCP Server</string>
+    <string name="settings_mcp_add_server_desc">Add a remote MCP server URL</string>
+    <string name="settings_mcp_add_title">Add MCP Server</string>
+    <string name="settings_mcp_server_name">Name</string>
+    <string name="settings_mcp_server_url">URL</string>
+    <string name="settings_mcp_connection_success_toast">Connected: %s</string>
+    <string name="settings_mcp_connection_failed_toast">Connection failed: %s</string>
+    <string name="settings_mcp_connection_error_toast">Connection test failed: %s</string>
+    <string name="settings_mcp_delete">Delete</string>
+
+    <!-- AI Multi-Provider -->
+    <string name="settings_ai_provider_list">AI Provider List</string>
+    <string name="settings_ai_no_providers">No providers. Tap the button below to add one</string>
+    <string name="settings_ai_add_provider">Add Provider</string>
+    <string name="settings_ai_add_provider_desc">Add a new AI provider configuration</string>
+    <string name="settings_ai_active_provider">Active</string>
+    <string name="settings_ai_plugin_registered">Plugin Registered</string>
+    <string name="settings_ai_provider_name">Name</string>
+    <string name="settings_ai_provider_name_hint">e.g. My OpenAI</string>
+    <string name="settings_ai_edit_provider">Edit Provider</string>
+    <string name="settings_ai_delete_provider">Delete Provider</string>
+    <string name="settings_ai_set_active">Set Active</string>
+    <string name="settings_ai_select_model">Select Model</string>
+    <string name="settings_ai_custom_model">Custom Model</string>
+    <string name="settings_ai_plugin_models">Plugin Models</string>
+    <string name="settings_ai_default_model">Default: %s</string>
+
+    <!-- Common Actions -->
+    <string name="settings_add">Add</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="settings_save">Save</string>
+
+    <!-- MCP Supplement -->
+    <string name="settings_mcp_name_hint">e.g. My MCP Server</string>
+    <string name="settings_mcp_source">Server Type</string>
+    <string name="settings_mcp_source_local">Local Plugin</string>
+    <string name="settings_mcp_source_remote">Remote URL</string>
+    <string name="settings_mcp_transport_streamable_http">Streamable HTTP</string>
+    <string name="settings_mcp_transport_sse">SSE</string>
 </resources>

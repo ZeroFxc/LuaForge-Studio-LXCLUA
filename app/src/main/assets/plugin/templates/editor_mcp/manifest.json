@@ -1,0 +1,11 @@
+{
+  "id": "editor_mcp",
+  "name": "编辑器 MCP 工具",
+  "version": "1.0.0",
+  "author": "LXC-LUA",
+  "description": "注册 MCP 工具，提供编辑器事件：跳转行、编辑行、搜索、获取内容等",
+  "type": "lua",
+  "main": "main.lua",
+  "permissions": ["mcp", "editor", "floating"],
+  "minAppVersion": "1.1.3"
+}

@@ -1,1 +1,91 @@
-10 actionable tasks: 1 executed, 9 up-to-date
+Add to mViews: com.luaforge.studio.lxclua.plugin.floating.FloatingBallView{8c58799 V.E...... ......I. 0,0-0,0 alpha=1.0 viewInfo = },pkg= null
+setRusSupported enable 1
+Couldn't add view: com.luaforge.studio.lxclua.plugin.floating.FloatingBallView{8c58799 V.E...... ......I. 0,0-0,0 alpha=1.0 viewInfo = }
+android.view.WindowManager$BadTokenException: Unable to add window -- token null is not valid; is your activity running?
+	at android.view.ViewRootImpl.setView(ViewRootImpl.java:1831)
+	at android.view.WindowManagerGlobal.addView(WindowManagerGlobal.java:514)
+	at android.view.WindowManagerImpl.addView(WindowManagerImpl.java:158)
+	at com.luaforge.studio.lxclua.plugin.floating.FloatingManager.createBall(FloatingManager.kt:71)
+	at com.luaforge.studio.lxclua.plugin.bridge.PluginFloating.createBall(PluginFloating.kt:46)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.luajava.LuaJavaAPI.callMethod(LuaJavaAPI.java:241)
+	at com.luajava.LuaState._pcall(Native Method)
+	at com.luajava.LuaState.pcall(LuaState.java:703)
+	at com.luaforge.studio.lxclua.plugin.loaders.LuaPluginLoader.load(LuaPluginLoader.kt:59)
+	at com.luaforge.studio.lxclua.plugin.PluginManager.loadPluginInternal$app_debug(PluginManager.kt:407)
+	at com.luaforge.studio.lxclua.plugin.PluginManager.togglePlugin(PluginManager.kt:614)
+	at com.luaforge.studio.lxclua.ui.plugin.PluginScreenKt$PluginScreen$3$2$1$3$1$1.invoke(PluginScreen.kt:276)
+	at com.luaforge.studio.lxclua.ui.plugin.PluginScreenKt$PluginScreen$3$2$1$3$1$1.invoke(PluginScreen.kt:275)
+	at androidx.compose.foundation.selection.ToggleableNode._onClick$lambda$0(Toggleable.kt:309)
+	at androidx.compose.foundation.selection.ToggleableNode.$r8$lambda$0IjPdE90RQ3-WGAeWUKEqa-WyE0(Unknown Source:0)
+	at androidx.compose.foundation.selection.ToggleableNode$$ExternalSyntheticLambda2.invoke(D8$$SyntheticClass:0)
+	at androidx.compose.foundation.ClickableNode.onPointerEvent-H0pRuoY(Clickable.kt:935)
+	at androidx.compose.ui.input.pointer.Node.dispatchMainEventPass(HitPathTracker.kt:446)
+	at androidx.compose.ui.input.pointer.Node.dispatchMainEventPass(HitPathTracker.kt:432)
+	at androidx.compose.ui.input.pointer.Node.dispatchMainEventPass(HitPathTracker.kt:432)
+	at androidx.compose.ui.input.pointer.Node.dispatchMainEventPass(HitPathTracker.kt:432)
+	at androidx.compose.ui.input.pointer.Node.dispatchMainEventPass(HitPathTracker.kt:432)
+	at androidx.compose.ui.input.pointer.Node.dispatchMainEventPass(HitPathTracker.kt:432)
+	at androidx.compose.ui.input.pointer.NodeParent.dispatchMainEventPass(HitPathTracker.kt:285)
+	at androidx.compose.ui.input.pointer.HitPathTracker.dispatchChanges(HitPathTracker.kt:181)
+	at androidx.compose.ui.input.pointer.PointerInputEventProcessor.process-BIzXfog(PointerInputEventProcessor.kt:118)
+	at androidx.compose.ui.platform.AndroidComposeView.sendMotionEvent-8iAsVTc(AndroidComposeView.android.kt:2685)
+	at androidx.compose.ui.platform.AndroidComposeView.handleMotionEvent-8iAsVTc(AndroidComposeView.android.kt:2629)
+	at androidx.compose.ui.platform.AndroidComposeView.dispatchTouchEvent(AndroidComposeView.android.kt:2467)
+	at android.view.ViewGroup.dispatchTransformedTouchEvent(ViewGroup.java:3223)
+	at android.view.ViewGroup.dispatchTouchEvent(ViewGroup.java:2892)
+	at android.view.ViewGroup.dispatchTransformedTouchEvent(ViewGroup.java:3223)
+	at android.view.ViewGroup.dispatchTouchEvent(ViewGroup.java:2892)
+	at android.view.ViewGroup.dispatchTransformedTouchEvent(ViewGroup.java:3223)
+	at android.view.ViewGroup.dispatchTouchEvent(ViewGroup.java:2892)
+	at android.view.ViewGroup.dispatchTransformedTouchEvent(ViewGroup.java:3223)
+	at android.view.ViewGroup.dispatchTouchEvent(ViewGroup.java:2892)
+	at com.android.internal.policy.DecorView.superDispatchTouchEvent(DecorView.java:569)
+	at com.android.internal.policy.PhoneWindow.superDispatchTouchEvent(PhoneWindow.java:2101)
+	at android.app.Activity.dispatchTouchEvent(Activity.java:4776)
+	at com.android.internal.policy.DecorView.dispatchTouchEvent(DecorView.java:517)
+	at android.view.View.dispatchPointerEvent(View.java:17216)
+	at android.view.ViewRootImpl$ViewPostImeInputStage.processPointerEvent(ViewRootImpl.java:9386)
+	at android.view.ViewRootImpl$ViewPostImeInputStage.onProcess(ViewRootImpl.java:9055)
+	at android.view.ViewRootImpl$InputStage.deliver(ViewRootImpl.java:8419)
+	at android.view.ViewRootImpl$InputStage.onDeliverToNext(ViewRootImpl.java:8483)
+	at android.view.ViewRootImpl$InputStage.forward(ViewRootImpl.java:8442)
+	at android.view.ViewRootImpl$AsyncInputStage.forward(ViewRootImpl.java:8615)
+	at android.view.ViewRootImpl$InputStage.apply(ViewRootImpl.java:8450)
+	at android.view.ViewRootImpl$AsyncInputStage.apply(ViewRootImpl.java:8672)
+	at android.view.ViewRootImpl$InputStage.deliver(ViewRootImpl.java:8423)
+	at android.view.ViewRootImpl$InputStage.onDeliverToNext(ViewRootImpl.java:8483)
+	at android.view.ViewRootImpl$InputStage.forward(ViewRootImpl.java:8442)
+	at android.view.ViewRootImpl$InputStage.apply(ViewRootImpl.java:8450)
+	at android.view.ViewRootImpl$InputStage.deliver(ViewRootImpl.java:8423)
+	at android.view.ViewRootImpl.deliverInputEvent(ViewRootImpl.java:11949)
+	at android.view.ViewRootImpl.doProcessInputEvents(ViewRootImpl.java:11896)
+	at android.view.ViewRootImpl.enqueueInputEvent(ViewRootImpl.java:11841)
+	at android.view.ViewRootImpl.processRawInputEvent(ViewRootImpl.java:12340)
+	at android.view.ViewRootImpl$WindowInputEventReceiver.onInputEvent(ViewRootImpl.java:12079)
+	at android.view.InputEventReceiver.dispatchInputEvent(InputEventReceiver.java:321)
+	at android.os.MessageQueue.nativePollOnce(Native Method)
+	at android.os.MessageQueue.nextLegacy(MessageQueue.java:983)
+	at android.os.MessageQueue.next(MessageQueue.java:1095)
+	at android.os.Looper.loopOnce(Looper.java:225)
+	at android.os.Looper.loop(Looper.java:416)
+	at android.app.ActivityThread.main(ActivityThread.java:9999)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:613)
+	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1074)
+,window dying
+,unregisterSystemUIBroadcastReceiver 
+, unregisterSystemUIBroadcastReceiver failed java.lang.IllegalArgumentException: Receiver not registered: android.view.OplusScrollToTopManager$2@ff6630c
+RenderProxy::destroy: this=0xb400007715907800, mContext=0xb4000077ceda6b80
+SkiaVulkanPipeline::setSurface: this=0xb40000771598a680, surface=NULL
+执行 Lua 插件脚本出错: Invalid method call.
+  at public final java.lang.String com.luaforge.studio.lxclua.plugin.bridge.PluginFloating.createBall(int,int,java.lang.String,java.lang.String,com.luajava.LuaFunction,com.luajava.LuaFunction)
+  -> android.view.WindowManager$BadTokenException: Unable to add window -- token null is not valid; is your activity running?
+
+stack traceback:
+	[C]: in field 'createBall'
+	...age/emulated/0/LXC-LUA/plugins/floating_ai_demo/main.lua:105: in local 'createFloatingBall'
+	...age/emulated/0/LXC-LUA/plugins/floating_ai_demo/main.lua:171: in main chunk
+the up motion event handled by client, just return
+notifyValueChanged(1073741824:496): ignoring on state UNKNOWN
+notifyValueChanged(1073741824:496): ignoring on state UNKNOWN

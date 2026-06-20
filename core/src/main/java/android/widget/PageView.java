@@ -450,6 +450,7 @@ public class PageView extends ViewGroup {
      * and {@link #removeOnPageChangeListener(OnPageChangeListener)} instead.
      */
 
+    @Deprecated
     public void setOnPageChangeListener(OnPageChangeListener listener) {
         mOnPageChangeListener = listener;
     }

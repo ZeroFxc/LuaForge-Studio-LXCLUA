@@ -2188,4 +2188,26 @@ class MainActivity : ComponentActivity() {
         com.luaforge.studio.lxclua.ui.editor.viewmodel.CompletionDataManager.clear()
         System.gc()
     }
+
+    // ==================== 权限请求回调 ====================
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        com.luaforge.studio.lxclua.plugin.bridge.PluginSystem.handlePermissionResult(
+            requestCode, permissions, grantResults
+        )
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        // 处理悬浮窗权限请求返回
+        if (requestCode >= 1000) {
+            com.luaforge.studio.lxclua.plugin.bridge.PluginSystem.handleOverlayResult(requestCode)
+        }
+    }
 }

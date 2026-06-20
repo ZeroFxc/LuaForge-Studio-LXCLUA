@@ -1558,4 +1558,199 @@ class PluginBridgeImpl(val pluginId: String) : IPluginBridge {
     override fun getWebView(): WebView? {
         return webUIBridge.getWebView()
     }
+
+    // ==================== AI 功能 ====================
+
+    private val aiBridge by lazy { PluginAI() }
+
+    override fun chat(messagesJson: String): String {
+        return try {
+            val gson = com.google.gson.Gson()
+            val type = object : com.google.gson.reflect.TypeToken<List<Map<String, String>>>() {}.type
+            val messages: List<Map<String, String>> = gson.fromJson(messagesJson, type)
+            val result = aiBridge.chat(messages, null)
+            result ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    override fun chatAsync(messagesJson: String, callback: HttpCallback) {
+        try {
+            val gson = com.google.gson.Gson()
+            val type = object : com.google.gson.reflect.TypeToken<List<Map<String, String>>>() {}.type
+            val messages: List<Map<String, String>> = gson.fromJson(messagesJson, type)
+            val msgs = messages.map { com.luaforge.studio.lxclua.ai.ChatMessage(it["role"] ?: "user", it["content"] ?: "") }
+            val req = com.luaforge.studio.lxclua.ai.ChatRequest(messages = msgs)
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    val response = com.luaforge.studio.lxclua.ai.AIManager.chat(req)
+                    callback.onResult(response.success, response.content, response.error)
+                } catch (e: Exception) {
+                    callback.onResult(false, null, e.message)
+                }
+            }
+        } catch (e: Exception) {
+            callback.onResult(false, null, e.message)
+        }
+    }
+
+    override fun chatAsyncV2(messagesJson: String, callback: com.luaforge.studio.lxclua.plugin.api.callbacks.AIChatCallback) {
+        try {
+            val gson = com.google.gson.Gson()
+            val type = object : com.google.gson.reflect.TypeToken<List<Map<String, String>>>() {}.type
+            val messages: List<Map<String, String>> = gson.fromJson(messagesJson, type)
+            val msgs = messages.map { com.luaforge.studio.lxclua.ai.ChatMessage(it["role"] ?: "user", it["content"] ?: "") }
+            val req = com.luaforge.studio.lxclua.ai.ChatRequest(messages = msgs)
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    val response = com.luaforge.studio.lxclua.ai.AIManager.chat(req)
+                    callback.onResult(
+                        response.success,
+                        response.content,
+                        response.error,
+                        response.model,
+                        response.usage?.totalTokens ?: 0,
+                        response.reasoningContent
+                    )
+                } catch (e: Exception) {
+                    callback.onResult(false, null, e.message, null, 0, null)
+                }
+            }
+        } catch (e: Exception) {
+            callback.onResult(false, null, e.message, null, 0, null)
+        }
+    }
+
+    override fun isAiAvailable(): Boolean = aiBridge.isAvailable()
+
+    override fun getAiConfig(): String {
+        return com.google.gson.Gson().toJson(aiBridge.getConfig())
+    }
+
+    // ==================== MCP 功能 ====================
+
+    private val mcpBridge by lazy { PluginMCP(pluginId, PluginManager.appContext!!) }
+
+    override fun connectMcp(): Boolean = mcpBridge.connect()
+
+    override fun disconnectMcp() { mcpBridge.disconnect() }
+
+    override fun isMcpConnected(): Boolean = mcpBridge.isConnected()
+
+    override fun listMcpTools(): String {
+        return com.google.gson.Gson().toJson(mcpBridge.listTools())
+    }
+
+    override fun callMcpTool(name: String, argumentsJson: String): String {
+        return try {
+            val args = com.google.gson.Gson().fromJson(argumentsJson, Map::class.java) as? Map<String, Any> ?: emptyMap()
+            val result = mcpBridge.callTool(name, args)
+            com.google.gson.Gson().toJson(result)
+        } catch (e: Exception) {
+            "{\"success\":false,\"error\":\"${e.message}\"}"
+        }
+    }
+
+    override fun listMcpResources(): String {
+        return com.google.gson.Gson().toJson(mcpBridge.listResources())
+    }
+
+    override fun readMcpResource(uri: String): String? = mcpBridge.readResource(uri)
+
+    override fun registerMcpTool(name: String, description: String, inputSchemaJson: String): Boolean {
+        return try {
+            // DEX 插件注册工具使用简化方式
+            com.luaforge.studio.lxclua.mcp.MCPManager.registerPluginTool(
+                com.luaforge.studio.lxclua.mcp.MCPTool(name, description, emptyMap())
+            ) { _ -> "DEX 插件工具: $name 已调用" }
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    override fun unregisterMcpTool(name: String) {
+        com.luaforge.studio.lxclua.mcp.MCPManager.unregisterPluginTool(name)
+    }
+
+    // ==================== 悬浮窗功能 ====================
+
+    private val floatingBridge by lazy { PluginFloating(pluginId) }
+
+    override fun createFloatingBall(x: Int, y: Int, label: String, iconText: String): String? {
+        return floatingBridge.createBall(x, y, label, iconText, null, null)
+    }
+
+    override fun removeFloatingBall(id: String) {
+        floatingBridge.removeBall(id)
+    }
+
+    override fun removeAllFloatingBalls() {
+        floatingBridge.removeAll()
+    }
+
+    override fun updateFloatingBall(id: String, label: String) {
+        floatingBridge.updateBall(id, label)
+    }
+
+    override fun showFloatingPanel(id: String, title: String, hint: String) {
+        floatingBridge.showPanel(id, title, hint)
+    }
+
+    override fun showFloatingPanelWebUI(id: String, title: String, page: String): Boolean {
+        return floatingBridge.showPanelWebUI(id, title, page)
+    }
+
+    override fun hideFloatingPanel(id: String) {
+        floatingBridge.hidePanel(id)
+    }
+
+    override fun requestFloatingPanelFocus(id: String) {
+        floatingBridge.requestFocus(id)
+    }
+
+    override fun clearFloatingPanelFocus(id: String) {
+        floatingBridge.clearFocus(id)
+    }
+
+    override fun sendToFloatingPanelWeb(id: String, jsonMessage: String) {
+        floatingBridge.sendToWeb(id, jsonMessage)
+    }
+
+    override fun evaluateFloatingPanelJs(id: String, jsCode: String) {
+        floatingBridge.evaluateJs(id, jsCode)
+    }
+
+    override fun getFloatingBallCount(): Int = floatingBridge.getBallCount()
+
+    // ==================== 系统信息与权限 ====================
+
+    private val systemBridge by lazy { PluginSystem() }
+
+    override fun getScreenWidth(): Int = systemBridge.getScreenWidth()
+
+    override fun getScreenHeight(): Int = systemBridge.getScreenHeight()
+
+    override fun getScreenDensity(): Float = systemBridge.getScreenDensity()
+
+    override fun getScreenInfoJson(): String {
+        return com.google.gson.Gson().toJson(systemBridge.getScreenInfo())
+    }
+
+    override fun getDeviceInfoJson(): String {
+        return com.google.gson.Gson().toJson(systemBridge.getDeviceInfo())
+    }
+
+    override fun getAppInfoJson(): String {
+        return com.google.gson.Gson().toJson(systemBridge.getAppInfo())
+    }
+
+    override fun checkPermission(permission: String): Boolean = systemBridge.checkPermission(permission)
+
+    override fun canDrawOverlays(): Boolean = systemBridge.canDrawOverlays()
+
+    override fun openOverlaySettings() = systemBridge.openOverlaySettings()
+
+    override fun openAppSettings() = systemBridge.openAppSettings()
 }

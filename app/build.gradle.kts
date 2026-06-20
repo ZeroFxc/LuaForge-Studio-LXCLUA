@@ -15,8 +15,8 @@ android {
         applicationId = "com.luaforge.studio.lxclua"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260618
-        versionName = "1.1.2"
+        versionCode = 20260620
+        versionName = "1.1.4"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -204,5 +204,9 @@ dependencies {
     api("org.eclipse.jdt:ecj:3.33.0")
     api("com.android.tools:r8:8.2.42")
     api("io.github.kyant0:backdrop-android:2.0.0-alpha01")
+
+    // MCP Kotlin SDK
+    api(libs.mcp.kotlin.sdk)
+    api(libs.kotlinx.serialization.json)
 
 }

@@ -26,19 +26,24 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
 import androidx.compose.material.icons.automirrored.filled.MergeType
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DataArray
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -50,9 +55,11 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Swipe
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -67,9 +74,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,7 +108,17 @@ import com.luaforge.studio.lxclua.utils.IconManager
 import com.luaforge.studio.lxclua.utils.NonBlockingToastState
 import com.luaforge.studio.lxclua.plugin.state.PluginSettingsState
 import com.luaforge.studio.lxclua.plugin.state.PluginSettingsItem
+import com.luaforge.studio.lxclua.ai.AIConfigManager
+import com.luaforge.studio.lxclua.ai.AIConfigData
+import com.luaforge.studio.lxclua.ai.AIProvider
+import com.luaforge.studio.lxclua.ai.AIProviderConfig
+import com.luaforge.studio.lxclua.ai.AIManager
+import com.luaforge.studio.lxclua.ai.ChatMessage
+import com.luaforge.studio.lxclua.mcp.MCPManager
+import com.luaforge.studio.lxclua.mcp.MCPServerEntry
+import com.luaforge.studio.lxclua.mcp.MCPServerSource
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.io.File
 
 @Composable
@@ -220,6 +240,20 @@ fun SettingsScreen(
     var colorPickerTitle by remember { mutableStateOf("") }
     var colorToEdit by remember { mutableStateOf<Color?>(null) }
     var onColorSelected by remember { mutableStateOf<(Color) -> Unit>({}) }
+
+    // AI 配置状态（从 AIConfigManager 的 StateFlow 收集，实时响应外部变更）
+    val aiConfig by AIConfigManager.configFlow.collectAsState()
+    var aiExpanded by remember { mutableStateOf(false) }
+    var mcpExpanded by remember { mutableStateOf(false) }
+    var aiTesting by remember { mutableStateOf(false) }
+
+    fun updateAiConfig(newConfig: AIConfigData) {
+        scope.launch {
+            AIConfigManager.saveConfig(context, newConfig)
+            AIManager.refresh()
+            MCPManager.refresh()
+        }
+    }
 
     // 使用资源ID，避免在remember中直接调用stringResource
     val fontFamilyOptions = remember {
@@ -1370,6 +1404,75 @@ SettingsListItem(
                     }
                 }
             }
+
+            // AI 配置
+            item {
+                AISettingsSection(
+                    config = aiConfig,
+                    expanded = aiExpanded,
+                    onExpandedChange = { aiExpanded = it },
+                    testing = aiTesting,
+                    onConfigChange = { updateAiConfig(it) },
+                    onTestConnection = {
+                        aiTesting = true
+                        scope.launch {
+                            try {
+                                val result = withTimeout(15_000L) {
+                                    AIManager.chat(
+                                        com.luaforge.studio.lxclua.ai.ChatRequest(
+                                            messages = listOf(ChatMessage("user", "Hello, reply with just 'OK'.")),
+                                            maxTokens = 10
+                                        )
+                                    )
+                                }
+                                aiTesting = false
+                                if (result.success) {
+                                    val model = result.model ?: "?"
+                                    val content = result.content?.take(50)?.replace("\n", " ") ?: ""
+                                    toast.showToast(context.getString(R.string.settings_ai_connection_success_toast, model, content))
+                                } else {
+                                    toast.showToast(context.getString(R.string.settings_ai_connection_failed, result.error ?: ""))
+                                }
+                            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                                aiTesting = false
+                                toast.showToast(context.getString(R.string.settings_ai_connection_timeout))
+                            } catch (e: Exception) {
+                                aiTesting = false
+                                toast.showToast(context.getString(R.string.settings_ai_connection_failed, e.message ?: ""))
+                            }
+                        }
+                    },
+                    aiStreamEnabled = currentSettingsState.aiStreamEnabled,
+                    onStreamEnabledChange = {
+                        updateSettingsWithSave(currentSettingsState.copy(aiStreamEnabled = it))
+                    }
+                )
+            }
+
+            // MCP 配置
+            item {
+                MCPSettingsSection(
+                    config = aiConfig,
+                    expanded = mcpExpanded,
+                    onExpandedChange = { mcpExpanded = it },
+                    onConfigChange = { updateAiConfig(it) },
+                    onTestConnection = { server ->
+                        scope.launch {
+                            try {
+                                val connected = MCPManager.connectServer(server)
+                                if (connected) {
+                                    toast.showToast(context.getString(R.string.settings_mcp_connection_success_toast, server.name))
+                                    MCPManager.disconnectServer(server)
+                                } else {
+                                    toast.showToast(context.getString(R.string.settings_mcp_connection_failed_toast, server.name))
+                                }
+                            } catch (e: Exception) {
+                                toast.showToast(context.getString(R.string.settings_mcp_connection_error_toast, e.message ?: ""))
+                            }
+                        }
+                    }
+                )
+            }
         }
     }
 
@@ -1881,5 +1984,1040 @@ fun DarkModeOption(
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+// ==================== AI 设置 UI（多提供商版本） ====================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AISettingsSection(
+    config: AIConfigData,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    testing: Boolean,
+    onConfigChange: (AIConfigData) -> Unit,
+    onTestConnection: () -> Unit,
+    aiStreamEnabled: Boolean,
+    onStreamEnabledChange: (Boolean) -> Unit
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+    var editingProvider by remember { mutableStateOf<AIProviderConfig?>(null) }
+    var providerMenuExpanded by remember { mutableStateOf(false) }
+
+    // 新增对话框状态
+    var addName by remember { mutableStateOf("") }
+    var addProvider by remember { mutableStateOf(AIProvider.OPENAI) }
+    var addApiKey by remember { mutableStateOf("") }
+    var addModel by remember { mutableStateOf("") }
+    var addProviderMenuExpanded by remember { mutableStateOf(false) }
+
+    SettingsCardGroup(
+        title = stringResource(R.string.settings_ai_config),
+        icon = Icons.AutoMirrored.Filled.Comment,
+        initiallyExpanded = expanded,
+        onExpandedChange = onExpandedChange
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 全局启用开关
+            SettingsListItem(
+                title = stringResource(R.string.settings_ai_enable),
+                subtitle = stringResource(R.string.settings_ai_enable_desc),
+                trailingContent = {
+                    Switch(
+                        checked = config.enabled,
+                        onCheckedChange = { onConfigChange(config.copy(enabled = it)) }
+                    )
+                },
+                onClick = { onConfigChange(config.copy(enabled = !config.enabled)) }
+            )
+
+            if (config.enabled) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
+
+                // AI 流式输出开关
+                SettingsListItem(
+                    title = stringResource(R.string.settings_ai_stream),
+                    subtitle = stringResource(R.string.settings_ai_stream_desc),
+                    trailingContent = {
+                        Switch(
+                            checked = aiStreamEnabled,
+                            onCheckedChange = onStreamEnabledChange
+                        )
+                    },
+                    onClick = { onStreamEnabledChange(!aiStreamEnabled) }
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
+
+                // 提供商列表标题
+                Text(
+                    text = stringResource(R.string.settings_ai_provider_list),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                if (config.providers.isEmpty()) {
+                    Text(
+                        stringResource(R.string.settings_ai_no_providers),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                } else {
+                    config.providers.forEach { providerConfig ->
+                        val isActive = providerConfig.id == config.activeProviderId
+                        val isPlugin = providerConfig.isPluginRegistered
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isActive)
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                else
+                                    MaterialTheme.colorScheme.surface
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { editingProvider = providerConfig }
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 活跃指示器
+                                if (isActive) {
+                                    Icon(
+                                        Icons.Filled.CheckCircle,
+                                        contentDescription = stringResource(R.string.settings_ai_active_provider),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = providerConfig.name,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                        if (isPlugin) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = stringResource(R.string.settings_ai_plugin_registered),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier
+                                                    .background(
+                                                        MaterialTheme.colorScheme.primaryContainer,
+                                                        RoundedCornerShape(4.dp)
+                                                    )
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "${providerConfig.provider.displayName} | ${providerConfig.effectiveModel}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                // 启用开关
+                                Switch(
+                                    checked = providerConfig.enabled,
+                                    onCheckedChange = { enabled ->
+                                        val updated = config.providers.map {
+                                            if (it.id == providerConfig.id) it.copy(enabled = enabled) else it
+                                        }
+                                        onConfigChange(config.copy(providers = updated))
+                                    },
+                                    modifier = Modifier.padding(start = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 添加提供商按钮
+                SettingsListItem(
+                    title = stringResource(R.string.settings_ai_add_provider),
+                    subtitle = stringResource(R.string.settings_ai_add_provider_desc),
+                    leadingIcon = {
+                        Icon(
+                            Icons.Filled.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    onClick = {
+                        addName = ""
+                        addProvider = AIProvider.OPENAI
+                        addApiKey = ""
+                        addModel = ""
+                        showAddDialog = true
+                    }
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
+
+                // 连接测试
+                SettingsListItem(
+                    title = stringResource(R.string.settings_ai_connection_test),
+                    subtitle = if (testing) stringResource(R.string.settings_ai_connection_testing)
+                    else stringResource(R.string.settings_ai_connection_test_desc),
+                    onClick = {
+                        if (!testing) onTestConnection()
+                    },
+                    enabled = config.enabled && config.activeProvider?.isConfigured == true && !testing
+                )
+            }
+        }
+    }
+
+    // ========== 添加提供商对话框 ==========
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAddDialog = false
+            },
+            title = { Text(stringResource(R.string.settings_ai_add_provider)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = addName,
+                        onValueChange = { addName = it },
+                        label = { Text(stringResource(R.string.settings_ai_provider_name)) },
+                        placeholder = { Text(stringResource(R.string.settings_ai_provider_name_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // 提供商类型
+                    ExposedDropdownMenuBox(
+                        expanded = addProviderMenuExpanded,
+                        onExpandedChange = { addProviderMenuExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = addProvider.displayName,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(stringResource(R.string.settings_ai_provider)) },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = addProviderMenuExpanded)
+                            },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier.fillMaxWidth().menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = addProviderMenuExpanded,
+                            onDismissRequest = { addProviderMenuExpanded = false }
+                        ) {
+                            AIProvider.entries.forEach { provider ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            provider.displayName,
+                                            fontWeight = if (addProvider == provider) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    onClick = {
+                                        addProvider = provider
+                                        addProviderMenuExpanded = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = addApiKey,
+                        onValueChange = { addApiKey = it },
+                        label = { Text(stringResource(R.string.settings_ai_api_key)) },
+                        placeholder = { Text(stringResource(R.string.settings_ai_api_key_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = addModel,
+                        onValueChange = { addModel = it },
+                        label = { Text(stringResource(R.string.settings_ai_model)) },
+                        placeholder = { Text(stringResource(R.string.settings_ai_default_model, addProvider.defaultModel)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (addName.isNotBlank()) {
+                            val newProvider = AIProviderConfig(
+                                name = addName,
+                                provider = addProvider,
+                                apiKey = addApiKey,
+                                model = addModel,
+                                enabled = true
+                            )
+                            onConfigChange(
+                                config.copy(
+                                    providers = config.providers + newProvider,
+                                    activeProviderId = config.activeProviderId ?: newProvider.id
+                                )
+                            )
+                            showAddDialog = false
+                        }
+                    },
+                    enabled = addName.isNotBlank()
+                ) {
+                    Text(stringResource(R.string.settings_add))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddDialog = false }) {
+                    Text(stringResource(R.string.settings_cancel))
+                }
+            }
+        )
+    }
+
+    // ========== 编辑提供商对话框 ==========
+    editingProvider?.let { provider ->
+        var editName by remember { mutableStateOf(provider.name) }
+        var editProviderType by remember { mutableStateOf(provider.provider) }
+        var editApiKey by remember { mutableStateOf(provider.apiKey) }
+        var editEndpoint by remember { mutableStateOf(provider.customEndpoint) }
+        var editModel by remember { mutableStateOf(provider.model) }
+        var editTemperature by remember { mutableStateOf(provider.temperature) }
+        var editMaxTokens by remember { mutableStateOf(provider.maxTokens) }
+        var editSystemPrompt by remember { mutableStateOf(provider.systemPrompt) }
+        var editSupportsTools by remember { mutableStateOf(provider.supportsTools) }
+        var editMaxToolRounds by remember { mutableStateOf(provider.maxToolRounds) }
+        var editModelMenuExpanded by remember { mutableStateOf(false) }
+        var editProviderMenuExpanded by remember { mutableStateOf(false) }
+        val isPlugin = provider.isPluginRegistered
+
+        AlertDialog(
+            onDismissRequest = { editingProvider = null },
+            title = { Text(stringResource(R.string.settings_ai_edit_provider)) },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    // 名称
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = { Text(stringResource(R.string.settings_ai_provider_name)) },
+                        singleLine = true,
+                        enabled = !isPlugin,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // 提供商类型
+                    if (!isPlugin) {
+                        ExposedDropdownMenuBox(
+                            expanded = editProviderMenuExpanded,
+                            onExpandedChange = { editProviderMenuExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = editProviderType.displayName,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(stringResource(R.string.settings_ai_provider)) },
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = editProviderMenuExpanded)
+                                },
+                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                modifier = Modifier.fillMaxWidth().menuAnchor()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = editProviderMenuExpanded,
+                                onDismissRequest = { editProviderMenuExpanded = false }
+                            ) {
+                                AIProvider.entries.forEach { prov ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                prov.displayName,
+                                                fontWeight = if (editProviderType == prov) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        },
+                                        onClick = {
+                                            editProviderType = prov
+                                            editProviderMenuExpanded = false
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // API 密钥
+                    OutlinedTextField(
+                        value = editApiKey,
+                        onValueChange = { editApiKey = it },
+                        label = { Text(stringResource(R.string.settings_ai_api_key)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // 自定义端点
+                    if (editProviderType == AIProvider.CUSTOM) {
+                        OutlinedTextField(
+                            value = editEndpoint,
+                            onValueChange = { editEndpoint = it },
+                            label = { Text(stringResource(R.string.settings_ai_custom_endpoint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // 模型选择（下拉 + 自定义）
+                    Text(
+                        text = stringResource(R.string.settings_ai_select_model),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val allModels = provider.allModels
+                    if (allModels.isNotEmpty()) {
+                        allModels.forEach { m ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { editModel = m }
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    if (editModel == m) Icons.Filled.CheckCircle else Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    tint = if (editModel == m) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = m,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (editModel == m) FontWeight.Bold else FontWeight.Normal
+                                )
+                                if (m in provider.registeredModels) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.settings_ai_plugin_models),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .background(
+                                                MaterialTheme.colorScheme.primaryContainer,
+                                                RoundedCornerShape(4.dp)
+                                            )
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = editModel,
+                        onValueChange = { editModel = it },
+                        label = { Text(stringResource(R.string.settings_ai_custom_model)) },
+                        placeholder = { Text(stringResource(R.string.settings_ai_default_model, editProviderType.defaultModel)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // 温度
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_ai_temperature),
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = String.format("%.1f", editTemperature),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Slider(
+                        value = editTemperature,
+                        onValueChange = { editTemperature = it },
+                        valueRange = 0f..2f,
+                        steps = 19,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // 最大 Token
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_ai_max_tokens),
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "${editMaxTokens}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Slider(
+                        value = editMaxTokens.toFloat(),
+                        onValueChange = { editMaxTokens = it.toInt() },
+                        valueRange = 256f..32768f,
+                        steps = 0,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // 系统提示词
+                    OutlinedTextField(
+                        value = editSystemPrompt,
+                        onValueChange = { editSystemPrompt = it },
+                        label = { Text(stringResource(R.string.settings_ai_system_prompt)) },
+                        minLines = 2,
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // MCP 工具支持（仅对支持 function calling 的模型开启）
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { editSupportsTools = !editSupportsTools },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "MCP 工具支持",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = if (editSupportsTools) "已开启" else "已关闭",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (editSupportsTools) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Switch(
+                            checked = editSupportsTools,
+                            onCheckedChange = { editSupportsTools = it }
+                        )
+                    }
+                    if (!editSupportsTools) {
+                        Text(
+                            text = "开启后，AI 请求将自动附带已启用的 MCP 工具定义。请确保当前模型支持 function calling 后再开启。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                        )
+                    }
+
+                    // 最大工具调用轮次
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "最大工具调用轮次",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "${editMaxToolRounds}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Slider(
+                        value = editMaxToolRounds.toFloat(),
+                        onValueChange = { editMaxToolRounds = it.toInt() },
+                        valueRange = 1f..30f,
+                        steps = 28,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = "控制 AI 最多可调用几轮工具，防止无限循环。建议值：5~15",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Column {
+                    // 设为当前
+                    if (provider.id != config.activeProviderId) {
+                        TextButton(
+                            onClick = {
+                                onConfigChange(config.copy(activeProviderId = provider.id))
+                                editingProvider = null
+                            }
+                        ) {
+                            Text(stringResource(R.string.settings_ai_set_active))
+                        }
+                    }
+                    Row {
+                        // 删除（仅非插件注册的）
+                        if (!isPlugin) {
+                            TextButton(
+                                onClick = {
+                                    onConfigChange(
+                                        config.copy(
+                                            providers = config.providers.filter { it.id != provider.id },
+                                            activeProviderId = if (config.activeProviderId == provider.id)
+                                                config.providers.firstOrNull { it.id != provider.id }?.id
+                                            else config.activeProviderId
+                                        )
+                                    )
+                                    editingProvider = null
+                                }
+                            ) {
+                                Text(
+                                    stringResource(R.string.settings_ai_delete_provider),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                        // 保存
+                        TextButton(
+                            onClick = {
+                                val updated = config.providers.map {
+                                    if (it.id == provider.id) it.copy(
+                                        name = editName,
+                                        provider = editProviderType,
+                                        apiKey = editApiKey,
+                                        customEndpoint = editEndpoint,
+                                        model = editModel,
+                                        temperature = editTemperature,
+                                        maxTokens = editMaxTokens,
+                                        systemPrompt = editSystemPrompt,
+                                        supportsTools = editSupportsTools,
+                                        maxToolRounds = editMaxToolRounds
+                                    ) else it
+                                }
+                                onConfigChange(config.copy(providers = updated))
+                                editingProvider = null
+                            }
+                        ) {
+                            Text(stringResource(R.string.settings_save))
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingProvider = null }) {
+                    Text(stringResource(R.string.settings_cancel))
+                }
+            }
+        )
+    }
+}
+
+// ==================== MCP 设置 UI ====================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MCPSettingsSection(
+    config: AIConfigData,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onConfigChange: (AIConfigData) -> Unit,
+    onTestConnection: (MCPServerEntry) -> Unit
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+    var addServerName by remember { mutableStateOf("") }
+    var addServerUrl by remember { mutableStateOf("") }
+    var addServerSource by remember { mutableStateOf(MCPServerSource.REMOTE_URL) }
+    var addServerTransport by remember { mutableStateOf("streamable_http") }
+    var addSourceMenuExpanded by remember { mutableStateOf(false) }
+    var addTransportMenuExpanded by remember { mutableStateOf(false) }
+    var expandedServiceId by remember { mutableStateOf<String?>(null) }
+    var hierarchyVersion by remember { mutableStateOf(0) }
+
+    // 获取服务层级结构（含工具列表），hierarchyVersion 变化时重新获取
+    val serviceHierarchy = remember(hierarchyVersion) { MCPManager.getServiceHierarchy() }
+
+    SettingsCardGroup(
+        title = stringResource(R.string.settings_mcp_server_list),
+        icon = Icons.Filled.DataArray,
+        initiallyExpanded = expanded,
+        onExpandedChange = onExpandedChange
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            // 服务器列表
+            if (config.mcpServers.isEmpty()) {
+                Text(
+                    stringResource(R.string.settings_mcp_no_servers),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            } else {
+                config.mcpServers.forEach { server ->
+                    val isPlugin = server.source == com.luaforge.studio.lxclua.mcp.MCPServerSource.LOCAL_PLUGIN
+                    val isExpanded = expandedServiceId == server.id
+
+                    // 查找该服务在层级结构中的信息（含工具列表）
+                    val serviceInfo = if (isPlugin) {
+                        val serviceName = server.id.removePrefix("plugin_service_")
+                        serviceHierarchy.find { it["name"] == serviceName && it["source"] == "plugin" }
+                    } else null
+                    val tools = (serviceInfo?.get("tools") as? List<*>) ?: emptyList<Any>()
+
+                    Column {
+                        SettingsListItem(
+                            title = server.name,
+                            subtitle = if (isPlugin) {
+                                val toolCount = serviceInfo?.get("toolCount") as? Int ?: 0
+                                "${stringResource(R.string.settings_mcp_local_plugin)} · $toolCount 个工具"
+                            } else server.url.ifBlank { stringResource(R.string.settings_mcp_no_url) },
+                            trailingContent = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Switch(
+                                        checked = server.enabled,
+                                        onCheckedChange = { enabled ->
+                                            val updated = config.mcpServers.map {
+                                                if (it.id == server.id) it.copy(enabled = enabled) else it
+                                            }
+                                            onConfigChange(config.copy(mcpServers = updated))
+                                            // 同步更新 serviceRegistry，确保 getEnabledServiceTools() 生效
+                                            if (isPlugin) {
+                                                val serviceName = server.id.removePrefix("plugin_service_")
+                                                if (enabled) {
+                                                    MCPManager.enableService(serviceName)
+                                                } else {
+                                                    MCPManager.disableService(serviceName)
+                                                }
+                                            }
+                                        }
+                                    )
+                                    if (isPlugin) {
+                                        IconButton(onClick = {
+                                            expandedServiceId = if (isExpanded) null else server.id
+                                        }) {
+                                            Icon(
+                                                if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                                contentDescription = if (isExpanded) "收起" else "展开",
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                    if (!isPlugin) {
+                                        IconButton(onClick = {
+                                            val updated = config.mcpServers.filter { it.id != server.id }
+                                            onConfigChange(config.copy(mcpServers = updated))
+                                        }) {
+                                            Icon(
+                                                Icons.Filled.Delete,
+                                                contentDescription = stringResource(R.string.settings_mcp_delete),
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            onClick = {
+                                if (isPlugin) {
+                                    expandedServiceId = if (isExpanded) null else server.id
+                                } else if (server.url.isNotBlank()) {
+                                    onTestConnection(server)
+                                }
+                            }
+                        )
+
+                        // 展开的工具列表
+                        AnimatedVisibility(
+                            visible = isExpanded && isPlugin && tools.isNotEmpty(),
+                            enter = expandVertically(),
+                            exit = shrinkVertically()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 24.dp, end = 8.dp, bottom = 4.dp)
+                            ) {
+                                tools.forEach { tool ->
+                                    val toolMap = tool as? Map<*, *> ?: return@forEach
+                                    val toolName = toolMap["name"] as? String ?: ""
+                                    val toolDesc = toolMap["description"] as? String ?: ""
+                                    val toolEnabled = toolMap["enabled"] as? Boolean ?: true
+                                    val serviceName = serviceInfo?.get("name") as? String ?: ""
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                toolName,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            if (toolDesc.isNotBlank()) {
+                                                Text(
+                                                    toolDesc,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                        Switch(
+                                            checked = toolEnabled,
+                                            onCheckedChange = { enabled ->
+                                                if (enabled) {
+                                                    MCPManager.enableServiceTool(serviceName, toolName)
+                                                } else {
+                                                    MCPManager.disableServiceTool(serviceName, toolName)
+                                                }
+                                                // 刷新层级数据
+                                                hierarchyVersion++
+                                            }
+                                        )
+                                    }
+                                    HorizontalDivider(
+                                        thickness = 0.5.dp,
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.05f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (server != config.mcpServers.last()) {
+                        HorizontalDivider(
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+            )
+
+            // 添加服务器按钮
+            SettingsListItem(
+                title = stringResource(R.string.settings_mcp_add_server),
+                subtitle = stringResource(R.string.settings_mcp_add_server_desc),
+                onClick = { showAddDialog = true }
+            )
+        }
+    }
+
+    // 添加服务器对话框
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAddDialog = false
+                addServerName = ""
+                addServerUrl = ""
+                addServerSource = MCPServerSource.REMOTE_URL
+                addServerTransport = "streamable_http"
+            },
+            title = { Text(stringResource(R.string.settings_mcp_add_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // 服务器名称
+                    OutlinedTextField(
+                        value = addServerName,
+                        onValueChange = { addServerName = it },
+                        label = { Text(stringResource(R.string.settings_mcp_server_name)) },
+                        placeholder = { Text(stringResource(R.string.settings_mcp_name_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // 服务器类型
+                    ExposedDropdownMenuBox(
+                        expanded = addSourceMenuExpanded,
+                        onExpandedChange = { addSourceMenuExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = when (addServerSource) {
+                                MCPServerSource.LOCAL_PLUGIN -> stringResource(R.string.settings_mcp_source_local)
+                                MCPServerSource.REMOTE_URL -> stringResource(R.string.settings_mcp_source_remote)
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(stringResource(R.string.settings_mcp_source)) },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = addSourceMenuExpanded)
+                            },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier.fillMaxWidth().menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = addSourceMenuExpanded,
+                            onDismissRequest = { addSourceMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(R.string.settings_mcp_source_remote),
+                                        fontWeight = if (addServerSource == MCPServerSource.REMOTE_URL) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                onClick = {
+                                    addServerSource = MCPServerSource.REMOTE_URL
+                                    addSourceMenuExpanded = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(R.string.settings_mcp_source_local),
+                                        fontWeight = if (addServerSource == MCPServerSource.LOCAL_PLUGIN) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                onClick = {
+                                    addServerSource = MCPServerSource.LOCAL_PLUGIN
+                                    addSourceMenuExpanded = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    // URL（仅远程类型显示）
+                    if (addServerSource == MCPServerSource.REMOTE_URL) {
+                        OutlinedTextField(
+                            value = addServerUrl,
+                            onValueChange = { addServerUrl = it },
+                            label = { Text(stringResource(R.string.settings_mcp_server_url)) },
+                            placeholder = { Text("http://localhost:8080/mcp") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // 传输类型
+                    val transportOptions = listOf("streamable_http" to stringResource(R.string.settings_mcp_transport_streamable_http), "sse" to stringResource(R.string.settings_mcp_transport_sse))
+                    ExposedDropdownMenuBox(
+                        expanded = addTransportMenuExpanded,
+                        onExpandedChange = { addTransportMenuExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = transportOptions.find { it.first == addServerTransport }?.second ?: addServerTransport,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(stringResource(R.string.settings_mcp_transport)) },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = addTransportMenuExpanded)
+                            },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier.fillMaxWidth().menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = addTransportMenuExpanded,
+                            onDismissRequest = { addTransportMenuExpanded = false }
+                        ) {
+                            transportOptions.forEach { (value, label) ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            label,
+                                            fontWeight = if (addServerTransport == value) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    onClick = {
+                                        addServerTransport = value
+                                        addTransportMenuExpanded = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val isValid = when (addServerSource) {
+                            MCPServerSource.REMOTE_URL -> addServerName.isNotBlank() && addServerUrl.isNotBlank()
+                            MCPServerSource.LOCAL_PLUGIN -> addServerName.isNotBlank()
+                        }
+                        if (isValid) {
+                            val newServer = MCPServerEntry(
+                                name = addServerName,
+                                url = addServerUrl,
+                                source = addServerSource,
+                                transport = addServerTransport
+                            )
+                            onConfigChange(config.copy(mcpServers = config.mcpServers + newServer))
+                            showAddDialog = false
+                            addServerName = ""
+                            addServerUrl = ""
+                            addServerSource = MCPServerSource.REMOTE_URL
+                            addServerTransport = "streamable_http"
+                        }
+                    },
+                    enabled = when (addServerSource) {
+                        MCPServerSource.REMOTE_URL -> addServerName.isNotBlank() && addServerUrl.isNotBlank()
+                        MCPServerSource.LOCAL_PLUGIN -> addServerName.isNotBlank()
+                    }
+                ) {
+                    Text(stringResource(R.string.settings_add))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showAddDialog = false
+                    addServerName = ""
+                    addServerUrl = ""
+                    addServerSource = MCPServerSource.REMOTE_URL
+                    addServerTransport = "streamable_http"
+                }) {
+                    Text(stringResource(R.string.settings_cancel))
+                }
+            }
+        )
     }
 }

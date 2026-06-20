@@ -1,0 +1,11 @@
+{
+  "id": "editor_search",
+  "name": "编辑器搜索增强",
+  "version": "1.0.0",
+  "author": "LXC-LUA",
+  "description": "在编辑器顶部栏添加搜索按钮，支持搜索和替换，两个输入框",
+  "type": "lua",
+  "main": "main.lua",
+  "permissions": ["editor", "floating"],
+  "minAppVersion": "1.1.3"
+}

@@ -650,6 +650,14 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
         decorationEventSubscriptions.clear()
         editorInstances.values.forEach { editor ->
             try {
+                // 清理编辑器诊断（波浪线），防止关闭后残留
+                val language = editor.editorLanguage
+                if (language is LuaLanguage) {
+                    val analyzer = language.analyzeManager
+                    if (analyzer is LuaIncrementalAnalyzeManager) {
+                        analyzer.diagnosticsContainer.reset()
+                    }
+                }
                 (editor.parent as? ViewGroup)?.removeView(editor)
                 editor.release()
             } catch (e: Exception) {
