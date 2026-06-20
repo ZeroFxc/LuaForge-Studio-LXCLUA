@@ -451,6 +451,20 @@ static void PrintCode(const Proto* f)
 	printf("%d %d %d%s",a,vb,vc,ISK);
 	printf(COMMENT "%d",vc+EXTRAARGC);
 	break;
+   case OP_NEWMAP:
+	/* R[A] := [] (åˆ›å»ºmapå®¹å™¨ï¼ŒB/Cæœªä½¿ç”¨) */
+	printf("%d %d %d%s",a,0,0,ISK);
+	printf(COMMENT "new map");
+	break;
+   case OP_MAPGET:
+	/* R[A] := R[B][R[C]] (mapä¸‹æ ‡è¯»å–) */
+	printf("%d %d %d%s",a,b,c,ISK);
+	break;
+   case OP_MAPSET:
+	/* R[A][R[B]] := RK(C) (mapä¸‹æ ‡èµ‹å€¼) */
+	printf("%d %d %d%s",a,b,c,ISK);
+	if (isk) { printf(COMMENT); PrintConstant(f,c); }
+	break;
    case OP_SELF:
 	printf("%d %d %d%s",a,b,c,ISK);
 	if (isk) { printf(COMMENT); PrintConstant(f,c); }
@@ -782,8 +796,8 @@ static void PrintCode(const Proto* f)
 	printf("%d",ax);
 	break;
    case OP_AWAIT:
-	/* A=½á¹û¼Ä´æÆ÷, B=Promise(»òÆÕÍ¨Öµ)¼Ä´æÆ÷
-	 * B ÊÇ userdata(Promise)Ê±¹ÒÆğĞ­³ÌµÈ´ı£»ÆÕÍ¨ÖµÊ±Ö±½ÓĞ´Èë R[A]¡£*/
+	/* A=ç»“æœå¯„å­˜å™¨, B=Promise(æˆ–æ™®é€šå€¼)å¯„å­˜å™¨
+	 * B æ˜¯ userdata(Promise)æ—¶æŒ‚èµ·åç¨‹ç­‰å¾…ï¼›æ™®é€šå€¼æ—¶ç›´æ¥å†™å…¥ R[A]ã€‚*/
 	printf("%d %d",a,b);
 	break;
    case OP_SETTRAITFLAG:

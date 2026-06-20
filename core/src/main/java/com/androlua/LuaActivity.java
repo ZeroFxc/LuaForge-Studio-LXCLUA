@@ -50,6 +50,7 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.core.content.ContextCompat;
 
 import com.luajava.JavaFunction;
 import com.luajava.LuaException;
@@ -1253,6 +1254,58 @@ public class LuaActivity extends AppCompatActivity
           }
         };
     call.register("call");
+
+    JavaFunction requestP =
+        new JavaFunction(L) {
+          @Override
+          public int execute() throws LuaException {
+            if (L.getTop() < 2) return 0;
+            int type = L.type(2);
+            if (type == LuaState.LUA_TTABLE) {
+              // 表参数：检查所有权限，有缺失则申请并返回false，全都有则返回true
+              java.util.ArrayList<String> permList = new java.util.ArrayList<>();
+              L.pushNil();
+              while (L.next(2) != 0) {
+                if (L.isString(-1)) {
+                  String perm = L.toString(-1);
+                  if (!perm.contains(".")) {
+                    perm = "android.permission." + perm;
+                  }
+                  permList.add(perm);
+                }
+                L.pop(1);
+              }
+              if (permList.isEmpty()) return 0;
+              String[] perms = permList.toArray(new String[0]);
+              boolean allGranted = true;
+              for (String p : perms) {
+                if (ContextCompat.checkSelfPermission(LuaActivity.this, p)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                  allGranted = false;
+                  break;
+                }
+              }
+              if (!allGranted) {
+                LuaActivity.this.requestPermissions(perms, 0);
+              }
+              L.pushBoolean(allGranted);
+              return 1;
+            } else if (L.isString(2)) {
+              // 字符串参数：检查单个权限是否已授予
+              String perm = L.toString(2);
+              if (!perm.contains(".")) {
+                perm = "android.permission." + perm;
+              }
+              boolean granted =
+                  ContextCompat.checkSelfPermission(LuaActivity.this, perm)
+                      == android.content.pm.PackageManager.PERMISSION_GRANTED;
+              L.pushBoolean(granted);
+              return 1;
+            }
+            return 0;
+          }
+        };
+    requestP.register("requestP");
   }
 
   public void setDebug(boolean isDebug) {

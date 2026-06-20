@@ -90,6 +90,7 @@ enum class Tokens {
     ERROR,
     IPAIRS,
     PAIRS,
+    MPAIRS,
     NEXT,
     PRINT,
     RAWEQUAL,

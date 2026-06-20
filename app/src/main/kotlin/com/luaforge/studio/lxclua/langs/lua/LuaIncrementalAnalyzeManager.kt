@@ -533,7 +533,7 @@ class LuaIncrementalAnalyzeManager :
                 }
 
                 Tokens.COLLECTGARBAGE, Tokens.COMPILE, Tokens.COROUTINE, Tokens.ASSERT,
-                Tokens.ERROR, Tokens.IPAIRS, Tokens.PAIRS, Tokens.NEXT, Tokens.PRINT,
+                Tokens.ERROR, Tokens.IPAIRS, Tokens.PAIRS,Tokens.MPAIRS, Tokens.NEXT, Tokens.PRINT,
                 Tokens.RAWEQUAL, Tokens.RAWGET, Tokens.RAWSET, Tokens.SELECT,
                 Tokens.SETMETATABLE, Tokens.GETMETATABLE, Tokens.TONUMBER,
                 Tokens.TOSTRING, Tokens.TYPE, Tokens.UNPACK, Tokens._G, Tokens.CALL -> {

@@ -111,6 +111,7 @@ class LuaLanguage : Language {
             "getfenv",
             "getmetatable",
             "ipairs",
+            "mpairs",
             "load",
             "loadfile",
             "loadstring",
