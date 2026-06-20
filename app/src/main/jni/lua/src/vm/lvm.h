@@ -148,7 +148,7 @@ LUAI_FUNC lua_Integer luaV_shiftl (lua_Integer x, lua_Integer y);
 LUAI_FUNC void luaV_objlen (lua_State *L, StkId ra, const TValue *rb);
 LUAI_FUNC Instruction luaV_getinst(const Proto *p, int pc);
 
-/* 异步系统：纯语法级函数指针设置（替代注册表查找） */
+/* 寮傛绯荤粺锛氱函璇硶绾у嚱鏁版寚閽堣缃紙鏇夸唬娉ㄥ唽琛ㄦ煡鎵撅級 */
 LUAI_FUNC void lvm_set_async_runner(void *fn);
 LUAI_FUNC int lvm_async_invoke(lua_State *L);
 

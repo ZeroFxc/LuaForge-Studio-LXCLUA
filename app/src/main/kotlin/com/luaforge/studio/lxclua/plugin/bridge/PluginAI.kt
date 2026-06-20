@@ -198,7 +198,8 @@ class PluginAI {
                         android.util.Log.i("PluginAI", "[流式→编辑器] 完成 | jobId: $jobId | success: ${response.success} | 内容长度: ${response.content?.length ?: 0} | chunks: $chunkCount")
                         safeCall(onDone, response.success, response.content ?: "", response.error ?: "")
                     }
-                ) catch (e: CancellationException) {
+                )
+            } catch (e: CancellationException) {
                 android.util.Log.i("PluginAI", "[流式→编辑器] 已取消 | jobId: $jobId")
                 safeCall(onDone, false, "", "已取消")
             } catch (e: Exception) {
