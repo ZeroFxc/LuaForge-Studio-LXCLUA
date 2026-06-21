@@ -86,6 +86,10 @@ import java.io.InputStreamReader
  */
 class PluginWebUIBridge(private val pluginId: String) : IPluginBridgeWebUI {
 
+    companion object {
+        private const val TAG = "PluginWebUIBridge"
+    }
+
     /**
      * 持有 WebView 引用以支持宿主 → Web 发送消息
      */
@@ -293,9 +297,11 @@ class PluginWebUIBridge(private val pluginId: String) : IPluginBridgeWebUI {
          */
         @JavascriptInterface
         fun callLua(funcName: String, argsJson: String): String {
+            android.util.Log.d(TAG, "[$pluginId] callLua func=$funcName, args=${argsJson.take(200)}")
             return try {
                 val luaState = getPluginLuaState()
                 if (luaState == null) {
+                    android.util.Log.e(TAG, "[$pluginId] callLua 失败: 插件 '$pluginId' 的 LuaState 未初始化")
                     return "error: 插件 Lua 状态未初始化"
                 }
 
@@ -303,6 +309,7 @@ class PluginWebUIBridge(private val pluginId: String) : IPluginBridgeWebUI {
                 luaState.getGlobal(funcName)
                 if (!luaState.isFunction(-1)) {
                     luaState.pop(1)
+                    android.util.Log.w(TAG, "[$pluginId] callLua 失败: 全局函数 '$funcName' 不存在")
                     return "error: 函数 '$funcName' 不存在"
                 }
 
@@ -319,6 +326,7 @@ class PluginWebUIBridge(private val pluginId: String) : IPluginBridgeWebUI {
                 if (status != 0) {
                     val errMsg = luaState.toString(-1)
                     luaState.pop(1)
+                    android.util.Log.e(TAG, "[$pluginId] callLua pcall 失败: func=$funcName, error=$errMsg")
                     return "error: Lua调用失败 - $errMsg"
                 }
 
@@ -335,9 +343,10 @@ class PluginWebUIBridge(private val pluginId: String) : IPluginBridgeWebUI {
                     luaState.toString(-1) ?: "unknown"
                 }
                 luaState.pop(1)
+                android.util.Log.d(TAG, "[$pluginId] callLua 成功: func=$funcName, result=${result.take(100)}")
                 result
             } catch (e: Exception) {
-                android.util.Log.e("PluginWebUI[$pluginId]", "callLua 异常", e)
+                android.util.Log.e(TAG, "[$pluginId] callLua 异常: func=$funcName", e)
                 "error: ${e.message}"
             }
         }

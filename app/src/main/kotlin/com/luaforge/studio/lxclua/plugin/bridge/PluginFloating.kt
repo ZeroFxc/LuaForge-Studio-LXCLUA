@@ -25,6 +25,10 @@ import java.util.UUID
  */
 class PluginFloating(private val pluginId: String = "") {
 
+    companion object {
+        private const val TAG = "PluginFloating"
+    }
+
     private val ballCallbacks = mutableMapOf<String, LuaFunction<*>?>()
     private val submitCallbacks = mutableMapOf<String, LuaFunction<*>?>()
 
@@ -35,7 +39,7 @@ class PluginFloating(private val pluginId: String = "") {
                 @Suppress("UNCHECKED_CAST")
                 (it as LuaFunction<Any>).call(*args)
             } catch (e: Exception) {
-                android.util.Log.e("PluginFloating", "Lua 回调异常: ${e.message}", e)
+                android.util.Log.e(TAG, "Lua 回调异常: ${e.message}", e)
             }
         }
     }
@@ -43,12 +47,16 @@ class PluginFloating(private val pluginId: String = "") {
     /**
      * 创建悬浮球
      *
+     * 点击悬浮球时仅触发 onClick 回调，由 Lua 层决定是否显示面板及使用哪种模式。
+     * 面板内容通过 WebUI 模板渲染（默认模板或插件自定义 HTML），
+     * Lua 与 WebUI 通过 LXC.callLua / lxc-message 双向通信。
+     *
      * @param x 初始 X 坐标（像素）
      * @param y 初始 Y 坐标（像素）
      * @param label 悬浮球标签文字
      * @param iconText 悬浮球图标文字（2个字符，如 "AI"）
      * @param onClick 点击悬浮球回调（参数：ballId）
-     * @param onSubmit 提交输入回调（参数：ballId, inputText）
+     * @param onSubmit 提交输入回调（已废弃，改用 onFloatingPanelSubmit 全局函数）
      * @return 悬浮球 ID，失败返回 null
      */
     fun createBall(
@@ -60,6 +68,7 @@ class PluginFloating(private val pluginId: String = "") {
         onSubmit: LuaFunction<*>?
     ): String? {
         val id = UUID.randomUUID().toString().take(8)
+        android.util.Log.d(TAG, "[$pluginId] createBall id=$id, x=$x, y=$y, label=\"$label\"")
         ballCallbacks[id] = onClick
         submitCallbacks[id] = onSubmit
 
@@ -71,11 +80,12 @@ class PluginFloating(private val pluginId: String = "") {
             label = label,
             iconText = iconText,
             onBallClick = { ballId ->
-                // 点击悬浮球：展开面板
-                showPanel(ballId, "AI 提示", "输入提示词...")
+                android.util.Log.d(TAG, "[$pluginId] ballClick id=$ballId")
+                // 仅触发 Lua 回调，由 Lua 层决定展示内容
                 safeCall(ballCallbacks[ballId], ballId)
             },
             onInputSubmit = { ballId, inputText ->
+                // 保留兼容：如果 Lua 定义了 onSubmit 回调且不使用 WebUI 模式
                 safeCall(submitCallbacks[ballId], ballId, inputText)
             }
         )
@@ -84,6 +94,7 @@ class PluginFloating(private val pluginId: String = "") {
 
     /** 移除悬浮球 */
     fun removeBall(id: String) {
+        android.util.Log.d(TAG, "[$pluginId] removeBall id=$id")
         FloatingManager.removeBall(id)
         ballCallbacks.remove(id)
         submitCallbacks.remove(id)
@@ -91,6 +102,7 @@ class PluginFloating(private val pluginId: String = "") {
 
     /** 移除所有悬浮球 */
     fun removeAll() {
+        android.util.Log.d(TAG, "[$pluginId] removeAll 数量=${ballCallbacks.size}")
         FloatingManager.removeAllBalls()
         ballCallbacks.clear()
         submitCallbacks.clear()
@@ -101,9 +113,23 @@ class PluginFloating(private val pluginId: String = "") {
         FloatingManager.updateBallLabel(id, label)
     }
 
-    /** 展开默认输入面板 */
+    /**
+     * 展开默认输入面板（使用内置 WebUI 模板 panel_default.html）
+     *
+     * 面板内容由 HTML 模板渲染，Lua 通过以下方式与面板交互：
+     * - 面板 → Lua：JS 调用 LXC.callLua("onFloatingPanelSubmit", json)
+     * - Lua → 面板：调用 plugin.floating.sendToWeb(id, json)
+     *
+     * @param id 悬浮球 ID
+     * @param title 面板标题
+     * @param hint 输入框提示文字
+     */
     fun showPanel(id: String, title: String, hint: String) {
-        FloatingManager.showPanel(id, title, hint)
+        android.util.Log.d(TAG, "[$pluginId] showPanel id=$id, title=\"$title\", hint=\"$hint\"")
+        // 创建 WebUI 桥接器用于 JS ↔ Lua 通信
+        val webUIBridge = PluginWebUIBridge(pluginId)
+        val jsBridge = webUIBridge.JsApiBridge()
+        FloatingManager.showPanelDefault(id, title, hint, jsBridge, "LXC")
     }
 
     /**
@@ -115,10 +141,14 @@ class PluginFloating(private val pluginId: String = "") {
      * @return 是否成功加载
      */
     fun showPanelWebUI(id: String, title: String, page: String): Boolean {
+        android.util.Log.d(TAG, "[$pluginId] showPanelWebUI id=$id, title=\"$title\", page=$page")
         // 查找当前插件的 web 目录
         val plugin = PluginManager.loadedPlugins.find { it.manifest.id == pluginId }
         val webDir = plugin?.let { File(it.directory, "web") }
-        if (webDir == null || !webDir.exists()) return false
+        if (webDir == null || !webDir.exists()) {
+            android.util.Log.w(TAG, "[$pluginId] showPanelWebUI 失败: webDir 不存在")
+            return false
+        }
 
         // 创建 WebUI 桥接器用于 JS 通信
         val webUIBridge = PluginWebUIBridge(pluginId)
@@ -129,6 +159,7 @@ class PluginFloating(private val pluginId: String = "") {
 
     /** 隐藏面板 */
     fun hidePanel(id: String) {
+        android.util.Log.d(TAG, "[$pluginId] hidePanel id=$id")
         FloatingManager.hidePanel(id)
     }
 
@@ -144,10 +175,11 @@ class PluginFloating(private val pluginId: String = "") {
      * @param view 自定义 View（Lua 中通过 LuaJava 创建）
      */
     fun showPanelCustom(id: String, title: String, view: Any?) {
+        android.util.Log.d(TAG, "[$pluginId] showPanelCustom id=$id, title=\"$title\", viewType=${view?.javaClass?.simpleName}")
         if (view is android.view.View) {
             FloatingManager.showPanelCustom(id, title, view)
         } else {
-            android.util.Log.e("PluginFloating", "showPanelCustom: view 不是有效的 View 类型: ${view?.javaClass?.name}")
+            android.util.Log.e(TAG, "showPanelCustom: view 不是有效的 View 类型: ${view?.javaClass?.name}")
         }
     }
 
@@ -242,20 +274,13 @@ class PluginFloating(private val pluginId: String = "") {
     /**
      * 向 WebUI 面板发送消息（宿主 → Web）
      * Web 端通过监听 lxc-message 自定义事件接收
+     * 支持消息队列，WebView 未就绪时自动暂存
      *
      * @param id 悬浮球 ID
      * @param jsonMessage JSON 格式消息
      */
     fun sendToWeb(id: String, jsonMessage: String) {
-        val wv = FloatingManager.getPanelWebView(id)
-        if (wv != null) {
-            wv.post {
-                wv.evaluateJavascript(
-                    """window.dispatchEvent(new CustomEvent('lxc-message', {detail: $jsonMessage}));""",
-                    null
-                )
-            }
-        }
+        FloatingManager.sendToPanelWebView(id, jsonMessage)
     }
 
     /**

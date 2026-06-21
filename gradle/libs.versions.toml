@@ -73,7 +73,7 @@ okhttp = "5.3.2"
 ktoast = "1.0.4"
 
 # MCP Kotlin SDK
-mcp-kotlin-sdk = "0.12.0"
+mcp-kotlin-sdk = "0.13.0"
 
 # Kotlinx Serialization (MCP SDK 依赖)
 kotlinx-serialization-json = "1.9.0"

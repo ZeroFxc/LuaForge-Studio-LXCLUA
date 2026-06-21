@@ -170,7 +170,9 @@ data class AIConfigData(
     /** MCP 传输类型 */
     val mcpTransport: String = "streamable_http",
     /** MCP 服务器列表（多服务器支持） */
-    val mcpServers: List<com.luaforge.studio.lxclua.mcp.MCPServerEntry> = emptyList()
+    val mcpServers: List<com.luaforge.studio.lxclua.mcp.MCPServerEntry> = emptyList(),
+    /** MCP 工具开关状态持久化：serviceName -> (toolName -> enabled) */
+    val mcpToolStates: Map<String, Map<String, Boolean>> = emptyMap()
 ) {
     // ========== 向后兼容的计算属性（委托给活跃提供商） ==========
 
@@ -225,6 +227,7 @@ object AIConfigManager {
         val MCP_ENDPOINT = stringPreferencesKey("mcp_endpoint")
         val MCP_TRANSPORT = stringPreferencesKey("mcp_transport")
         val MCP_SERVERS = stringPreferencesKey("mcp_servers_json")
+        val MCP_TOOL_STATES = stringPreferencesKey("mcp_tool_states_json")
 
         // 旧版字段（用于迁移）
         val OLD_PROVIDER = stringPreferencesKey("ai_provider")
@@ -304,7 +307,8 @@ object AIConfigManager {
             mcpEnabled = prefs[Keys.MCP_ENABLED] ?: false,
             mcpEndpoint = prefs[Keys.MCP_ENDPOINT] ?: "http://localhost:8080/mcp",
             mcpTransport = prefs[Keys.MCP_TRANSPORT] ?: "streamable_http",
-            mcpServers = com.luaforge.studio.lxclua.mcp.MCPServerEntry.fromJsonList(prefs[Keys.MCP_SERVERS] ?: "")
+            mcpServers = com.luaforge.studio.lxclua.mcp.MCPServerEntry.fromJsonList(prefs[Keys.MCP_SERVERS] ?: ""),
+            mcpToolStates = parseToolStatesJson(prefs[Keys.MCP_TOOL_STATES] ?: "")
         ))
         android.util.Log.i("AIConfigManager", "[loadConfig] 从磁盘加载完成, mcpServers: ${_config.mcpServers.size} 个")
     }
@@ -320,6 +324,7 @@ object AIConfigManager {
             prefs[Keys.MCP_ENDPOINT] = config.mcpEndpoint
             prefs[Keys.MCP_TRANSPORT] = config.mcpTransport
             prefs[Keys.MCP_SERVERS] = com.luaforge.studio.lxclua.mcp.MCPServerEntry.toJsonList(config.mcpServers)
+            prefs[Keys.MCP_TOOL_STATES] = serializeToolStatesJson(config.mcpToolStates)
         }
     }
 
@@ -400,5 +405,42 @@ object AIConfigManager {
                 } else it
             }
         ))
+    }
+
+    // ========== MCP 工具状态持久化 ==========
+
+    /** 解析工具状态 JSON: {"serviceName": {"toolName": true, ...}} */
+    private fun parseToolStatesJson(json: String): Map<String, Map<String, Boolean>> {
+        if (json.isBlank()) return emptyMap()
+        return try {
+            val root = JSONObject(json)
+            val result = mutableMapOf<String, Map<String, Boolean>>()
+            for (serviceName in root.keys()) {
+                val toolsJson = root.getJSONObject(serviceName)
+                val tools = mutableMapOf<String, Boolean>()
+                for (toolName in toolsJson.keys()) {
+                    tools[toolName] = toolsJson.getBoolean(toolName)
+                }
+                result[serviceName] = tools
+            }
+            result
+        } catch (e: Exception) {
+            android.util.Log.w("AIConfigManager", "解析 MCP 工具状态失败: ${e.message}")
+            emptyMap()
+        }
+    }
+
+    /** 序列化工具状态为 JSON */
+    private fun serializeToolStatesJson(states: Map<String, Map<String, Boolean>>): String {
+        if (states.isEmpty()) return ""
+        val root = JSONObject()
+        for ((serviceName, tools) in states) {
+            val toolsJson = JSONObject()
+            for ((toolName, enabled) in tools) {
+                toolsJson.put(toolName, enabled)
+            }
+            root.put(serviceName, toolsJson)
+        }
+        return root.toString()
     }
 }

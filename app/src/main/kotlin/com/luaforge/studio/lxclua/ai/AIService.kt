@@ -669,7 +669,8 @@ object AIManager {
         request: ChatRequest,
         onChunk: (String) -> Unit,
         onDone: (ChatResponse) -> Unit,
-        onReasoning: ((String) -> Unit)? = null
+        onReasoning: ((String) -> Unit)? = null,
+        onToolCall: ((String, String, String) -> Unit)? = null
     ) {
         val srv = service ?: run {
             onDone(ChatResponse(false, error = "AI 服务未配置"))
@@ -768,6 +769,9 @@ object AIManager {
                         toolResult.content.firstOrNull()?.text ?: toolResult.error ?: ""
                     }
                     android.util.Log.i("AIManager", "[chatStream] 工具结果: ${tc.functionName} -> ${result.take(200)}")
+
+                    // 通知调用方工具调用信息（用于 WebUI 展示）
+                    onToolCall?.invoke(tc.functionName, tc.functionArgs, result)
 
                     conversation.add(ChatMessage(
                         role = "tool",

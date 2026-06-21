@@ -113,7 +113,7 @@ class PluginAI {
     }
 
     /** 流式聊天 */
-    fun chatStream(messages: List<Map<String, String>>, onChunk: LuaFunction<*>, onDone: LuaFunction<*>, onReasoning: LuaFunction<*>?) {
+    fun chatStream(messages: List<Map<String, String>>, onChunk: LuaFunction<*>, onDone: LuaFunction<*>, onReasoning: LuaFunction<*>?, onToolCall: LuaFunction<*>?) {
         val msgs = messages.map { ChatMessage(it["role"] ?: "user", it["content"] ?: "") }
         val req = ChatRequest(messages = msgs)
         val jobId = nextJobId()
@@ -136,6 +136,12 @@ class PluginAI {
                     },
                     onReasoning = if (onReasoning != null) {
                         { reasoning -> safeCall(onReasoning, reasoning) }
+                    } else null,
+                    onToolCall = if (onToolCall != null) {
+                        { name, args, result ->
+                            android.util.Log.i("PluginAI", "[流式] 工具调用 | jobId: $jobId | $name($args) -> ${result.take(100)}")
+                            safeCall(onToolCall, name, args, result)
+                        }
                     } else null
                 )
             } catch (e: CancellationException) {

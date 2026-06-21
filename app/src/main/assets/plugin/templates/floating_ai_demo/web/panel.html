@@ -2,114 +2,440 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI 代码生成</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: transparent;
-            padding: 12px;
-            font-size: 14px;
-            color: #333;
+            padding: 0;
+            font-size: 13px;
+            color: #e0e0e0;
             overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
         }
+
+        /* ===== 输入区域 ===== */
+        .input-area { padding: 0 0 8px 0; }
         textarea {
             width: 100%;
-            height: 100px;
-            border: 1px solid #ddd;
+            min-height: 56px;
+            max-height: 100px;
+            border: 1px solid #444;
             border-radius: 8px;
-            padding: 8px;
+            padding: 8px 10px;
             font-size: 13px;
             resize: vertical;
             outline: none;
             font-family: inherit;
+            background: #2a2a2a;
+            color: #e0e0e0;
+            line-height: 1.5;
         }
         textarea:focus { border-color: #FF6B35; }
+        textarea::placeholder { color: #777; }
+
+        /* ===== 按钮行 ===== */
         .btn-row {
             display: flex;
-            gap: 8px;
-            margin-top: 10px;
+            gap: 6px;
+            padding: 0 0 4px 0;
         }
-        button {
+        .btn-row button {
             flex: 1;
-            padding: 8px;
+            padding: 7px 0;
             border: none;
-            border-radius: 8px;
-            font-size: 13px;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        button:active { opacity: 0.8; }
-        .btn-send {
-            background: #FF6B35;
-            color: #fff;
-        }
-        .btn-cancel {
-            background: #ccc;
-            color: #333;
-        }
-        .result-area {
-            margin-top: 10px;
-            padding: 8px;
-            background: #fff;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            min-height: 40px;
+            border-radius: 6px;
             font-size: 12px;
-            white-space: pre-wrap;
+            cursor: pointer;
+            transition: opacity 0.15s;
+            font-weight: 500;
+        }
+        .btn-row button:active { opacity: 0.7; }
+        .btn-send { background: #FF6B35; color: #fff; }
+        .btn-cancel { background: #444; color: #ccc; }
+        .btn-stop { background: #d32f2f; color: #fff; display: none; }
+
+        /* ===== 加载动画 ===== */
+        .loading-spinner {
             display: none;
+            text-align: center;
+            padding: 6px 0;
+        }
+        .loading-spinner .dot-pulse {
+            display: inline-block;
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #FF6B35;
+            animation: pulse 1.2s infinite ease-in-out;
+            margin: 0 3px;
+        }
+        .loading-spinner .dot-pulse:nth-child(2) { animation-delay: 0.2s; }
+        .loading-spinner .dot-pulse:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes pulse {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* ===== 思考过程 ===== */
+        .reasoning-area {
+            display: none;
+            margin: 4px 0;
+            padding: 6px 8px;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 6px;
+            max-height: 80px;
+            overflow-y: auto;
+            font-size: 11px;
+            color: #888;
+            font-style: italic;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* ===== 流式输出 ===== */
+        .stream-area {
+            display: none;
+            margin: 4px 0;
+            padding: 6px 8px;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 6px;
+            max-height: 140px;
+            overflow-y: auto;
+            font-size: 12px;
+            color: #d0d0d0;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+        }
+
+        /* ===== 工具调用卡片 ===== */
+        .tool-calls {
+            display: none;
+            margin: 4px 0;
             max-height: 120px;
             overflow-y: auto;
         }
-        .status {
+        .tool-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            padding: 5px 7px;
+            margin-bottom: 3px;
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
             font-size: 11px;
-            color: #999;
-            margin-top: 6px;
-            text-align: center;
+            animation: fadeIn 0.2s ease;
         }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        .tool-card .tool-icon {
+            font-size: 14px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+        .tool-card .tool-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .tool-card .tool-name {
+            color: #a78bfa;
+            font-weight: 600;
+            font-size: 11px;
+        }
+        .tool-card .tool-args {
+            color: #777;
+            font-size: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 1px;
+        }
+        .tool-card .tool-result {
+            color: #4ade80;
+            font-size: 10px;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .tool-card .tool-result.error { color: #f87171; }
+
+        /* ===== 状态栏 ===== */
+        .status-bar {
+            font-size: 10px;
+            color: #666;
+            text-align: center;
+            padding: 2px 0 0 0;
+            min-height: 14px;
+        }
+
+        /* ===== 滚动条 ===== */
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 2px; }
     </style>
 </head>
 <body>
-    <textarea id="prompt" placeholder="输入提示词，如：添加一个排序函数"></textarea>
-    <div class="btn-row">
-        <button class="btn-cancel" onclick="closePanel()">取消</button>
-        <button class="btn-send" onclick="sendPrompt()">发送</button>
-    </div>
-    <div class="result-area" id="result"></div>
-    <div class="status" id="status">WebUI 模式 - 通过 LXC 桥接与 Lua 通信</div>
 
-    <script>
-        // 监听宿主发来的消息（如 AI 生成结果）
-        window.addEventListener('lxc-message', function(e) {
-            var data = e.detail;
-            if (data.type === 'result') {
-                var resultDiv = document.getElementById('result');
-                resultDiv.style.display = 'block';
-                resultDiv.textContent = '生成结果:\n' + data.code;
-                document.getElementById('status').textContent = 'AI 代码已生成';
+<!-- 输入区域 -->
+<div class="input-area" id="inputArea">
+    <textarea id="promptInput" placeholder="输入提示词，如：添加一个排序函数" rows="2"></textarea>
+</div>
+
+<!-- 加载动画 -->
+<div class="loading-spinner" id="loadingSpinner">
+    <span class="dot-pulse"></span>
+    <span class="dot-pulse"></span>
+    <span class="dot-pulse"></span>
+</div>
+
+<!-- 思考过程 -->
+<div class="reasoning-area" id="reasoningArea"></div>
+
+<!-- 工具调用卡片 -->
+<div class="tool-calls" id="toolCallsArea"></div>
+
+<!-- 流式输出 -->
+<div class="stream-area" id="streamArea"></div>
+
+<!-- 按钮行 -->
+<div class="btn-row" id="btnRow">
+    <button class="btn-cancel" id="btnCancel" onclick="closePanel()">关闭</button>
+    <button class="btn-send" id="btnSend" onclick="sendPrompt()">发送</button>
+    <button class="btn-stop" id="btnStop" onclick="stopGenerate()">停止</button>
+</div>
+
+<!-- 状态栏 -->
+<div class="status-bar" id="statusBar">WebUI 自定义面板 - 通过 LXC 桥接与 Lua 通信</div>
+
+<script>
+var isProcessing = false;
+var streamVisible = false;
+var reasoningVisible = false;
+
+// ===== 监听宿主消息（Lua → Web） =====
+window.addEventListener('lxc-message', function(e) {
+    var data = e.detail;
+    if (!data || !data.type) return;
+
+    switch (data.type) {
+        case 'init':
+            if (data.hint) {
+                document.getElementById('promptInput').placeholder = data.hint;
             }
-        });
-
-        function sendPrompt() {
-            var prompt = document.getElementById('prompt').value.trim();
-            if (!prompt) {
-                LXC.toast('请输入提示词');
-                return;
+            break;
+        case 'title':
+            document.getElementById('statusBar').textContent = data.text || '';
+            break;
+        case 'loading':
+            data.show ? showLoading() : hideLoading();
+            break;
+        case 'stream':
+            if (data.action === 'show') showStream();
+            else if (data.action === 'append' && data.text) appendStream(data.text);
+            else if (data.action === 'clear') clearStream();
+            else if (data.action === 'hide') hideStream();
+            break;
+        case 'reasoning':
+            if (data.action === 'show') showReasoning();
+            else if (data.action === 'append' && data.text) appendReasoning(data.text);
+            else if (data.action === 'hide') hideReasoning();
+            break;
+        case 'stop':
+            document.getElementById('btnStop').style.display = data.show ? 'block' : 'none';
+            break;
+        case 'status':
+            if (data.text) {
+                document.getElementById('statusBar').textContent = data.text;
             }
-            // 通过 LXC.callLua 调用 Lua 全局函数
-            // 注意：需要在 main.lua 中定义 handleWebPrompt 函数
-            var result = LXC.callLua('handleWebPrompt', JSON.stringify({
-                prompt: prompt,
-                timestamp: Date.now()
-            }));
-            document.getElementById('status').textContent = '已发送到 Lua: ' + result;
-            document.getElementById('prompt').value = '';
-        }
+            break;
+        case 'reset':
+            resetPanel();
+            break;
+        case 'toolCall':
+            addToolCallCard(data.name, data.args, data.result);
+            break;
+    }
+});
 
-        function closePanel() {
-            LXC.navigateBack();
+// ===== 发送提示词到 Lua（Web → Lua） =====
+function sendPrompt() {
+    var input = document.getElementById('promptInput');
+    var text = input.value.trim();
+    if (typeof LXC !== 'undefined') LXC.log('sendPrompt: text=' + text.substring(0, 50));
+    if (!text) {
+        if (typeof LXC !== 'undefined') LXC.log('sendPrompt: 输入为空，取消');
+        return;
+    }
+    if (typeof LXC !== 'undefined') {
+        // 先显示加载状态，提升响应感
+        showLoading();
+        document.getElementById('inputArea').style.display = 'none';
+        LXC.log('sendPrompt: 调用 onFloatingPanelSubmit');
+        var result = LXC.callLua('onFloatingPanelSubmit', JSON.stringify({
+            text: text,
+            timestamp: Date.now()
+        }));
+        LXC.log('sendPrompt: callLua 返回=' + result);
+        if (result && result.indexOf('error:') === 0) {
+            LXC.log('sendPrompt: 错误! ' + result);
+            LXC.toast('调用失败: ' + result);
+            hideLoading();
+            document.getElementById('inputArea').style.display = 'block';
         }
-    </script>
+    } else {
+        if (typeof LXC !== 'undefined') LXC.log('sendPrompt: LXC 未定义!');
+    }
+}
+
+// ===== 关闭面板 =====
+function closePanel() {
+    if (typeof LXC !== 'undefined') {
+        LXC.log('closePanel: 调用 onFloatingPanelCancel');
+        LXC.callLua('onFloatingPanelCancel', '{}');
+    }
+}
+
+// ===== 停止生成 =====
+function stopGenerate() {
+    if (typeof LXC !== 'undefined') {
+        LXC.log('stopGenerate: 调用 onFloatingPanelStop');
+        LXC.callLua('onFloatingPanelStop', '{}');
+    }
+}
+
+// ===== 加载动画 =====
+function showLoading() {
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('btnStop').style.display = 'block';
+    isProcessing = true;
+}
+function hideLoading() {
+    document.getElementById('loadingSpinner').style.display = 'none';
+    if (!streamVisible && !reasoningVisible) {
+        document.getElementById('btnStop').style.display = 'none';
+    }
+    isProcessing = false;
+}
+
+// ===== 流式输出 =====
+function showStream() {
+    var el = document.getElementById('streamArea');
+    el.style.display = 'block';
+    el.textContent = '';
+    streamVisible = true;
+    document.getElementById('btnStop').style.display = 'block';
+    document.getElementById('inputArea').style.display = 'none';
+}
+function appendStream(text) {
+    var el = document.getElementById('streamArea');
+    if (document.getElementById('loadingSpinner').style.display === 'block') {
+        hideLoading();
+    }
+    el.textContent += text;
+    el.scrollTop = el.scrollHeight;
+}
+function hideStream() {
+    var el = document.getElementById('streamArea');
+    el.style.display = 'none';
+    el.textContent = '';
+    streamVisible = false;
+    document.getElementById('inputArea').style.display = 'block';
+    if (!reasoningVisible) {
+        document.getElementById('btnStop').style.display = 'none';
+    }
+}
+function clearStream() {
+    var el = document.getElementById('streamArea');
+    el.textContent = '';
+}
+
+// ===== 思考过程 =====
+function showReasoning() {
+    var el = document.getElementById('reasoningArea');
+    el.style.display = 'block';
+    el.textContent = '';
+    reasoningVisible = true;
+}
+function appendReasoning(text) {
+    var el = document.getElementById('reasoningArea');
+    el.textContent += text;
+    el.scrollTop = el.scrollHeight;
+}
+function hideReasoning() {
+    var el = document.getElementById('reasoningArea');
+    el.style.display = 'none';
+    el.textContent = '';
+    reasoningVisible = false;
+}
+
+// ===== 工具调用卡片 =====
+function addToolCallCard(name, args, result) {
+    var area = document.getElementById('toolCallsArea');
+    area.style.display = 'block';
+    var card = document.createElement('div');
+    card.className = 'tool-card';
+    // 根据工具名选择图标
+    var icon = '\uD83D\uDD27'; // 默认扳手
+    if (name.indexOf('editor_') === 0) icon = '\uD83D\uDCDD'; // 编辑器
+    else if (name.indexOf('file_') === 0) icon = '\uD83D\uDCC1'; // 文件
+    else if (name.indexOf('search') === 0) icon = '\uD83D\uDD0D'; // 搜索
+    var isError = (result || '').toLowerCase().indexOf('error') >= 0 || (result || '').toLowerCase().indexOf('失败') >= 0;
+    card.innerHTML = '<span class="tool-icon">' + icon + '</span>' +
+        '<div class="tool-info">' +
+        '<div class="tool-name">' + escapeHtml(name) + '</div>' +
+        (args ? '<div class="tool-args">' + escapeHtml(String(args).substring(0, 80)) + '</div>' : '') +
+        '<div class="tool-result' + (isError ? ' error' : '') + '">' + escapeHtml(String(result || '').substring(0, 100)) + '</div>' +
+        '</div>';
+    area.appendChild(card);
+    area.scrollTop = area.scrollHeight;
+    hideLoading();
+}
+function hideToolCalls() {
+    var area = document.getElementById('toolCallsArea');
+    area.style.display = 'none';
+    area.innerHTML = '';
+}
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// ===== 重置面板 =====
+function resetPanel() {
+    hideLoading();
+    hideStream();
+    hideReasoning();
+    hideToolCalls();
+    document.getElementById('inputArea').style.display = 'block';
+    document.getElementById('btnStop').style.display = 'none';
+    document.getElementById('statusBar').textContent = 'WebUI 自定义面板 - 通过 LXC 桥接与 Lua 通信';
+    isProcessing = false;
+}
+
+// ===== 键盘快捷键 =====
+document.getElementById('promptInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        sendPrompt();
+    }
+    if (e.key === 'Escape') {
+        closePanel();
+    }
+});
+
+// 初始化完成
+if (typeof LXC !== 'undefined') {
+    LXC.log('panel.html (自定义 WebUI) 已加载');
+}
+</script>
 </body>
 </html>

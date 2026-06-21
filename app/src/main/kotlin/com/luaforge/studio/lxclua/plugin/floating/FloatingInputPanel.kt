@@ -6,12 +6,8 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Outline
-import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.LayerDrawable
-import android.graphics.drawable.ShapeDrawable
-import android.graphics.drawable.shapes.PathShape
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -21,12 +17,8 @@ import android.view.WindowManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Button
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.ScrollView
 import android.widget.TextView
 import com.luaforge.studio.lxclua.ui.settings.SettingsData
 import com.luaforge.studio.lxclua.ui.settings.SettingsManager
@@ -35,12 +27,14 @@ import java.io.File
 /**
  * 悬浮球输入面板
  *
- * 点击悬浮球后展开的界面，支持三种模式：
- * - DEFAULT：默认提示输入框 + 发送按钮
- * - WEBUI：加载插件 web/ 目录下的 HTML 页面
+ * 点击悬浮球后展开的界面，支持两种模式：
+ * - WEBUI：加载 HTML 页面（默认模板或插件自定义页面）
  * - CUSTOM：用户通过 Lua 传入的任意 View
  *
- * 支持按住右下角拖拽调节面板大小
+ * 所有面板内容（输入框、按钮、流式输出、思考过程、加载动画）均由 WebUI 模板渲染，
+ * 宿主通过 sendToPanelWebView() 发送 JSON 消息控制面板状态。
+ *
+ * 支持按住右下角拖拽调节面板大小，支持标题栏拖拽移动面板。
  */
 class FloatingInputPanel(
     context: Context,
@@ -48,33 +42,22 @@ class FloatingInputPanel(
     private val onSubmit: ((String, String) -> Unit)?
 ) : LinearLayout(context) {
 
-    /** 面板显示模式 */
-    enum class PanelMode { DEFAULT, WEBUI, CUSTOM }
+    companion object {
+        private const val TAG = "FloatingPanel"
+    }
 
-    private var currentMode: PanelMode = PanelMode.DEFAULT
+    /** 面板显示模式 */
+    enum class PanelMode { WEBUI, CUSTOM }
+
+    private var currentMode: PanelMode = PanelMode.WEBUI
 
     private val titleView: TextView
-    private val loadingIndicator: ProgressBar
     private val contentContainer: FrameLayout
 
-    // 默认模式组件
-    private val inputView: EditText
-    private val sendButton: Button
-    private val cancelButton: Button
-    private val stopButton: Button
-    private val defaultContentLayout: LinearLayout
-
-    // 流式输出组件
-    private val streamOutputView: TextView
-    private val streamOutputScroll: ScrollView
-    private val streamLoadingIndicator: ProgressBar
-    private val streamContainer: LinearLayout
-    // 思考过程显示
-    private val reasoningOutputView: TextView
-    private val reasoningScroll: ScrollView
-
-    // WebUI 模式组件
+    // WebView（WebUI 模式使用，懒加载）
     private var webView: WebView? = null
+    /** 已加载的 URL，用于判断重新打开时是否需要 reload */
+    private var loadedUrl: String? = null
 
     // 调节大小手柄
     private val resizeHandle: View
@@ -97,7 +80,7 @@ class FloatingInputPanel(
     /** 面板大小调节回调 (width: Int, height: Int) */
     var onPanelResized: ((Int, Int) -> Unit)? = null
 
-    /** 停止按钮回调（用户点击停止生成） */
+    /** 停止按钮回调（用户点击停止生成，由 Lua 层通过 onFloatingPanelStop 处理） */
     var onStop: (() -> Unit)? = null
 
     /** 关联的悬浮球，用于拖拽时同步位置 */
@@ -122,6 +105,9 @@ class FloatingInputPanel(
     /** 手柄背景 drawable */
     private val handleBgDrawable: GradientDrawable
 
+    /** WebView 就绪前暂存待发送消息 */
+    private val pendingMessages = mutableListOf<String>()
+
     /** 设置变化监听器，主题切换时自动更新面板颜色 */
     private val settingsListener: (SettingsData) -> Unit = { _ ->
         post { applyTheme() }
@@ -132,6 +118,7 @@ class FloatingInputPanel(
         override fun onConfigurationChanged(newConfig: Configuration) {
             post { applyTheme() }
         }
+        @Suppress("OVERRIDE_DEPRECATION")
         override fun onLowMemory() {}
     }
 
@@ -148,23 +135,13 @@ class FloatingInputPanel(
         gravity = Gravity.CENTER_HORIZONTAL
         clipToPadding = false
 
-        // 标题行（含加载动画，可拖拽移动面板）
+        // 标题行（可拖拽移动面板）
         val titleRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER
             // 标题栏可拖拽移动整个面板
             setOnTouchListener { _, event -> this@FloatingInputPanel.handleDragTouch(event) }
         }
-        loadingIndicator = ProgressBar(context).apply {
-            visibility = GONE
-            isIndeterminate = true
-            // 小尺寸转圈
-            val size = dpToPx(16)
-            layoutParams = LinearLayout.LayoutParams(size, size).apply {
-                setMargins(0, 0, dpToPx(6), 0)
-            }
-        }
-        titleRow.addView(loadingIndicator)
         titleView = TextView(context).apply {
             textSize = 14f
             gravity = Gravity.CENTER
@@ -186,10 +163,9 @@ class FloatingInputPanel(
         }
         contentContainer = FrameLayout(context).apply {
             background = contentBgDrawable
-            // 裁剪子视图到圆角边界，防止 WebView/EditText 内容溢出覆盖圆角边框
+            // 裁剪子视图到圆角边界，防止 WebView 内容溢出覆盖圆角边框
             clipToOutline = true
             clipChildren = true
-            // 内容左右留白，避免紧贴边框
             setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6))
             outlineProvider = object : ViewOutlineProvider() {
                 override fun getOutline(view: View, outline: Outline) {
@@ -219,153 +195,22 @@ class FloatingInputPanel(
 
         addView(contentWrapper, LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dpToPx(180)
+            dpToPx(200)
         ).apply {
             setMargins(0, dpToPx(4), 0, dpToPx(4))
         })
 
-        // 初始化面板尺寸（与默认 layout 一致）
-        panelWidth = dpToPx(260)
-        panelHeight = dpToPx(180)
-
-        // 默认内容布局
-        defaultContentLayout = LinearLayout(context).apply {
-            orientation = VERTICAL
-            gravity = Gravity.CENTER
-        }
-
-        // 输入框
-        inputView = EditText(context).apply {
-            textSize = 13f
-            minLines = 2
-            maxLines = 4
-            setPadding(dpToPx(8), dpToPx(6), dpToPx(8), dpToPx(6))
-            gravity = Gravity.TOP
-        }
-        defaultContentLayout.addView(inputView, LayoutParams(dpToPx(220), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            setMargins(0, dpToPx(4), 0, dpToPx(4))
-        })
-
-        // 流式输出区域容器（含加载动画，默认隐藏）
-        streamContainer = LinearLayout(context).apply {
-            orientation = VERTICAL
-            visibility = GONE
-        }
-        streamLoadingIndicator = ProgressBar(context).apply {
-            visibility = GONE
-            isIndeterminate = true
-            val size = dpToPx(16)
-            layoutParams = LinearLayout.LayoutParams(size, size).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                setMargins(0, dpToPx(4), 0, dpToPx(4))
-            }
-        }
-        streamContainer.addView(streamLoadingIndicator)
-        // 思考过程显示区（小面板，灰色斜体，默认隐藏）
-        reasoningScroll = ScrollView(context).apply {
-            visibility = GONE
-            setPadding(dpToPx(4), dpToPx(2), dpToPx(4), dpToPx(2))
-        }
-        reasoningOutputView = TextView(context).apply {
-            textSize = 11f
-            gravity = Gravity.TOP or Gravity.START
-            setTextColor(0xFF888888.toInt())
-            setTypeface(null, android.graphics.Typeface.ITALIC)
-        }
-        reasoningScroll.addView(reasoningOutputView, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
-        streamContainer.addView(reasoningScroll, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(60)
-        ).apply {
-            setMargins(0, dpToPx(2), 0, dpToPx(4))
-        })
-        streamOutputScroll = ScrollView(context).apply {
-            setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4))
-        }
-        streamOutputView = TextView(context).apply {
-            textSize = 12f
-            gravity = Gravity.TOP or Gravity.START
-        }
-        streamOutputScroll.addView(streamOutputView, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
-        streamContainer.addView(streamOutputScroll, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(100)
-        ).apply {
-            setMargins(0, dpToPx(4), 0, dpToPx(4))
-        })
-        defaultContentLayout.addView(streamContainer, LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
-
-        contentContainer.addView(defaultContentLayout, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT
-        ))
-
-        // 按钮行
-        val buttonRow = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-
-        cancelButton = Button(context).apply {
-            text = "关闭"
-            textSize = 12f
-            setPadding(dpToPx(12), dpToPx(4), dpToPx(12), dpToPx(4))
-            setOnClickListener { hide() }
-        }
-        buttonRow.addView(cancelButton, LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(0, 0, dpToPx(8), 0) })
-
-        sendButton = Button(context).apply {
-            text = "发送"
-            textSize = 12f
-            setPadding(dpToPx(16), dpToPx(4), dpToPx(16), dpToPx(4))
-            setOnClickListener {
-                val text = inputView.text.toString().trim()
-                if (text.isNotEmpty()) {
-                    onSubmit?.invoke(ballId, text)
-                    inputView.text.clear()
-                    // 不再自动关闭面板，让用户可以看到 AI 响应
-                }
-            }
-        }
-        buttonRow.addView(sendButton, LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(0, 0, dpToPx(8), 0) })
-
-        // 停止按钮（流式输出时显示，用于手动终止 AI 生成）
-        stopButton = Button(context).apply {
-            text = "停止"
-            textSize = 12f
-            setPadding(dpToPx(12), dpToPx(4), dpToPx(12), dpToPx(4))
-            visibility = GONE
-            setOnClickListener { onStop?.invoke() }
-        }
-        buttonRow.addView(stopButton, LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
-
-        addView(buttonRow, LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
+        // 初始化面板尺寸
+        panelWidth = dpToPx(280)
+        panelHeight = dpToPx(200)
 
         // 应用主题颜色
         applyTheme()
 
-        // 注册设置变化监听，主题切换时自动更新面板颜色
+        // 注册设置变化监听
         SettingsManager.addListener(settingsListener)
 
-        // 注册系统配置变化监听（如夜间模式切换），确保 FOLLOW_SYSTEM 时面板跟随系统
+        // 注册系统配置变化监听
         context.applicationContext.registerComponentCallbacks(configCallback)
 
         visibility = GONE
@@ -373,7 +218,6 @@ class FloatingInputPanel(
 
     /**
      * 应用当前主题颜色到所有组件
-     * 每次面板显示前调用，确保跟随主题切换
      */
     fun applyTheme() {
         val c = FloatingPanelColors
@@ -388,50 +232,25 @@ class FloatingInputPanel(
         // 内容容器
         contentBgDrawable.setColor(c.contentBackground)
 
-        // 输入框
-        inputView.setTextColor(c.contentText)
-        inputView.setHintTextColor(c.hintText)
-        inputView.setBackgroundColor(c.contentBackground)
-
-        // 关闭按钮
-        cancelButton.background = createRoundedBg(c.cancelButtonBg, dpToPx(6).toFloat())
-        cancelButton.setTextColor(c.cancelButtonText)
-
-        // 发送按钮
-        sendButton.background = createRoundedBg(c.sendButtonBg, dpToPx(6).toFloat())
-        sendButton.setTextColor(c.sendButtonText)
-
-        // 停止按钮
-        stopButton.background = createRoundedBg(c.stopButtonBg, dpToPx(6).toFloat())
-        stopButton.setTextColor(c.stopButtonText)
-
-        // 流式输出区域
-        streamOutputView.setTextColor(c.contentText)
-        streamOutputView.setBackgroundColor(c.contentBackground)
-        streamOutputScroll.setBackgroundColor(c.contentBackground)
-
         // 手柄
         handleBgDrawable.setColor(c.resizeHandle)
-
-        // 加载动画
-        loadingIndicator.indeterminateTintList = android.content.res.ColorStateList.valueOf(c.loadingIndicator)
-        streamLoadingIndicator.indeterminateTintList = android.content.res.ColorStateList.valueOf(c.loadingIndicator)
     }
 
     /**
      * 销毁面板，清理资源
-     * 移除 SettingsManager 监听器，防止内存泄漏
      */
     fun destroy() {
+        Log.d(TAG, "[$ballId] destroy WebView=${webView != null}")
+        loadedUrl = null
         SettingsManager.removeListener(settingsListener)
         context.applicationContext.unregisterComponentCallbacks(configCallback)
+        webView?.stopLoading()
+        webView?.destroy()
+        webView = null
     }
 
     // ==================== 调节大小 ====================
 
-    /**
-     * 处理调节大小手柄的触摸事件
-     */
     private fun handleResizeTouch(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
@@ -460,21 +279,16 @@ class FloatingInputPanel(
         return false
     }
 
-    /**
-     * 应用面板尺寸，更新 WindowManager.LayoutParams 和内容容器大小
-     */
     private fun applyPanelSize(width: Int, height: Int) {
         panelWidth = width
         panelHeight = height
 
-        // 更新内容容器尺寸（宽度保持 MATCH_PARENT，由父布局 padding 控制留白）
         val contentWrapper = contentContainer.parent as? ViewGroup
         (contentWrapper?.layoutParams as? LinearLayout.LayoutParams)?.apply {
             this.height = height
         }
         contentWrapper?.requestLayout()
 
-        // 更新 WindowManager.LayoutParams
         if (isAttached) {
             val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
             val params = layoutParams as? WindowManager.LayoutParams
@@ -488,23 +302,199 @@ class FloatingInputPanel(
 
     // ==================== 显示/隐藏 ====================
 
-    /** 显示面板（默认模式） */
-    fun show(title: String, hint: String) {
+    /**
+     * 以默认 WebUI 模板显示面板
+     * 加载内置的 panel_default.html，通过 lxc-message 传递 title 和 hint
+     *
+     * @param title 面板标题
+     * @param hint 输入框提示文字
+     * @param jsBridge JS 桥接对象（PluginWebUIBridge.JsApiBridge）
+     * @param bridgeName JS 桥接名称（默认 "LXC"）
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    fun showDefaultWebUI(
+        title: String,
+        hint: String,
+        jsBridge: Any? = null,
+        bridgeName: String = "LXC"
+    ): Boolean {
+        Log.d(TAG, "[$ballId] showDefaultWebUI title=\"$title\", hint=\"$hint\", hasBridge=${jsBridge != null}, bridgeName=$bridgeName")
         titleView.text = title
-        inputView.hint = hint
-        inputView.text.clear()
-        switchToMode(PanelMode.DEFAULT)
+        switchToMode(PanelMode.WEBUI)
         visibility = VISIBLE
-        // 请求焦点，让输入框可以立即输入
-        inputView.post {
-            inputView.requestFocus()
+
+        // 如果 WebView 已存在且加载的是同一页面，直接显示，不重新加载
+        val targetUrl = "file:///android_asset/html/panel_default.html"
+        if (webView != null && loadedUrl == targetUrl) {
+            Log.d(TAG, "[$ballId] 复用已加载的默认模板, 不重新加载")
+            contentContainer.addView(webView)
+            flushPendingMessages()
+            return true
         }
+
+        // 创建或重用 WebView
+        if (webView == null) {
+            Log.d(TAG, "[$ballId] 创建新的 WebView")
+            webView = WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                setBackgroundColor(Color.TRANSPARENT)
+                overScrollMode = View.OVER_SCROLL_NEVER
+                isHorizontalScrollBarEnabled = false
+                isVerticalScrollBarEnabled = false
+                with(settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    allowFileAccess = true
+                    allowContentAccess = true
+                    useWideViewPort = true
+                    loadWithOverviewMode = true
+                    builtInZoomControls = false
+                    displayZoomControls = false
+                    setSupportZoom(false)
+                }
+            }
+        } else {
+            Log.d(TAG, "[$ballId] 复用现有 WebView")
+            (webView!!.parent as? ViewGroup)?.removeView(webView)
+        }
+
+        // 注入 JS 桥接
+        if (jsBridge != null) {
+            Log.d(TAG, "[$ballId] 注入 JS 桥接: $bridgeName")
+            webView!!.removeJavascriptInterface(bridgeName)
+            webView!!.addJavascriptInterface(jsBridge, bridgeName)
+        } else {
+            Log.w(TAG, "[$ballId] 未注入 JS 桥接，LXC.callLua 将不可用")
+        }
+
+        // 页面加载完成后发送初始化消息
+        webView!!.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                Log.d(TAG, "[$ballId] 默认模板加载完成 url=$url, 待发送消息=${pendingMessages.size}")
+                val initMsg = """{"type":"init","title":"${escapeJson(title)}","hint":"${escapeJson(hint)}"}"""
+                sendToPanelWebView(initMsg)
+                flushPendingMessages()
+            }
+
+            @Suppress("OVERRIDE_DEPRECATION")
+            override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                Log.e(TAG, "[$ballId] 默认模板加载失败! errorCode=$errorCode, desc=$description, url=$failingUrl")
+            }
+        }
+        webView!!.webChromeClient = object : WebChromeClient() {}
+
+        contentContainer.addView(webView)
+        Log.d(TAG, "[$ballId] 开始加载默认模板: $targetUrl")
+        loadedUrl = targetUrl
+        webView!!.loadUrl(targetUrl)
+
+        return true
+    }
+
+    /**
+     * 以 WebUI 模式显示面板，加载插件 web/ 目录下的 HTML 页面
+     *
+     * @param title 面板标题
+     * @param webRootDir 插件的 web 资源根目录
+     * @param page HTML 页面文件名
+     * @param jsBridge JS 桥接对象
+     * @param bridgeName JS 桥接名称
+     * @return 是否成功加载
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    fun showWebUI(
+        title: String,
+        webRootDir: File,
+        page: String,
+        jsBridge: Any? = null,
+        bridgeName: String = "LXC"
+    ): Boolean {
+        val pageFile = File(webRootDir, page)
+        if (!pageFile.exists()) {
+            Log.e(TAG, "[$ballId] showWebUI 文件不存在: ${pageFile.absolutePath}")
+            return false
+        }
+        Log.d(TAG, "[$ballId] showWebUI title=\"$title\", page=$page, path=${pageFile.absolutePath}, hasBridge=${jsBridge != null}")
+
+        titleView.text = title
+        switchToMode(PanelMode.WEBUI)
+
+        // 如果 WebView 已存在且加载的是同一页面，直接显示，不重新加载
+        val targetUrl = "file://${pageFile.absolutePath}"
+        if (webView != null && loadedUrl == targetUrl) {
+            Log.d(TAG, "[$ballId] 复用已加载的自定义模板, 不重新加载")
+            contentContainer.addView(webView)
+            flushPendingMessages()
+            visibility = VISIBLE
+            return true
+        }
+
+        if (webView == null) {
+            Log.d(TAG, "[$ballId] 创建新的 WebView")
+            webView = WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                setBackgroundColor(Color.TRANSPARENT)
+                overScrollMode = View.OVER_SCROLL_NEVER
+                isHorizontalScrollBarEnabled = false
+                isVerticalScrollBarEnabled = false
+                with(settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    allowFileAccess = true
+                    allowContentAccess = true
+                    useWideViewPort = true
+                    loadWithOverviewMode = true
+                    builtInZoomControls = false
+                    displayZoomControls = false
+                    setSupportZoom(false)
+                }
+            }
+        } else {
+            Log.d(TAG, "[$ballId] 复用现有 WebView")
+            (webView!!.parent as? ViewGroup)?.removeView(webView)
+        }
+
+        if (jsBridge != null) {
+            Log.d(TAG, "[$ballId] 注入 JS 桥接: $bridgeName")
+            webView!!.removeJavascriptInterface(bridgeName)
+            webView!!.addJavascriptInterface(jsBridge, bridgeName)
+        } else {
+            Log.w(TAG, "[$ballId] 未注入 JS 桥接，LXC.callLua 将不可用")
+        }
+
+        // 自定义 WebUI 页面加载完成后发送积压消息
+        webView!!.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                Log.d(TAG, "[$ballId] 自定义模板加载完成 url=$url, 待发送消息=${pendingMessages.size}")
+                flushPendingMessages()
+            }
+
+            @Suppress("OVERRIDE_DEPRECATION")
+            override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                Log.e(TAG, "[$ballId] 自定义模板加载失败! errorCode=$errorCode, desc=$description, url=$failingUrl")
+            }
+        }
+        webView!!.webChromeClient = object : WebChromeClient() {}
+
+        contentContainer.addView(webView)
+        Log.d(TAG, "[$ballId] 开始加载自定义模板: $targetUrl")
+        loadedUrl = targetUrl
+        webView!!.loadUrl(targetUrl)
+        visibility = VISIBLE
+
+        return true
     }
 
     /** 隐藏面板 */
     fun hide() {
+        Log.d(TAG, "[$ballId] hide mode=$currentMode")
         visibility = GONE
-        // 隐藏时清理 WebView
         if (currentMode == PanelMode.WEBUI) {
             webView?.stopLoading()
         }
@@ -514,102 +504,115 @@ class FloatingInputPanel(
     fun updateTitle(title: String) {
         post {
             titleView.text = title
+            // 同步通知 WebView 更新标题显示
+            sendToPanelWebView("""{"type":"title","text":"${escapeJson(title)}"}""")
         }
     }
 
-    /** 显示加载转圈动画 */
-    fun showLoading() {
-        post { loadingIndicator.visibility = VISIBLE }
+    // ==================== WebView 消息发送 ====================
+
+    /**
+     * 向面板 WebView 发送 JSON 消息
+     * 如果 WebView 尚未就绪，消息会暂存到队列中
+     *
+     * @param jsonMessage JSON 格式消息
+     */
+    fun sendToPanelWebView(jsonMessage: String) {
+        val wv = webView
+        if (wv != null) {
+            val msgType = extractMsgType(jsonMessage)
+            Log.v(TAG, "[$ballId] sendToWeb type=$msgType")
+            wv.post {
+                wv.evaluateJavascript(
+                    """window.dispatchEvent(new CustomEvent('lxc-message', {detail: $jsonMessage}));""",
+                    null
+                )
+            }
+        } else {
+            Log.v(TAG, "[$ballId] sendToWeb 暂存(WebView未就绪), 队列长度=${pendingMessages.size + 1}")
+            pendingMessages.add(jsonMessage)
+        }
     }
 
-    /** 隐藏加载转圈动画 */
-    fun hideLoading() {
-        post { loadingIndicator.visibility = GONE }
-    }
-
-    /** 显示停止按钮 */
-    fun showStopButton() {
-        post { stopButton.visibility = VISIBLE }
-    }
-
-    /** 隐藏停止按钮 */
-    fun hideStopButton() {
-        post { stopButton.visibility = GONE }
+    /** 发送积压的待处理消息 */
+    private fun flushPendingMessages() {
+        if (pendingMessages.isEmpty()) return
+        val wv = webView ?: return
+        val count = pendingMessages.size
+        Log.d(TAG, "[$ballId] flushPendingMessages 发送 $count 条积压消息")
+        val messages = pendingMessages.toList()
+        pendingMessages.clear()
+        wv.post {
+            for (msg in messages) {
+                wv.evaluateJavascript(
+                    """window.dispatchEvent(new CustomEvent('lxc-message', {detail: $msg}));""",
+                    null
+                )
+            }
+        }
     }
 
     // ==================== 流式输出控制 ====================
 
-    /** 显示流式输出区域，隐藏输入框，并显示加载转圈 */
+    /** 显示流式输出区域，隐藏输入框 */
     fun showStreamOutput() {
-        post {
-            inputView.visibility = GONE
-            streamContainer.visibility = VISIBLE
-            streamOutputView.text = ""
-            streamLoadingIndicator.visibility = VISIBLE
-            stopButton.visibility = VISIBLE
-        }
+        sendToPanelWebView("""{"type":"stream","action":"show"}""")
     }
 
-    /** 追加流式内容到输出区域，首次收到数据时自动隐藏加载转圈 */
+    /** 追加流式内容到输出区域 */
     fun appendStreamContent(text: String) {
-        post {
-            // 首次收到内容时隐藏加载动画
-            if (streamLoadingIndicator.visibility == VISIBLE) {
-                streamLoadingIndicator.visibility = GONE
-            }
-            streamOutputView.append(text)
-            // 自动滚动到底部
-            streamOutputScroll.post {
-                streamOutputScroll.fullScroll(ScrollView.FOCUS_DOWN)
-            }
-        }
+        sendToPanelWebView("""{"type":"stream","action":"append","text":${toJsonString(text)}}""")
     }
 
     /** 清空流式输出区域 */
     fun clearStreamOutput() {
-        post {
-            streamOutputView.text = ""
-        }
+        sendToPanelWebView("""{"type":"stream","action":"clear"}""")
     }
 
     /** 隐藏流式输出区域，恢复输入框 */
     fun hideStreamOutput() {
-        post {
-            streamContainer.visibility = GONE
-            streamLoadingIndicator.visibility = GONE
-            reasoningScroll.visibility = GONE
-            reasoningOutputView.text = ""
-            stopButton.visibility = GONE
-            inputView.visibility = VISIBLE
-        }
+        sendToPanelWebView("""{"type":"stream","action":"hide"}""")
     }
 
     // ==================== 思考过程显示 ====================
 
     /** 显示思考过程面板 */
     fun showReasoningOutput() {
-        post {
-            reasoningScroll.visibility = VISIBLE
-            reasoningOutputView.text = ""
-        }
+        sendToPanelWebView("""{"type":"reasoning","action":"show"}""")
     }
 
     /** 追加思考过程内容 */
     fun appendReasoningContent(text: String) {
-        post {
-            reasoningOutputView.append(text)
-            reasoningScroll.post {
-                reasoningScroll.fullScroll(ScrollView.FOCUS_DOWN)
-            }
-        }
+        sendToPanelWebView("""{"type":"reasoning","action":"append","text":${toJsonString(text)}}""")
     }
 
     /** 隐藏思考过程面板 */
     fun hideReasoningOutput() {
-        post {
-            reasoningScroll.visibility = GONE
-            reasoningOutputView.text = ""
-        }
+        sendToPanelWebView("""{"type":"reasoning","action":"hide"}""")
+    }
+
+    // ==================== 加载动画 ====================
+
+    /** 显示加载转圈动画 */
+    fun showLoading() {
+        sendToPanelWebView("""{"type":"loading","show":true}""")
+    }
+
+    /** 隐藏加载转圈动画 */
+    fun hideLoading() {
+        sendToPanelWebView("""{"type":"loading","show":false}""")
+    }
+
+    // ==================== 停止按钮 ====================
+
+    /** 显示停止按钮 */
+    fun showStopButton() {
+        sendToPanelWebView("""{"type":"stop","show":true}""")
+    }
+
+    /** 隐藏停止按钮 */
+    fun hideStopButton() {
+        sendToPanelWebView("""{"type":"stop","show":false}""")
     }
 
     // ==================== 调节大小手柄 ====================
@@ -624,77 +627,6 @@ class FloatingInputPanel(
         panelWidth = dpToPx(widthDp)
     }
 
-    // ==================== WebUI 模式 ====================
-
-    /**
-     * 以 WebUI 模式显示面板，加载插件 web/ 目录下的 HTML 页面
-     *
-     * @param title 面板标题
-     * @param webRootDir 插件的 web 资源根目录（插件目录/web/）
-     * @param page HTML 页面文件名，如 "index.html"
-     * @param jsBridge 可选 JS 桥接对象（如 PluginWebUIBridge.JsApiBridge）
-     * @param bridgeName JS 桥接对象在 window 上的名字，如 "LXC"
-     * @return 是否成功加载
-     */
-    @SuppressLint("SetJavaScriptEnabled")
-    fun showWebUI(
-        title: String,
-        webRootDir: File,
-        page: String,
-        jsBridge: Any? = null,
-        bridgeName: String = "LXC"
-    ): Boolean {
-        val pageFile = File(webRootDir, page)
-        if (!pageFile.exists()) return false
-
-        titleView.text = title
-        switchToMode(PanelMode.WEBUI)
-
-        // 创建 WebView
-        if (webView == null) {
-            webView = WebView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                // 透明背景，避免 WebView 白色底色超出圆角
-                setBackgroundColor(Color.TRANSPARENT)
-                // 防止内容溢出到面板框架外
-                overScrollMode = View.OVER_SCROLL_NEVER
-                isHorizontalScrollBarEnabled = false
-                isVerticalScrollBarEnabled = false
-                with(settings) {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    allowFileAccess = true
-                    allowContentAccess = true
-                    useWideViewPort = true
-                    loadWithOverviewMode = true
-                    // 禁用缩放，防止用户手势放大导致内容溢出
-                    builtInZoomControls = false
-                    displayZoomControls = false
-                    setSupportZoom(false)
-                }
-                webViewClient = object : WebViewClient() {}
-                webChromeClient = object : WebChromeClient() {}
-            }
-        } else {
-            // 重用已有 WebView
-            (webView!!.parent as? ViewGroup)?.removeView(webView)
-        }
-
-        // 注入 JS 桥接
-        if (jsBridge != null) {
-            webView!!.addJavascriptInterface(jsBridge, bridgeName)
-        }
-
-        contentContainer.addView(webView)
-        webView!!.loadUrl("file://${pageFile.absolutePath}")
-        visibility = VISIBLE
-
-        return true
-    }
-
     // ==================== 自定义视图模式 ====================
 
     /**
@@ -704,10 +636,10 @@ class FloatingInputPanel(
      * @param customView 自定义 View，由 Lua 端创建
      */
     fun showCustom(title: String, customView: View) {
+        Log.d(TAG, "[$ballId] showCustom title=\"$title\", viewType=${customView.javaClass.simpleName}")
         titleView.text = title
         switchToMode(PanelMode.CUSTOM)
 
-        // 移除旧视图
         (customView.parent as? ViewGroup)?.removeView(customView)
         contentContainer.addView(customView, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -718,14 +650,9 @@ class FloatingInputPanel(
 
     // ==================== 焦点控制 ====================
 
-    /** 请求面板焦点（让输入框获得键盘焦点） */
+    /** 请求面板焦点 */
     fun requestFocusOnInput() {
         when (currentMode) {
-            PanelMode.DEFAULT -> {
-                inputView.post {
-                    inputView.requestFocus()
-                }
-            }
             PanelMode.WEBUI -> {
                 webView?.post {
                     webView?.requestFocus()
@@ -740,7 +667,6 @@ class FloatingInputPanel(
     /** 清除面板焦点 */
     fun clearPanelFocus() {
         when (currentMode) {
-            PanelMode.DEFAULT -> inputView.clearFocus()
             PanelMode.WEBUI -> webView?.clearFocus()
             PanelMode.CUSTOM -> contentContainer.getChildAt(0)?.clearFocus()
         }
@@ -799,7 +725,6 @@ class FloatingInputPanel(
                     params.y = newY
                     (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
                         .updateViewLayout(this, params)
-                    // 同步更新悬浮球位置（球在面板上方 60dp 处）
                     floatingBallView?.moveTo(newX, newY - dpToPx(60))
                 }
                 return true
@@ -816,42 +741,39 @@ class FloatingInputPanel(
     /** 切换面板模式 */
     private fun switchToMode(mode: PanelMode) {
         if (currentMode == mode && mode != PanelMode.WEBUI) return
+        Log.d(TAG, "[$ballId] switchToMode $currentMode -> $mode")
         currentMode = mode
-
-        // 清空内容容器
         contentContainer.removeAllViews()
-
-        when (mode) {
-            PanelMode.DEFAULT -> {
-                // 恢复默认输入布局
-                contentContainer.addView(defaultContentLayout, ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                ))
-                sendButton.visibility = VISIBLE
-            }
-            PanelMode.WEBUI -> {
-                // 隐藏发送按钮，WebUI 模式下由 HTML 自己处理交互
-                sendButton.visibility = GONE
-                // WebView 由 showWebUI 添加
-            }
-            PanelMode.CUSTOM -> {
-                // 模式切换时可隐藏发送按钮
-                sendButton.visibility = GONE
-                // 自定义视图由 showCustom 添加
-            }
-        }
+        // WebView / CustomView 由对应方法添加
     }
 
     private fun dpToPx(dp: Int): Int {
         return (dp * context.resources.displayMetrics.density).toInt()
     }
 
-    /** 创建圆角背景 Drawable */
-    private fun createRoundedBg(color: Int, radius: Float): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(color)
-            setCornerRadius(radius)
-        }
+    /** JSON 字符串转义 */
+    private fun escapeJson(s: String): String {
+        return s.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+    }
+
+    /** 将字符串转为 JSON 字符串值（带引号） */
+    private fun toJsonString(s: String): String {
+        return "\"${escapeJson(s)}\""
+    }
+
+    /** 从 JSON 消息中提取 type 字段用于日志 */
+    private fun extractMsgType(json: String): String {
+        val idx = json.indexOf("\"type\"")
+        if (idx < 0) return "?"
+        val colon = json.indexOf(":", idx + 6)
+        if (colon < 0) return "?"
+        val start = json.indexOf("\"", colon + 1)
+        if (start < 0) return "?"
+        val end = json.indexOf("\"", start + 1)
+        return if (end > start) json.substring(start + 1, end) else "?"
     }
 }

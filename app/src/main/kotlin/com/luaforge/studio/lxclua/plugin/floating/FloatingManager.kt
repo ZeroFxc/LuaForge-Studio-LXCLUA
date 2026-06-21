@@ -1,6 +1,7 @@
 package com.luaforge.studio.lxclua.plugin.floating
 
 import android.os.Build
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.view.Gravity
@@ -17,11 +18,14 @@ import java.io.File
  */
 object FloatingManager {
 
+    private const val TAG = "FloatingManager"
+
     private var windowManager: WindowManager? = null
     private val floatingBalls = mutableMapOf<String, FloatingBallData>()
 
     /** 悬浮窗类型：Android 8.0+ 用 TYPE_APPLICATION_OVERLAY，旧版本用 TYPE_PHONE */
     private val overlayType: Int
+        @Suppress("DEPRECATION")
         get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         } else {
@@ -54,10 +58,21 @@ object FloatingManager {
         onBallClick: ((String) -> Unit)?,
         onInputSubmit: ((String, String) -> Unit)?
     ): Boolean {
-        val wm = getWindowManager() ?: return false
-        if (floatingBalls.containsKey(id)) return false
+        val wm = getWindowManager() ?: run {
+            Log.e(TAG, "[$id] createBall 失败: WindowManager 不可用")
+            return false
+        }
+        if (floatingBalls.containsKey(id)) {
+            Log.w(TAG, "[$id] createBall 失败: 悬浮球已存在")
+            return false
+        }
 
-        val ctx = PluginManager.appContext ?: return false
+        val ctx = PluginManager.appContext ?: run {
+            Log.e(TAG, "[$id] createBall 失败: appContext 不可用")
+            return false
+        }
+
+        Log.d(TAG, "[$id] createBall pluginId=$pluginId, x=$x, y=$y, label=\"$label\", iconText=\"$iconText\"")
 
         // 创建悬浮球视图
         val ballView = FloatingBallView(ctx, id, label, iconText, onBallClick)
@@ -87,12 +102,14 @@ object FloatingManager {
         wm.addView(ballView, ballParams)
         floatingBalls[id] = FloatingBallData(id, pluginId, ballView, panel, ballParams)
 
+        Log.d(TAG, "[$id] createBall 成功, 当前悬浮球总数=${floatingBalls.size}")
         return true
     }
 
     /** 移除悬浮球 */
     fun removeBall(id: String) {
         val data = floatingBalls.remove(id) ?: return
+        Log.d(TAG, "[$id] removeBall panelAttached=${data.panel.isAttached}")
         val wm = getWindowManager()
         try {
             if (data.panel.isAttached) {
@@ -100,19 +117,23 @@ object FloatingManager {
             }
             wm?.removeView(data.view)
             data.panel.destroy()
-        } catch (_: Exception) {}
+            Log.d(TAG, "[$id] removeBall 完成, 剩余悬浮球=${floatingBalls.size}")
+        } catch (e: Exception) {
+            Log.w(TAG, "[$id] removeBall 异常: ${e.message}")
+        }
     }
 
     /** 移除所有悬浮球 */
     fun removeAllBalls() {
+        Log.d(TAG, "removeAllBalls 数量=${floatingBalls.size}")
         floatingBalls.keys.toList().forEach { removeBall(it) }
     }
 
     /** 移除指定插件的所有悬浮球 */
     fun removeBallsByPlugin(pluginId: String) {
-        floatingBalls.entries.filter { it.value.pluginId == pluginId }.forEach {
-            removeBall(it.key)
-        }
+        val ids = floatingBalls.entries.filter { it.value.pluginId == pluginId }.map { it.key }
+        Log.d(TAG, "removeBallsByPlugin pluginId=$pluginId, 匹配数量=${ids.size}")
+        ids.forEach { removeBall(it) }
     }
 
     /** 更新面板标题（用于流式进度等场景） */
@@ -212,22 +233,47 @@ object FloatingManager {
         floatingBalls[id]?.panel?.onPanelResized = callback
     }
 
-    /** 显示输入面板 */
-    fun showPanel(id: String, title: String, hint: String) {
-        val data = floatingBalls[id] ?: return
-        val wm = getWindowManager() ?: return
-        data.panel.show(title, hint)
-        if (!data.panel.isAttached) {
+    /**
+     * 以默认 WebUI 模板显示面板
+     * 加载内置 panel_default.html，通过 lxc-message 传递 title 和 hint
+     *
+     * @param id 悬浮球 ID
+     * @param title 面板标题
+     * @param hint 输入框提示文字
+     * @param jsBridge JS 桥接对象（PluginWebUIBridge.JsApiBridge）
+     * @param bridgeName JS 桥接名称（默认 "LXC"）
+     */
+    fun showPanelDefault(
+        id: String,
+        title: String,
+        hint: String,
+        jsBridge: Any? = null,
+        bridgeName: String = "LXC"
+    ): Boolean {
+        val data = floatingBalls[id] ?: run {
+            Log.w(TAG, "[$id] showPanelDefault 失败: 悬浮球不存在")
+            return false
+        }
+        val wm = getWindowManager() ?: run {
+            Log.e(TAG, "[$id] showPanelDefault 失败: WindowManager 不可用")
+            return false
+        }
+        Log.d(TAG, "[$id] showPanelDefault title=\"$title\", hint=\"$hint\", hasBridge=${jsBridge != null}")
+        val result = data.panel.showDefaultWebUI(title, hint, jsBridge, bridgeName)
+        if (result && !data.panel.isAttached) {
             val panelParams = createPanelParams(data)
             wm.addView(data.panel, panelParams)
             data.panel.isAttached = true
+            Log.d(TAG, "[$id] showPanelDefault 面板已添加到 WindowManager")
         }
+        return result
     }
 
     /** 隐藏输入面板 */
     fun hidePanel(id: String) {
         val data = floatingBalls[id] ?: return
         val wm = getWindowManager() ?: return
+        Log.d(TAG, "[$id] hidePanel isAttached=${data.panel.isAttached}")
         data.panel.hide()
         if (data.panel.isAttached) {
             try { wm.removeView(data.panel) } catch (_: Exception) {}
@@ -270,13 +316,21 @@ object FloatingManager {
         jsBridge: Any? = null,
         bridgeName: String = "LXC"
     ): Boolean {
-        val data = floatingBalls[id] ?: return false
-        val wm = getWindowManager() ?: return false
+        val data = floatingBalls[id] ?: run {
+            Log.w(TAG, "[$id] showPanelWebUI 失败: 悬浮球不存在")
+            return false
+        }
+        val wm = getWindowManager() ?: run {
+            Log.e(TAG, "[$id] showPanelWebUI 失败: WindowManager 不可用")
+            return false
+        }
+        Log.d(TAG, "[$id] showPanelWebUI title=\"$title\", page=$page, hasBridge=${jsBridge != null}")
         val result = data.panel.showWebUI(title, webRootDir, page, jsBridge, bridgeName)
         if (result && !data.panel.isAttached) {
             val panelParams = createPanelParams(data)
             wm.addView(data.panel, panelParams)
             data.panel.isAttached = true
+            Log.d(TAG, "[$id] showPanelWebUI 面板已添加到 WindowManager")
         }
         return result
     }
@@ -289,13 +343,21 @@ object FloatingManager {
      * @param customView 自定义 View
      */
     fun showPanelCustom(id: String, title: String, customView: View) {
-        val data = floatingBalls[id] ?: return
-        val wm = getWindowManager() ?: return
+        val data = floatingBalls[id] ?: run {
+            Log.w(TAG, "[$id] showPanelCustom 失败: 悬浮球不存在")
+            return
+        }
+        val wm = getWindowManager() ?: run {
+            Log.e(TAG, "[$id] showPanelCustom 失败: WindowManager 不可用")
+            return
+        }
+        Log.d(TAG, "[$id] showPanelCustom title=\"$title\", viewType=${customView.javaClass.simpleName}")
         data.panel.showCustom(title, customView)
         if (!data.panel.isAttached) {
             val panelParams = createPanelParams(data)
             wm.addView(data.panel, panelParams)
             data.panel.isAttached = true
+            Log.d(TAG, "[$id] showPanelCustom 面板已添加到 WindowManager")
         }
     }
 
@@ -307,6 +369,11 @@ object FloatingManager {
     /** 清除面板焦点 */
     fun clearPanelFocus(id: String) {
         floatingBalls[id]?.panel?.clearPanelFocus()
+    }
+
+    /** 向面板 WebView 发送 JSON 消息（支持消息队列，WebView 未就绪时暂存） */
+    fun sendToPanelWebView(id: String, jsonMessage: String) {
+        floatingBalls[id]?.panel?.sendToPanelWebView(jsonMessage)
     }
 
     /** 获取面板 WebView 实例（WebUI 模式下可用，用于 evaluateJs 等操作） */

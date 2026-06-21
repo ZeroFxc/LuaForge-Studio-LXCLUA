@@ -2741,6 +2741,18 @@ fun MCPSettingsSection(
                                             )
                                         }
                                     }
+                                    // 远程 MCP 服务器也显示展开按钮
+                                    if (!isPlugin && tools.isNotEmpty()) {
+                                        IconButton(onClick = {
+                                            expandedServiceId = if (isExpanded) null else server.id
+                                        }) {
+                                            Icon(
+                                                if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                                contentDescription = if (isExpanded) "收起" else "展开",
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
                                     if (!isPlugin) {
                                         IconButton(onClick = {
                                             val updated = config.mcpServers.filter { it.id != server.id }
@@ -2760,14 +2772,19 @@ fun MCPSettingsSection(
                                 if (isPlugin) {
                                     expandedServiceId = if (isExpanded) null else server.id
                                 } else if (server.url.isNotBlank()) {
-                                    onTestConnection(server)
+                                    // 远程 MCP 服务器：有工具时展开，否则测试连接
+                                    if (tools.isNotEmpty()) {
+                                        expandedServiceId = if (isExpanded) null else server.id
+                                    } else {
+                                        onTestConnection(server)
+                                    }
                                 }
                             }
                         )
 
                         // 展开的工具列表
                         AnimatedVisibility(
-                            visible = isExpanded && isPlugin && tools.isNotEmpty(),
+                            visible = isExpanded && tools.isNotEmpty(),
                             enter = expandVertically(),
                             exit = shrinkVertically()
                         ) {

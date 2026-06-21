@@ -1,16 +1,23 @@
 package com.luaforge.studio.lxclua.mcp
 
 import com.luaforge.studio.lxclua.ai.AIConfigManager
+import io.ktor.client.HttpClient
+import io.modelcontextprotocol.kotlin.sdk.client.Client
+import io.modelcontextprotocol.kotlin.sdk.client.SseClientTransport
+import io.modelcontextprotocol.kotlin.sdk.client.StreamableHttpClientTransport
+import io.modelcontextprotocol.kotlin.sdk.shared.Transport
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequestParams
+import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
+import io.modelcontextprotocol.kotlin.sdk.types.Implementation
+import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
+import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 /** MCP 工具定义 */
 data class MCPTool(
@@ -88,94 +95,113 @@ interface IMCPService {
     suspend fun readResource(uri: String): String?
 }
 
-/** 基于 HTTP 的 MCP 服务实现（Streamable HTTP Transport） */
+/** MCP 传输类型 */
+enum class MCPTransport(val value: String) {
+    STREAMABLE_HTTP("streamable_http"),
+    SSE("sse");
+
+    companion object {
+        fun fromString(s: String?): MCPTransport = when (s?.lowercase()) {
+            "sse" -> SSE
+            else -> STREAMABLE_HTTP
+        }
+    }
+}
+
+/** 基于官方 MCP Kotlin SDK 的服务实现（使用 SDK 内置 Transport） */
 class MCPServiceImpl(
     private val serverUrl: String? = null,
     private val serverTransport: String? = null
 ) : IMCPService {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val ktorClient = HttpClient()
 
-    private var sessionId: String? = null
-    private var serverCapabilities: JSONObject? = null
+    private var sdkClient: Client? = null
+    private var transport: Transport? = null
+
+    private val transportType: MCPTransport
+        get() = MCPTransport.fromString(serverTransport)
 
     override var isConnected: Boolean = false
         private set
 
     private val config get() = AIConfigManager.currentConfig
 
-    /** 实际使用的端点 */
-    private val effectiveEndpoint: String
+    private val baseUrl: String
         get() = serverUrl?.trimEnd('/')?.takeIf { it.isNotEmpty() }
             ?: config.mcpEndpoint.trimEnd('/')
 
     override suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
         try {
-            val endpoint = effectiveEndpoint
-            // MCP 初始化请求
-            val initBody = JSONObject().apply {
-                put("jsonrpc", "2.0")
-                put("id", 1)
-                put("method", "initialize")
-                put("params", JSONObject().apply {
-                    put("protocolVersion", "2024-11-05")
-                    put("capabilities", JSONObject())
-                    put("clientInfo", JSONObject().apply {
-                        put("name", "LXC-LUA")
-                        put("version", "1.1.3")
-                    })
-                })
+            // 开头就捕获 URL，避免 get() 属性在后续被修改
+            
+            val url = baseUrl
+            android.util.Log.i("MCPService", "正在连接 MCP 服务器: $url, 传输类型: ${transportType.value}")
+
+            // 根据传输类型创建 SDK 内置 Transport
+            val t = when (transportType) {
+                MCPTransport.SSE -> {
+                    android.util.Log.i("MCPService", "使用 SDK 内置 SSE 传输: $url")
+                    SseClientTransport(ktorClient, url, null)
+                }
+                MCPTransport.STREAMABLE_HTTP -> {
+                    android.util.Log.i("MCPService", "使用 SDK 内置 Streamable HTTP 传输: $url")
+                    StreamableHttpClientTransport(ktorClient, url)
+                }
             }
-            val response = client.newCall(
-                Request.Builder()
-                    .url(endpoint)
-                    .post(initBody.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-            ).execute()
-            if (!response.isSuccessful) return@withContext false
-            val body = response.body?.string() ?: return@withContext false
-            val json = JSONObject(body)
-            val result = json.optJSONObject("result")
-            if (result != null) {
-                serverCapabilities = result.optJSONObject("capabilities")
-                sessionId = response.header("Mcp-Session-Id")
-                isConnected = true
-                true
-            } else {
-                false
+            transport = t
+
+            // 创建 Client 并连接
+            val client = Client(
+                clientInfo = Implementation(name = "LXC-LUA", version = "1.1.3")
+            )
+            sdkClient = client
+            client.connect(t)
+            isConnected = true
+            android.util.Log.i("MCPService", "MCP 连接成功！协议版本: ${client.serverCapabilities}")
+
+            // 获取工具列表验证
+            val toolsResult = client.listTools()
+            val tools = toolsResult?.tools ?: emptyList()
+            android.util.Log.i("MCPService", "获取到 ${tools.size} 个工具: ${tools.map { it.name }}")
+            if (tools.isEmpty()) {
+                android.util.Log.w("MCPService", "工具列表为空！可能原因: 1) 服务器未声明 tools 能力 2) 服务器未注册工具")
             }
+
+            return@withContext true
         } catch (e: Exception) {
-            android.util.Log.e("MCPService", "MCP 连接失败", e)
-            false
+            android.util.Log.e("MCPService", "MCP 连接失败 (url=$baseUrl): ${e.message}", e)
+            isConnected = false
+            return@withContext false
         }
     }
 
     override suspend fun disconnect() {
-        sessionId = null
-        serverCapabilities = null
+        android.util.Log.d("MCPService", "断开 MCP 连接")
+        try {
+            sdkClient?.close()
+        } catch (e: Exception) {
+            android.util.Log.e("MCPService", "断开连接异常: ${e.message}", e)
+        }
+        sdkClient = null
+        transport = null
         isConnected = false
     }
 
     override suspend fun listTools(): List<MCPTool> = withContext(Dispatchers.IO) {
         if (!isConnected) return@withContext emptyList()
         try {
-            val result = sendRequest("tools/list")
-            val tools = result?.optJSONArray("tools") ?: return@withContext emptyList()
-            (0 until tools.length()).map { i ->
-                val tool = tools.getJSONObject(i)
-                val schema = tool.optJSONObject("inputSchema") ?: JSONObject()
-                val schemaMap = jsonToMap(schema)
+            val client = sdkClient ?: return@withContext emptyList()
+            val result = client.listTools() ?: return@withContext emptyList()
+            result.tools.map { sdkTool ->
                 MCPTool(
-                    name = tool.optString("name", ""),
-                    description = tool.optString("description", ""),
-                    inputSchema = schemaMap
+                    name = sdkTool.name,
+                    description = sdkTool.description ?: "",
+                    inputSchema = sdkToolToSchema(sdkTool)
                 )
             }
         } catch (e: Exception) {
+            android.util.Log.e("MCPService", "listTools 异常: ${e.message}", e)
             emptyList()
         }
     }
@@ -183,33 +209,46 @@ class MCPServiceImpl(
     override suspend fun callTool(request: MCPToolCallRequest): MCPToolCallResult = withContext(Dispatchers.IO) {
         if (!isConnected) return@withContext MCPToolCallResult(false, error = "MCP 未连接")
         try {
-            val argsJson = JSONObject()
-            request.arguments.forEach { (k, v) -> argsJson.put(k, v) }
-            val params = JSONObject().apply {
-                put("name", request.toolName)
-                put("arguments", argsJson)
-            }
-            val result = sendRequest("tools/call", params)
-            if (result == null) {
-                return@withContext MCPToolCallResult(false, error = "工具调用返回为空")
-            }
-            val contentArray = result.optJSONArray("content")
-            val contentList = if (contentArray != null) {
-                (0 until contentArray.length()).map { i ->
-                    val item = contentArray.getJSONObject(i)
-                    MCPContent(
-                        type = item.optString("type", "text"),
-                        text = item.optString("text", null),
-                        data = item.optString("data", null),
-                        mimeType = item.optString("mimeType", null)
+            val client = sdkClient ?: return@withContext MCPToolCallResult(false, error = "MCP 客户端未初始化")
+
+            // 转换参数为 JsonObject
+            val jsonArgs = request.arguments.entries.associate {
+                it.key to JsonPrimitive(it.value.toString())
+            }.let { JsonObject(it) }
+
+            val result = client.callTool(
+                CallToolRequest(
+                    params = CallToolRequestParams(
+                        name = request.toolName,
+                        arguments = jsonArgs
+                    )
+                )
+            )
+            val contentList = result?.content?.map { contentItem ->
+                when (contentItem) {
+                    is TextContent -> MCPContent(
+                        type = "text",
+                        text = contentItem.text,
+                        data = null,
+                        mimeType = null
+                    )
+                    is ImageContent -> MCPContent(
+                        type = "image",
+                        text = null,
+                        data = contentItem.data,
+                        mimeType = contentItem.mimeType
+                    )
+                    else -> MCPContent(
+                        type = contentItem.type.value,
+                        text = null,
+                        data = null,
+                        mimeType = null
                     )
                 }
-            } else {
-                // 直接返回文本
-                listOf(MCPContent(text = result.optString("text", result.toString())))
-            }
+            } ?: emptyList()
             MCPToolCallResult(true, content = contentList)
         } catch (e: Exception) {
+            android.util.Log.e("MCPService", "callTool 异常: ${e.message}", e)
             MCPToolCallResult(false, error = e.message ?: "调用失败")
         }
     }
@@ -217,18 +256,18 @@ class MCPServiceImpl(
     override suspend fun listResources(): List<MCPResource> = withContext(Dispatchers.IO) {
         if (!isConnected) return@withContext emptyList()
         try {
-            val result = sendRequest("resources/list")
-            val resources = result?.optJSONArray("resources") ?: return@withContext emptyList()
-            (0 until resources.length()).map { i ->
-                val res = resources.getJSONObject(i)
+            val client = sdkClient ?: return@withContext emptyList()
+            val result = client.listResources() ?: return@withContext emptyList()
+            result.resources.map { res ->
                 MCPResource(
-                    uri = res.optString("uri", ""),
-                    name = res.optString("name", ""),
-                    description = res.optString("description", ""),
-                    mimeType = res.optString("mimeType", "text/plain")
+                    uri = res.uri.toString(),
+                    name = res.name ?: "",
+                    description = res.description ?: "",
+                    mimeType = res.mimeType ?: "text/plain"
                 )
             }
         } catch (e: Exception) {
+            android.util.Log.w("MCPService", "listResources 异常: ${e.message}")
             emptyList()
         }
     }
@@ -236,60 +275,71 @@ class MCPServiceImpl(
     override suspend fun readResource(uri: String): String? = withContext(Dispatchers.IO) {
         if (!isConnected) return@withContext null
         try {
-            val params = JSONObject().put("uri", uri)
-            val result = sendRequest("resources/read", params)
-            val contents = result?.optJSONArray("contents")
-            if (contents != null && contents.length() > 0) {
-                contents.getJSONObject(0).optString("text", null)
-                    ?: contents.getJSONObject(0).optString("blob", null)
-            } else {
-                result?.optString("text")
-            }
+            val client = sdkClient ?: return@withContext null
+            val result = client.readResource(
+                io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest(
+                    io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequestParams(uri)
+                )
+            )
+            val contents = result?.contents ?: return@withContext null
+            if (contents.isNotEmpty()) {
+                when (val first = contents.first()) {
+                    is TextResourceContents -> first.text
+                    else -> null
+                }
+            } else null
         } catch (e: Exception) {
+            android.util.Log.w("MCPService", "readResource 异常: ${e.message}")
             null
         }
     }
 
-    /** 发送 JSON-RPC 请求 */
-    private suspend fun sendRequest(method: String, params: JSONObject? = null): JSONObject? {
-        val requestId = System.currentTimeMillis().toInt()
-        val body = JSONObject().apply {
-            put("jsonrpc", "2.0")
-            put("id", requestId)
-            put("method", method)
-            if (params != null) put("params", params)
+    /**
+     * 将 SDK 的 ToolSchema 转换为 Map
+     * SDK 0.13.0 的 Tool.inputSchema 是 ToolSchema 类型，包含 properties(JsonObject)、required 等
+     */
+    private fun sdkToolToSchema(tool: Tool): Map<String, Any> {
+        return try {
+            val schema = tool.inputSchema
+            val result = mutableMapOf<String, Any>()
+            result["type"] = schema.type
+            schema.schema?.let { result["\$schema"] = it }
+            schema.required?.let { result["required"] = it }
+            schema.properties?.let { props ->
+                result["properties"] = jsonElementToMap(props)
+            }
+            result
+        } catch (e: Exception) {
+            android.util.Log.w("MCPService", "sdkToolToSchema 转换异常: ${e.message}")
+            emptyMap()
         }
-        val endpoint = effectiveEndpoint
-        val reqBuilder = Request.Builder()
-            .url(endpoint)
-            .post(body.toString().toRequestBody("application/json".toMediaType()))
-        sessionId?.let { reqBuilder.addHeader("Mcp-Session-Id", it) }
-        val response = client.newCall(reqBuilder.build()).execute()
-        val respBody = response.body?.string() ?: return null
-        val json = JSONObject(respBody)
-        val error = json.optJSONObject("error")
-        if (error != null) {
-            android.util.Log.w("MCPService", "MCP 请求错误: $method -> ${error.optString("message")}")
-            return null
-        }
-        return json.optJSONObject("result")
     }
 
-    /** JSONObject 转 Map */
-    private fun jsonToMap(json: JSONObject): Map<String, Any> {
-        val map = mutableMapOf<String, Any>()
-        json.keys().forEach { key ->
-            val value = json.get(key)
-            when (value) {
-                is JSONObject -> map[key] = jsonToMap(value)
-                is JSONArray -> map[key] = (0 until value.length()).map { i ->
-                    val item = value.get(i)
-                    if (item is JSONObject) jsonToMap(item) else item
+    /** kotlinx.serialization JsonElement 递归转 Map */
+    private fun jsonElementToMap(element: kotlinx.serialization.json.JsonElement): Any {
+        return when (element) {
+            is kotlinx.serialization.json.JsonObject -> {
+                val map = mutableMapOf<String, Any>()
+                element.forEach { (key, value) ->
+                    map[key] = jsonElementToMap(value)
                 }
-                else -> map[key] = value
+                map
             }
+            is kotlinx.serialization.json.JsonArray -> {
+                element.map { jsonElementToMap(it) }
+            }
+            is kotlinx.serialization.json.JsonPrimitive -> {
+                val primitive = element
+                when {
+                    primitive.isString -> primitive.content
+                    primitive.content == "true" -> true
+                    primitive.content == "false" -> false
+                    primitive.content == "null" -> null
+                    else -> primitive.content.toDoubleOrNull() ?: primitive.content
+                } ?: primitive.content
+            }
+            else -> element.toString()
         }
-        return map
     }
 }
 
@@ -546,20 +596,31 @@ object MCPManager {
     /**
      * 注册一个 MCP 服务（工具组）
      * 服务默认启用，所有工具默认启用
+     * 如果已持久化过状态，则恢复持久化的状态
      */
     fun registerService(serviceName: String, serviceLabel: String, tools: List<MCPTool>) {
+        val serverId = "plugin_service_$serviceName"
+        // 检查持久化的服务器启用状态
+        val persistedEntry = com.luaforge.studio.lxclua.ai.AIConfigManager.currentConfig.mcpServers
+            .find { it.id == serverId }
+        val isEnabled = persistedEntry?.enabled ?: true
+        // 检查持久化的工具开关状态
+        val persistedToolStates = com.luaforge.studio.lxclua.ai.AIConfigManager.currentConfig.mcpToolStates[serviceName]
+
         val toolStates = mutableMapOf<String, MCPToolState>()
         for (tool in tools) {
-            toolStates[tool.name] = MCPToolState(tool.name, enabled = true)
+            val toolEnabled = persistedToolStates?.get(tool.name) ?: true
+            toolStates[tool.name] = MCPToolState(tool.name, enabled = toolEnabled)
             toolToService[tool.name] = serviceName
         }
         serviceRegistry[serviceName] = MCPServiceInfo(
             name = serviceName,
             label = serviceLabel,
-            enabled = true,
+            enabled = isEnabled,
             tools = tools,
             toolStates = toolStates
         )
+        android.util.Log.i("MCPManager", "[registerService] $serviceName: enabled=$isEnabled, tools=${tools.size}, 持久化工具状态=${persistedToolStates?.size ?: 0}")
     }
 
     /**
@@ -592,6 +653,7 @@ object MCPManager {
      */
     fun getEnabledServiceTools(): List<MCPTool> {
         val result = mutableListOf<MCPTool>()
+        // 插件服务
         for ((_, info) in serviceRegistry) {
             if (!info.enabled) continue
             for (tool in info.tools) {
@@ -601,7 +663,20 @@ object MCPManager {
                 }
             }
         }
-        android.util.Log.d("MCPManager", "[getEnabledServiceTools] 服务数: ${serviceRegistry.size}, 启用工具数: ${result.size}")
+        // 远程 MCP 服务器 — 检查持久化的工具开关状态
+        val config = AIConfigManager.currentConfig
+        for ((serverId, tools) in serverToolsCache) {
+            val entry = config.mcpServers.find { it.id == serverId }
+            if (entry == null || !entry.enabled) continue
+            val toolStates = config.mcpToolStates[entry.name] ?: emptyMap()
+            for (tool in tools) {
+                val enabled = toolStates[tool.name] ?: true
+                if (enabled) {
+                    result.add(tool)
+                }
+            }
+        }
+        android.util.Log.d("MCPManager", "[getEnabledServiceTools] 服务数: ${serviceRegistry.size}, 远程: ${serverToolsCache.size}, 启用工具数: ${result.size}")
         return result
     }
 
@@ -636,16 +711,19 @@ object MCPManager {
         for ((serverId, tools) in serverToolsCache) {
             val entry = pluginServerEntries[serverId]
                 ?: AIConfigManager.currentConfig.mcpServers.find { it.id == serverId }
+            // 读取持久化的工具开关状态
+            val persistedToolStates = AIConfigManager.currentConfig.mcpToolStates[entry?.name] ?: emptyMap()
             val toolList = tools.map { tool ->
+                val toolEnabled = persistedToolStates[tool.name] ?: true
                 mapOf(
                     "name" to tool.name,
                     "description" to tool.description,
-                    "enabled" to true
+                    "enabled" to toolEnabled
                 )
             }
             if (toolList.isNotEmpty()) {
                 result.add(mapOf(
-                    "name" to (entry?.id ?: serverId),
+                    "name" to (entry?.name ?: serverId),
                     "label" to (entry?.name ?: serverId),
                     "enabled" to (entry?.enabled ?: true),
                     "source" to "remote",
@@ -684,26 +762,79 @@ object MCPManager {
         AIConfigManager.updateInMemory(config.copy(mcpServers = updated))
     }
 
-    /** 启用服务中的指定工具 */
+    /** 启用服务中的指定工具（插件和远程 MCP 均支持） */
     fun enableServiceTool(serviceName: String, toolName: String): Boolean {
-        val info = serviceRegistry[serviceName] ?: return false
-        val toolStates = info.toolStates
-        if (toolStates.containsKey(toolName)) {
-            toolStates[toolName] = MCPToolState(toolName, enabled = true)
-            return true
+        // 先尝试插件服务
+        val info = serviceRegistry[serviceName]
+        if (info != null) {
+            val toolStates = info.toolStates
+            if (toolStates.containsKey(toolName)) {
+                toolStates[toolName] = MCPToolState(toolName, enabled = true)
+                syncToolStatesToConfig()
+                return true
+            }
+            return false
         }
-        return false
+        // 远程 MCP 服务器 - 直接更新持久化的工具状态
+        return setRemoteToolState(serviceName, toolName, true)
     }
 
-    /** 禁用服务中的指定工具 */
+    /** 禁用服务中的指定工具（插件和远程 MCP 均支持） */
     fun disableServiceTool(serviceName: String, toolName: String): Boolean {
-        val info = serviceRegistry[serviceName] ?: return false
-        val toolStates = info.toolStates
-        if (toolStates.containsKey(toolName)) {
-            toolStates[toolName] = MCPToolState(toolName, enabled = false)
-            return true
+        // 先尝试插件服务
+        val info = serviceRegistry[serviceName]
+        if (info != null) {
+            val toolStates = info.toolStates
+            if (toolStates.containsKey(toolName)) {
+                toolStates[toolName] = MCPToolState(toolName, enabled = false)
+                syncToolStatesToConfig()
+                return true
+            }
+            return false
         }
-        return false
+        // 远程 MCP 服务器
+        return setRemoteToolState(serviceName, toolName, false)
+    }
+
+    /** 设置远程 MCP 服务器的工具状态 */
+    private fun setRemoteToolState(serverName: String, toolName: String, enabled: Boolean): Boolean {
+        // 查找对应的 MCP 服务器 entry
+        val entry = AIConfigManager.currentConfig.mcpServers.find { it.name == serverName }
+        if (entry == null) {
+            android.util.Log.w("MCPManager", "setRemoteToolState: 找不到服务器 $serverName")
+            return false
+        }
+        // 验证工具是否属于该服务器
+        val serverTools = serverToolsCache[entry.id]
+        if (serverTools?.none { it.name == toolName } != false) {
+            android.util.Log.w("MCPManager", "setRemoteToolState: 工具 $toolName 不在服务器 $serverName 中")
+            return false
+        }
+        val config = AIConfigManager.currentConfig
+        val currentStates = config.mcpToolStates.toMutableMap()
+        val toolStates = currentStates.getOrPut(serverName) { mutableMapOf() }.toMutableMap()
+        toolStates[toolName] = enabled
+        currentStates[serverName] = toolStates
+        AIConfigManager.updateInMemory(config.copy(mcpToolStates = currentStates))
+        android.util.Log.i("MCPManager", "setRemoteToolState: $serverName/$toolName -> $enabled")
+        return true
+    }
+
+    /** 持久化所有服务的工具开关状态到配置 */
+    private fun syncToolStatesToConfig() {
+        val states = mutableMapOf<String, Map<String, Boolean>>()
+        for ((serviceName, info) in serviceRegistry) {
+            val toolStates = mutableMapOf<String, Boolean>()
+            for ((toolName, state) in info.toolStates) {
+                toolStates[toolName] = state.enabled
+            }
+            if (toolStates.isNotEmpty()) {
+                states[serviceName] = toolStates
+            }
+        }
+        val config = com.luaforge.studio.lxclua.ai.AIConfigManager.currentConfig
+        com.luaforge.studio.lxclua.ai.AIConfigManager.updateInMemory(config.copy(mcpToolStates = states))
+        android.util.Log.d("MCPManager", "[syncToolStatesToConfig] 已持久化 ${states.size} 个服务的工具状态")
     }
 
     /** 获取服务状态（包含服务启用状态和各工具状态） */

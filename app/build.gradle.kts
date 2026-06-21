@@ -15,8 +15,8 @@ android {
         applicationId = "com.luaforge.studio.lxclua"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260621
-        versionName = "1.1.5"
+        versionCode = 20260622
+        versionName = "1.1.6"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -208,5 +208,15 @@ dependencies {
     // MCP Kotlin SDK
     api(libs.mcp.kotlin.sdk)
     api(libs.kotlinx.serialization.json)
+
+    
+    // 官方 MCP SDK
+    implementation("io.modelcontextprotocol:kotlin-sdk:0.13.0")
+    
+    // Ktor 依赖，用于 MCP SDK
+    implementation("io.ktor:ktor-client-core:3.5.0")
+    implementation("io.ktor:ktor-client-okhttp:3.5.0")
+    implementation("io.ktor:ktor-client-content-negotiation:3.5.0")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.5.0")
 
 }
