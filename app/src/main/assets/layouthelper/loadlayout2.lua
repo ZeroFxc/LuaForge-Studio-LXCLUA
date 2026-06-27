@@ -1010,7 +1010,17 @@ local function createView(layout, views, parentViewClass)
       error("从函数创建视图失败: " .. tostring(view), 2)
     end
   else
-    error("无效的视图类型: " .. type(view), 2)
+    -- 回退处理：type() 对 Java 对象返回类名（如 "java.lang.Class"）而非 "userdata"
+    -- 尝试作为 Java 类实例化
+    local success, instance = pcall(function()
+      return style and view(context, nil, style) or view(context)
+    end)
+    if success and instanceofx(instance, View) then
+      view = instance
+      viewClass = view.class
+    else
+      error("无效的视图类型: " .. type(view), 2)
+    end
   end
 
   view.setId(layout.viewId or View.generateViewId())

@@ -1022,8 +1022,9 @@ int gc(lua_State *L) {
     if (luaL_testudata(L, 1, LUAJAVAOBJECTMETA) != NULL) {
         pObj = (java_object *) lua_touserdata(L, 1);
         lua_getmetatable(L, 1);
+        /* 清理 per-object table (metatable[obj->index]) */
         lua_pushnil(L);
-        lua_rawseti(L, -2, (long long) pObj);
+        lua_rawseti(L, -2, (long long) pObj->index);
         lua_pop(L, 1);
 
         javaEnv = checkEnv(L);
@@ -1067,8 +1068,9 @@ int jclose(lua_State *L) {
     if (luaL_testudata(L, 1, LUAJAVAOBJECTMETA) != NULL) {
         pObj = (java_object *) lua_touserdata(L, 1);
         lua_getmetatable(L, 1);
+        /* 清理 per-object table (metatable[obj->index]) */
         lua_pushnil(L);
-        lua_rawseti(L, -2, (long long) pObj);
+        lua_rawseti(L, -2, (long long) pObj->index);
         lua_pop(L, 1);
 
         javaEnv = checkEnv(L);
