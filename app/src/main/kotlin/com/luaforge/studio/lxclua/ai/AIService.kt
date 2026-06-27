@@ -98,7 +98,9 @@ interface IAIService {
         request: ChatRequest,
         onChunk: (String) -> Unit,
         onDone: (ChatResponse) -> Unit,
-        onReasoning: ((String) -> Unit)? = null
+        onReasoning: ((String) -> Unit)? = null,
+        /** 工具调用 delta 回调（流式增量）：(index, id?, name?, argsDelta?) -> Unit */
+        onToolCallDelta: ((Int, String?, String?, String?) -> Unit)? = null
     )
 
     /** 检查 AI 服务是否可用 */
@@ -156,7 +158,8 @@ class AIServiceImpl(private val config: AIConfigData) : IAIService {
         request: ChatRequest,
         onChunk: (String) -> Unit,
         onDone: (ChatResponse) -> Unit,
-        onReasoning: ((String) -> Unit)?
+        onReasoning: ((String) -> Unit)?,
+        onToolCallDelta: ((Int, String?, String?, String?) -> Unit)?
     ) = withContext(Dispatchers.IO) {
         if (!config.isConfigured) {
             android.util.Log.w("AIService", "[流式] 未配置")
@@ -171,7 +174,7 @@ class AIServiceImpl(private val config: AIConfigData) : IAIService {
                 kotlinx.coroutines.delay(1000)  // 重试前等待 1 秒
             }
             try {
-                val result = executeStreamRequest(request, onChunk, onReasoning)
+                val result = executeStreamRequest(request, onChunk, onReasoning, onToolCallDelta)
                 if (result.success) {
                     onDone(result)
                     return@withContext
@@ -202,7 +205,9 @@ class AIServiceImpl(private val config: AIConfigData) : IAIService {
     private suspend fun executeStreamRequest(
         request: ChatRequest,
         onChunk: (String) -> Unit,
-        onReasoning: ((String) -> Unit)? = null
+        onReasoning: ((String) -> Unit)? = null,
+        /** 工具调用 delta 回调（流式增量）：(index, id?, name?, argsDelta?) -> Unit */
+        onToolCallDelta: ((Int, String?, String?, String?) -> Unit)? = null
     ): ChatResponse {
         val (jsonBody, httpBuilder) = buildRequest(request)
         jsonBody.put("stream", true)
@@ -274,17 +279,28 @@ class AIServiceImpl(private val config: AIConfigData) : IAIService {
                                     val idx = tc.optInt("index", -1)
                                     if (idx < 0) continue
                                     val acc = toolAccumulators.getOrPut(idx) { ToolCallDeltaAccumulator() }
+                                    var deltaId: String? = null
+                                    var deltaName: String? = null
+                                    var deltaArgs: String? = null
                                     // 第一帧：id、type、function.name
-                                    if (!tc.isNull("id")) acc.id = tc.getString("id")
+                                    if (!tc.isNull("id")) {
+                                        acc.id = tc.getString("id")
+                                        deltaId = acc.id
+                                    }
                                     val fn = tc.optJSONObject("function")
                                     if (fn != null) {
                                         if (!fn.isNull("name") && fn.getString("name").isNotEmpty()) {
                                             acc.functionName = fn.getString("name")
+                                            deltaName = acc.functionName
                                         }
                                         if (!fn.isNull("arguments")) {
-                                            acc.functionArgs.append(fn.getString("arguments"))
+                                            val argDelta = fn.getString("arguments")
+                                            acc.functionArgs.append(argDelta)
+                                            deltaArgs = argDelta
                                         }
                                     }
+                                    // 实时推送 delta 给调用方（用于流式显示）
+                                    onToolCallDelta?.invoke(idx, deltaId, deltaName, deltaArgs)
                                 }
                             }
                             // 非空 delta 但没有 content 时，记录详情
@@ -670,7 +686,10 @@ object AIManager {
         onChunk: (String) -> Unit,
         onDone: (ChatResponse) -> Unit,
         onReasoning: ((String) -> Unit)? = null,
-        onToolCall: ((String, String, String) -> Unit)? = null
+        /** 工具调用完成回调：(index, name, args, result) -> Unit */
+        onToolCall: ((Int, String, String, String) -> Unit)? = null,
+        /** 工具调用 delta 回调（流式增量）：(index, id?, name?, argsDelta?) -> Unit */
+        onToolCallDelta: ((Int, String?, String?, String?) -> Unit)? = null
     ) {
         val srv = service ?: run {
             onDone(ChatResponse(false, error = "AI 服务未配置"))
@@ -688,7 +707,7 @@ object AIManager {
         if (!hasTools || request.tools != null) {
             // 无工具可用 或 调用方已手动指定 tools，直接走单轮流式
             try {
-                srv.chatStream(enrichWithTools(request), onChunk, onDone, onReasoning)
+                srv.chatStream(enrichWithTools(request), onChunk, onDone, onReasoning, onToolCallDelta)
             } finally {
                 currentChatJob = null
             }
@@ -718,7 +737,8 @@ object AIManager {
                     request = req,
                     onChunk = onChunk,
                     onDone = { response -> deferred.complete(response) },
-                    onReasoning = onReasoning
+                    onReasoning = onReasoning,
+                    onToolCallDelta = onToolCallDelta
                 )
 
                 val response = deferred.await()
@@ -745,7 +765,7 @@ object AIManager {
                 ))
 
                 // 执行每个工具调用
-                for (tc in toolCalls) {
+                for ((tcIndex, tc) in toolCalls.withIndex()) {
                     val args = try {
                         org.json.JSONObject(tc.functionArgs).let { json ->
                             val map = mutableMapOf<String, Any>()
@@ -771,7 +791,7 @@ object AIManager {
                     android.util.Log.i("AIManager", "[chatStream] 工具结果: ${tc.functionName} -> ${result.take(200)}")
 
                     // 通知调用方工具调用信息（用于 WebUI 展示）
-                    onToolCall?.invoke(tc.functionName, tc.functionArgs, result)
+                    onToolCall?.invoke(tcIndex, tc.functionName, tc.functionArgs, result)
 
                     conversation.add(ChatMessage(
                         role = "tool",

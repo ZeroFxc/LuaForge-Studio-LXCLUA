@@ -1001,8 +1001,7 @@ public class LuaState {
      *
      * @param obj Object to be pushed into lua
      */
-    private int sIdx = 0;
-    private static final AtomicInteger ssIdx = new AtomicInteger();
+    private final AtomicInteger sIdx = new AtomicInteger(1);
     @SuppressLint("UseSparseArrays")
     private final HashMap<Integer, Object> javaObjectMap = new HashMap<>();
     private final ArrayList<Integer> javaObjectGcList = new ArrayList<>();
@@ -1016,8 +1015,46 @@ public class LuaState {
     }
 
     public void removeJavaObject(int i) {
+        Object obj = javaObjectMap.get(i);
         javaObjectGcList.add(i);
-        //javaObjectMap.remove(i);
+        javaObjectMap.remove(i);
+        // AutoCloseable 对象在移除时尝试关闭
+        if (obj instanceof AutoCloseable) {
+            try {
+                ((AutoCloseable) obj).close();
+            } catch (Exception ignored) {
+                // 忽略关闭异常，避免影响 GC
+            }
+        }
+    }
+
+    /**
+     * 清空所有 Java 对象引用（用于全局清理）
+     */
+    public void clearJavaObjects() {
+        // 先关闭所有 AutoCloseable 资源
+        for (Object obj : javaObjectMap.values()) {
+            if (obj instanceof AutoCloseable) {
+                try {
+                    ((AutoCloseable) obj).close();
+                } catch (Exception ignored) {
+                    // 忽略关闭异常
+                }
+            }
+        }
+        // 把所有对象加入 GC 列表
+        for (Integer key : javaObjectMap.keySet()) {
+            javaObjectGcList.add(key);
+        }
+        javaObjectMap.clear();
+    }
+
+    /**
+     * 获取 Java 对象映射表（用于诊断/调试）
+     * @return javaObjectMap 的副本或直接引用
+     */
+    public java.util.Map<Integer, Object> getJavaObjectMap() {
+        return javaObjectMap;
     }
 
     public void pushJavaObject(Object obj) {
@@ -1026,11 +1063,7 @@ public class LuaState {
             pushNil();
             return;
         }
-        int idx = sIdx++;
-        /*int idx = 0;
-        synchronized (ssIdx) {
-            idx = ssIdx.addAndGet(1);
-        }*/
+        int idx = sIdx.getAndIncrement();
         pushJavaObject(idx, obj);
 
         Class clazz;

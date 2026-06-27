@@ -113,7 +113,7 @@ class PluginAI {
     }
 
     /** 流式聊天 */
-    fun chatStream(messages: List<Map<String, String>>, onChunk: LuaFunction<*>, onDone: LuaFunction<*>, onReasoning: LuaFunction<*>?, onToolCall: LuaFunction<*>?) {
+    fun chatStream(messages: List<Map<String, String>>, onChunk: LuaFunction<*>, onDone: LuaFunction<*>, onReasoning: LuaFunction<*>?, onToolCall: LuaFunction<*>?, onToolCallDelta: LuaFunction<*>?) {
         val msgs = messages.map { ChatMessage(it["role"] ?: "user", it["content"] ?: "") }
         val req = ChatRequest(messages = msgs)
         val jobId = nextJobId()
@@ -138,9 +138,15 @@ class PluginAI {
                         { reasoning -> safeCall(onReasoning, reasoning) }
                     } else null,
                     onToolCall = if (onToolCall != null) {
-                        { name, args, result ->
-                            android.util.Log.i("PluginAI", "[流式] 工具调用 | jobId: $jobId | $name($args) -> ${result.take(100)}")
-                            safeCall(onToolCall, name, args, result)
+                        { index, name, args, result ->
+                            android.util.Log.i("PluginAI", "[流式] 工具调用 | jobId: $jobId | #$index $name($args) -> ${result.take(100)}")
+                            safeCall(onToolCall, index, name, args, result)
+                        }
+                    } else null,
+                    onToolCallDelta = if (onToolCallDelta != null) {
+                        { index, id, name, argsDelta ->
+                            android.util.Log.d("PluginAI", "[流式] 工具delta | jobId: $jobId | idx=$index name=$name delta=${argsDelta?.take(50)}")
+                            safeCall(onToolCallDelta, index, id ?: "", name ?: "", argsDelta ?: "")
                         }
                     } else null
                 )

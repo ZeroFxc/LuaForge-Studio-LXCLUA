@@ -223,11 +223,18 @@ local function generateCodeStream(prompt, ctx)
             end
         end,
         -- 工具调用回调：在 WebUI 面板中以卡片形式显示工具调用
-        function(name, args, result)
-            plugin.logger.info("FloatingAI", string.format("工具调用: %s(%s) -> %s", name, tostring(args):sub(1, 100), tostring(result):sub(1, 100)))
+        function(index, name, args, result)
+            plugin.logger.info("FloatingAI", string.format("工具调用: #%d %s(%s) -> %s", index, name, tostring(args):sub(1, 100), tostring(result):sub(1, 100)))
             if ballId then
-                local toolJson = '{"type":"toolCall","name":"' .. name .. '","args":"' .. tostring(args):gsub('"', '\\"'):sub(1, 200) .. '","result":"' .. tostring(result):gsub('"', '\\"'):gsub('\n', '\\n'):sub(1, 300) .. '"}'
+                local toolJson = '{"type":"toolCall","index":' .. tostring(index) .. ',"name":"' .. name .. '","args":"' .. tostring(args):gsub('"', '\\"'):sub(1, 200) .. '","result":"' .. tostring(result):gsub('"', '\\"'):gsub('\n', '\\n'):sub(1, 300) .. '"}'
                 plugin.floating.sendToWeb(ballId, toolJson)
+            end
+        end,
+        -- 工具调用 delta 回调（流式增量）：实时更新卡片参数
+        function(index, id, name, argsDelta)
+            if ballId then
+                local deltaJson = '{"type":"toolCallDelta","index":' .. tostring(index) .. ',"id":"' .. tostring(id):gsub('"', '\\"') .. '","name":"' .. tostring(name):gsub('"', '\\"') .. '","argsDelta":"' .. tostring(argsDelta):gsub('"', '\\"'):gsub('\n', '\\n') .. '"}'
+                plugin.floating.sendToWeb(ballId, deltaJson)
             end
         end
     )

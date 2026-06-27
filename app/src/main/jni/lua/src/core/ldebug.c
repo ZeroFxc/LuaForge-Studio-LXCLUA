@@ -12,6 +12,7 @@
 
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "lua.h"
@@ -856,9 +857,9 @@ l_noret luaG_ordererror (lua_State *L, const TValue *p1, const TValue *p2) {
   const char *t1 = luaT_objtypename(L, p1);
   const char *t2 = luaT_objtypename(L, p2);
   if (strcmp(t1, t2) == 0)
-    luaG_runerror(L, "[!] 错误: 无法比较两个%s值", t1);
+    luaG_runerror(L, "attempt to compare two %s values", t1);
   else
-    luaG_runerror(L, "[!] 错误: 无法比较%s和%s类型", t1, t2);
+    luaG_runerror(L, "attempt to compare %s with %s", t1, t2);
 }
 
 
@@ -887,6 +888,7 @@ l_noret luaG_errormsg (lua_State *L) {
   if (L->errfunc != 0) {  /* is there an error handling function? */
     StkId errfunc = restorestack(L, L->errfunc);
     lua_assert(ttisfunction(s2v(errfunc)));
+    L->errfunc = 0;  /* 清除错误函数索引，防止错误处理函数内部出错时递归调用 */
     setobjs2s(L, L->top.p, L->top.p - 1);  /* move argument */
     setobjs2s(L, L->top.p - 1, errfunc);  /* push function */
     L->top.p++;  /* assume EXTRA_STACK */

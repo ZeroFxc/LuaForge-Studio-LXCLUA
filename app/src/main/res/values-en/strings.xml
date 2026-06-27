@@ -105,7 +105,7 @@
     <string name="error_check_failed">Failed to check file: %s</string>
     <string name="unknown_error">Unknown error</string>
     <string name="file_label">File: %s</string>
-    <string name="author_note">LXC-LUA is dedicated to providing the best mobile development experience for Lua developers, with full support for the LXCLUA 20260619 standard library and common extensions.</string>
+    <string name="author_note">LXC-LUA is dedicated to providing the best mobile development experience for Lua developers, with full support for the LXCLUA 20260625 standard library and common extensions.</string>
     <string name="build_time_label">Build time: %s</string>
     <string name="close">Close</string>
     <string name="copy">Copy</string>
@@ -117,7 +117,7 @@
     <string name="dev_w_role">Developer</string>
     <string name="dev_kotlin_name">Kotlin</string>
     <string name="dev_kotlin_role">Language</string>
-    <string name="dev_lua_name">LXCLUA 20260619</string>
+    <string name="dev_lua_name">LXCLUA 20260625</string>
     <string name="dev_lua_role">Core Engine</string>
     <string name="dev_android_name">Android</string>
     <string name="dev_android_role">Platform</string>

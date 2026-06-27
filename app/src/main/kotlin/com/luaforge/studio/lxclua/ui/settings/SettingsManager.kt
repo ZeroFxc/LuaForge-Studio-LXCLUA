@@ -23,7 +23,11 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.TypeAdapter
 import com.google.gson.reflect.TypeToken
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonWriter
 import com.luaforge.studio.lxclua.ui.theme.ThemeType
 import com.luaforge.studio.lxclua.utils.IconManager
 import kotlinx.coroutines.CoroutineScope
@@ -109,6 +113,21 @@ object SettingsManager {
 
     private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** 自定义 Gson 实例，支持 Compose Color 的序列化 */
+    private val gson: Gson by lazy {
+        GsonBuilder()
+            .registerTypeAdapter(Color::class.java, object : TypeAdapter<Color>() {
+                override fun write(out: JsonWriter, value: Color) {
+                    out.value(value.toArgb())
+                }
+                override fun read(`in`: JsonReader): Color {
+                    return Color(`in`.nextInt())
+                }
+            })
+            .setPrettyPrinting()
+            .create()
+    }
+
     @Volatile
     var settingsLoaded = false
         private set
@@ -150,8 +169,54 @@ object SettingsManager {
         }
     }
 
-    // 从 DataStore 异步加载设置
+    // 从 DataStore 异步加载设置（优先从 SD 卡加载，其次私有目录）
     suspend fun loadSavedSettings(context: Context) {
+        // 先尝试从 SD 卡加载
+        val sdSettings = loadSettingsFromSdCard(context)
+        if (sdSettings != null) {
+            updateSettings(sdSettings)
+            // 同步到私有目录
+            try {
+                context.dataStore.edit { preferences ->
+                    preferences[PreferencesKeys.THEME_TYPE] = sdSettings.themeType.name
+                    preferences[PreferencesKeys.DARK_MODE] = sdSettings.darkMode.name
+                    preferences[PreferencesKeys.FONT_SIZE_SCALE] = sdSettings.fontSizeScale
+                    preferences[PreferencesKeys.SHAPE_SIZE_INDEX] = sdSettings.shapeSizeIndex
+                    preferences[PreferencesKeys.FONT_FAMILY_TYPE] = sdSettings.fontFamilyType.name
+                    preferences[PreferencesKeys.DYNAMIC_COLOR] = sdSettings.dynamicColor
+                    preferences[PreferencesKeys.EDITOR_FONT_TYPE] = sdSettings.editorFontType.name
+                    preferences[PreferencesKeys.CUSTOM_FONT_PATH] = sdSettings.customFontPath
+                    preferences[PreferencesKeys.ENABLE_TAB_HISTORY] = sdSettings.enableTabHistory
+                    preferences[PreferencesKeys.INDENT_GUIDE_ENABLED] = sdSettings.indentGuideEnabled
+                    preferences[PreferencesKeys.PROJECT_STORAGE_PATH] = sdSettings.projectStoragePath
+                    preferences[PreferencesKeys.ADDITIONAL_PROJECT_PATHS] = Gson().toJson(sdSettings.additionalProjectPaths)
+                    preferences[PreferencesKeys.CLASS_NAME_COLOR] = sdSettings.classNameColor.toArgb()
+                    preferences[PreferencesKeys.LOCAL_VAR_COLOR] = sdSettings.localVariableColor.toArgb()
+                    preferences[PreferencesKeys.KEYWORD_COLOR] = sdSettings.keywordColor.toArgb()
+                    preferences[PreferencesKeys.FUNCTION_NAME_COLOR] = sdSettings.functionNameColor.toArgb()
+                    preferences[PreferencesKeys.LITERAL_COLOR] = sdSettings.literalColor.toArgb()
+                    preferences[PreferencesKeys.COMMENT_COLOR] = sdSettings.commentColor.toArgb()
+                    preferences[PreferencesKeys.SELECTED_LINE_COLOR] = sdSettings.selectedLineColor.toArgb()
+                    preferences[PreferencesKeys.COMPLETION_CASE_SENSITIVE] = sdSettings.completionCaseSensitive
+                    preferences[PreferencesKeys.SELECTED_APP_ICON] = sdSettings.selectedAppIcon.name
+                    preferences[PreferencesKeys.SORT_ORDER] = sdSettings.sortOrder.name
+                    preferences[PreferencesKeys.PINNED_PROJECTS] = Gson().toJson(sdSettings.pinnedProjects)
+                    preferences[PreferencesKeys.SMART_SORTING_ENABLED] = sdSettings.smartSortingEnabled
+                    preferences[PreferencesKeys.TOAST_POSITION] = sdSettings.toastPosition.name
+                    preferences[PreferencesKeys.TOAST_BORDER_ENABLED] = sdSettings.toastBorderEnabled
+                    preferences[PreferencesKeys.EDITOR_WORD_WRAP] = sdSettings.editorWordWrap
+                    preferences[PreferencesKeys.LANGUAGE_TAG] = sdSettings.languageTag
+                    preferences[PreferencesKeys.HEX_COLOR_HIGHLIGHT_ENABLED] = sdSettings.hexColorHighlightEnabled
+                    preferences[PreferencesKeys.ENABLE_SWIPE_GESTURE] = sdSettings.enableSwipeGesture
+                    preferences[PreferencesKeys.AI_STREAM_ENABLED] = sdSettings.aiStreamEnabled
+                }
+            } catch (_: Exception) { }
+            settingsLoaded = true
+            android.util.Log.d("SettingsManager", "[SD卡] 设置已加载")
+            return
+        }
+
+        // SD 卡没有配置，从私有目录加载
         val preferences = context.dataStore.data.first()
 
         val themeType = ThemeType.valueOf(
@@ -288,9 +353,11 @@ object SettingsManager {
             )
         )
         settingsLoaded = true
+        // 加载完成后同步到 SD 卡（创建备份）
+        saveSettingsToSdCard(context)
     }
 
-    // 异步保存设置到 DataStore
+    // 异步保存设置到 DataStore（同时保存到 SD 卡）
     suspend fun saveSettingsAsync(context: Context) {
         if (!settingsLoaded) {
             return
@@ -352,6 +419,8 @@ object SettingsManager {
             // 【新增】保存 AI 流式输出开关
             preferences[PreferencesKeys.AI_STREAM_ENABLED] = currentSettings.aiStreamEnabled
         }
+        // 同步保存到 SD 卡
+        saveSettingsToSdCard(context)
         notifyListeners()
     }
 
@@ -428,6 +497,63 @@ object SettingsManager {
             currentSettings.languageTag
         } catch (_: Exception) {
             "zh"
+        }
+    }
+
+    // ========== SD 卡配置同步 ==========
+
+    /**
+     * 获取 SD 卡配置目录
+     */
+    private fun getSdCardConfigDir(): File? {
+        return try {
+            val sdRoot = Environment.getExternalStorageDirectory()
+            val configDir = File(sdRoot, "LXC-LUA/config")
+            if (!configDir.exists()) {
+                configDir.mkdirs()
+            }
+            if (configDir.exists() && configDir.canWrite()) configDir else null
+        } catch (e: Exception) {
+            android.util.Log.w("SettingsManager", "获取 SD 卡配置目录失败: ${e.message}")
+            null
+        }
+    }
+
+    /** 应用设置的 SD 卡文件路径 */
+    private fun getSdCardSettingsFile(): File? {
+        return getSdCardConfigDir()?.let { File(it, "app_settings.json") }
+    }
+
+    /**
+     * 保存设置到 SD 卡（JSON 格式）
+     * 失败时静默忽略，不影响主流程
+     */
+    private fun saveSettingsToSdCard(context: Context) {
+        try {
+            val file = getSdCardSettingsFile() ?: return
+            val json = gson.toJson(currentSettings)
+            file.writeText(json, Charsets.UTF_8)
+            android.util.Log.d("SettingsManager", "[SD卡] 设置已保存: ${file.absolutePath}")
+        } catch (e: Exception) {
+            android.util.Log.w("SettingsManager", "[SD卡] 保存设置失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 从 SD 卡加载设置
+     * @return 设置数据，失败返回 null
+     */
+    private fun loadSettingsFromSdCard(context: Context): SettingsData? {
+        return try {
+            val file = getSdCardSettingsFile() ?: return null
+            if (!file.exists() || !file.canRead()) return null
+            val json = file.readText(Charsets.UTF_8)
+            val settings = gson.fromJson(json, SettingsData::class.java)
+            android.util.Log.d("SettingsManager", "[SD卡] 设置已加载: ${file.absolutePath}")
+            settings
+        } catch (e: Exception) {
+            android.util.Log.w("SettingsManager", "[SD卡] 加载设置失败: ${e.message}")
+            null
         }
     }
 }

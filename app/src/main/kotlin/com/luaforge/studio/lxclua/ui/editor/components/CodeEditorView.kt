@@ -112,41 +112,44 @@ fun CodeEditorView(
     // 滑动检测阈值（px）
     val swipeThreshold = with(LocalDensity.current) { 30.dp.toPx() }
 
-    LaunchedEffect(editor) {
-        var lastTouchY = 0f
-        var totalDeltaY = 0f
-        var isSwiping = false
+    // 仅在滑动手势开关开启时设置触摸监听，避免干扰编辑器长按等操作
+    LaunchedEffect(editor, settingsState.enableSwipeGesture) {
+        if (settingsState.enableSwipeGesture) {
+            var lastTouchY = 0f
+            var totalDeltaY = 0f
+            var isSwiping = false
 
-        editor.setOnTouchListener { v, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    lastTouchY = event.y
-                    totalDeltaY = 0f
-                    isSwiping = false
-                    false // 不消费事件，让编辑器继续处理
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val deltaY = event.y - lastTouchY
-                    // 累加垂直滑动距离
-                    totalDeltaY += deltaY
-                    lastTouchY = event.y
-
-                    // 只有当设置开启、累积距离超过阈值且尚未判定方向时才触发
-                    if (settingsState.enableSwipeGesture && !isSwiping && abs(totalDeltaY) > swipeThreshold) {
-                        isSwiping = true
-                        val direction = if (totalDeltaY > 0) SwipeDirection.DOWN else SwipeDirection.UP
-                        onSwipe?.invoke(direction)
-                        // 触发后重置累积距离，避免连续触发
+            editor.setOnTouchListener { _, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        lastTouchY = event.y
                         totalDeltaY = 0f
+                        isSwiping = false
+                        false // 不消费事件，让编辑器继续处理
                     }
-                    false
+                    MotionEvent.ACTION_MOVE -> {
+                        val deltaY = event.y - lastTouchY
+                        totalDeltaY += deltaY
+                        lastTouchY = event.y
+
+                        if (!isSwiping && kotlin.math.abs(totalDeltaY) > swipeThreshold) {
+                            isSwiping = true
+                            val direction = if (totalDeltaY > 0) SwipeDirection.DOWN else SwipeDirection.UP
+                            onSwipe?.invoke(direction)
+                            totalDeltaY = 0f
+                        }
+                        false
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        isSwiping = false
+                        false
+                    }
+                    else -> false
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    isSwiping = false
-                    false
-                }
-                else -> false
             }
+        } else {
+            // 关闭滑动手势时移除触摸监听，避免干扰编辑器原生手势（长按选中等）
+            editor.setOnTouchListener(null)
         }
     }
 
@@ -345,6 +348,7 @@ fun CodeEditorView(
         onDispose {
             parseJob?.cancel()
             try {
+                editor.setOnTouchListener(null)
                 editor.text.removeContentListener(listener)
                 selectionReceipt.unsubscribe()
             } catch (e: Exception) {

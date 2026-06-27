@@ -57,6 +57,7 @@
         .btn-send { background: #FF6B35; color: #fff; }
         .btn-cancel { background: #444; color: #ccc; }
         .btn-stop { background: #d32f2f; color: #fff; display: none; }
+        .btn-clear { background: #555; color: #ccc; display: none; }
 
         /* ===== 加载动画 ===== */
         .loading-spinner {
@@ -119,53 +120,178 @@
         .tool-calls {
             display: none;
             margin: 4px 0;
-            max-height: 120px;
+            max-height: 160px;
             overflow-y: auto;
         }
         .tool-card {
-            display: flex;
-            align-items: flex-start;
-            gap: 6px;
-            padding: 5px 7px;
-            margin-bottom: 3px;
+            margin-bottom: 4px;
             background: #1a1a2e;
             border: 1px solid #2a2a4a;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 11px;
-            animation: fadeIn 0.2s ease;
+            overflow: hidden;
+            animation: fadeIn 0.25s ease;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .tool-card:hover {
+            border-color: #3a3a5a;
+        }
+        .tool-card.expanded {
+            cursor: default;
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-        .tool-card .tool-icon {
+
+        /* 卡片头部 */
+        .tool-card-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px;
+            position: relative;
+        }
+        .tool-card-header .tool-icon {
             font-size: 14px;
             flex-shrink: 0;
-            margin-top: 1px;
         }
-        .tool-card .tool-info {
+        .tool-card-header .tool-name {
             flex: 1;
-            min-width: 0;
-        }
-        .tool-card .tool-name {
             color: #a78bfa;
             font-weight: 600;
             font-size: 11px;
-        }
-        .tool-card .tool-args {
-            color: #777;
-            font-size: 10px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            margin-top: 1px;
+            min-width: 0;
         }
-        .tool-card .tool-result {
+        .tool-card-header .tool-status {
+            flex-shrink: 0;
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: #2a2a4a;
+            color: #888;
+        }
+        .tool-card-header .tool-status.success {
+            background: rgba(74, 222, 128, 0.15);
             color: #4ade80;
-            font-size: 10px;
-            margin-top: 2px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
-        .tool-card .tool-result.error { color: #f87171; }
+        .tool-card-header .tool-status.error {
+            background: rgba(248, 113, 113, 0.15);
+            color: #f87171;
+        }
+        .tool-card-header .tool-status.loading {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+        }
+        .tool-card-header .expand-icon {
+            flex-shrink: 0;
+            font-size: 10px;
+            color: #666;
+            transition: transform 0.2s ease;
+        }
+        .tool-card.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        /* 倒计时进度条 */
+        .tool-card-progress {
+            height: 2px;
+            background: #2a2a4a;
+            position: relative;
+            overflow: hidden;
+        }
+        .tool-card-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #a78bfa, #FF6B35);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        /* 卡片内容（展开时显示） */
+        .tool-card-body {
+            display: none;
+            padding: 0 8px 8px 8px;
+            border-top: 1px solid #2a2a4a;
+        }
+        .tool-card.expanded .tool-card-body {
+            display: block;
+            animation: slideDown 0.2s ease;
+        }
+        @keyframes slideDown {
+            from { opacity: 0; max-height: 0; }
+            to { opacity: 1; max-height: 500px; }
+        }
+
+        .tool-section-label {
+            font-size: 10px;
+            color: #666;
+            margin: 6px 0 3px 0;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tool-section-label:first-child {
+            margin-top: 6px;
+        }
+
+        /* 结构化 JSON 显示 */
+        .tool-json-view {
+            background: #0d0d1a;
+            border: 1px solid #2a2a4a;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+            font-size: 10px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 120px;
+            overflow-y: auto;
+            color: #d0d0d0;
+        }
+        .tool-json-view .json-key { color: #93c5fd; }
+        .tool-json-view .json-string { color: #4ade80; }
+        .tool-json-view .json-number { color: #fbbf24; }
+        .tool-json-view .json-boolean { color: #f472b6; }
+        .tool-json-view .json-null { color: #9ca3af; }
+
+        /* 流式光标闪烁效果 */
+        .stream-cursor {
+            display: inline-block;
+            color: #FF6B35;
+            animation: cursorBlink 1s infinite;
+            margin-left: 1px;
+        }
+        @keyframes cursorBlink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* 卡片底部操作栏 */
+        .tool-card-footer {
+            display: flex;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .tool-card-footer button {
+            flex: 1;
+            padding: 4px 0;
+            font-size: 10px;
+            border: 1px solid #3a3a5a;
+            background: #252540;
+            color: #aaa;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .tool-card-footer button:hover {
+            background: #2a2a50;
+            color: #fff;
+        }
+        .tool-card-footer button:active {
+            opacity: 0.7;
+        }
 
         /* ===== 状态栏 ===== */
         .status-bar {
@@ -208,6 +334,7 @@
 <!-- 按钮行 -->
 <div class="btn-row" id="btnRow">
     <button class="btn-cancel" id="btnCancel" onclick="closePanel()">关闭</button>
+    <button class="btn-clear" id="btnClear" onclick="clearAll()">清除</button>
     <button class="btn-send" id="btnSend" onclick="sendPrompt()">发送</button>
     <button class="btn-stop" id="btnStop" onclick="stopGenerate()">停止</button>
 </div>
@@ -259,8 +386,11 @@ window.addEventListener('lxc-message', function(e) {
         case 'reset':
             resetPanel();
             break;
+        case 'toolCallDelta':
+            handleToolCallDelta(data.index, data.id, data.name, data.argsDelta);
+            break;
         case 'toolCall':
-            addToolCallCard(data.name, data.args, data.result);
+            addToolCallCard(data.index, data.name, data.args, data.result);
             break;
     }
 });
@@ -311,6 +441,23 @@ function stopGenerate() {
     }
 }
 
+// ===== 清除所有内容 =====
+function clearAll() {
+    resetPanel();
+    document.getElementById('promptInput').value = '';
+    if (typeof LXC !== 'undefined') {
+        LXC.toast('已清除');
+    }
+}
+
+// ===== 显示/隐藏清除按钮 =====
+function updateClearButton() {
+    var hasContent = streamVisible || reasoningVisible ||
+        (document.getElementById('toolCallsArea').style.display === 'block' &&
+         document.getElementById('toolCallsArea').children.length > 0);
+    document.getElementById('btnClear').style.display = hasContent ? 'block' : 'none';
+}
+
 // ===== 加载动画 =====
 function showLoading() {
     document.getElementById('loadingSpinner').style.display = 'block';
@@ -333,6 +480,7 @@ function showStream() {
     streamVisible = true;
     document.getElementById('btnStop').style.display = 'block';
     document.getElementById('inputArea').style.display = 'none';
+    updateClearButton();
 }
 function appendStream(text) {
     var el = document.getElementById('streamArea');
@@ -351,6 +499,7 @@ function hideStream() {
     if (!reasoningVisible) {
         document.getElementById('btnStop').style.display = 'none';
     }
+    updateClearButton();
 }
 function clearStream() {
     var el = document.getElementById('streamArea');
@@ -363,6 +512,7 @@ function showReasoning() {
     el.style.display = 'block';
     el.textContent = '';
     reasoningVisible = true;
+    updateClearButton();
 }
 function appendReasoning(text) {
     var el = document.getElementById('reasoningArea');
@@ -374,34 +524,399 @@ function hideReasoning() {
     el.style.display = 'none';
     el.textContent = '';
     reasoningVisible = false;
+    updateClearButton();
 }
 
 // ===== 工具调用卡片 =====
-function addToolCallCard(name, args, result) {
+var toolCardMap = {}; // 存储工具卡片 { cardId -> cardElement }
+var toolCardCounter = 0; // 卡片序号
+var streamingToolCards = {}; // 流式构建中的卡片 { index -> cardId }
+var AUTO_COLLAPSE_DELAY = 2000; // 自动折叠延迟（毫秒）
+
+function addToolCallCard(index, name, args, result) {
     var area = document.getElementById('toolCallsArea');
     area.style.display = 'block';
+
+    // 检查是否有对应的流式卡片，如果有则更新它
+    var streamCardId = streamingToolCards[index];
+    if (streamCardId) {
+        var streamCard = document.getElementById(streamCardId);
+        if (streamCard) {
+            // 更新流式卡片为完成状态
+            streamCard.dataset.rawArgs = args || '';
+            streamCard.dataset.rawResult = result || '';
+            streamCard.dataset.isStreaming = 'false';
+
+            // 更新状态标签
+            var isError = (result || '').toLowerCase().indexOf('error') >= 0 || (result || '').toLowerCase().indexOf('失败') >= 0;
+            var statusClass = isError ? 'error' : 'success';
+            var statusText = isError ? '失败' : '成功';
+            var statusEl = streamCard.querySelector('.tool-status');
+            if (statusEl) {
+                statusEl.className = 'tool-status ' + statusClass;
+                statusEl.textContent = statusText;
+            }
+
+            // 更新参数显示（完整格式化）
+            var argsEl = document.getElementById(streamCardId + '_args');
+            if (argsEl) {
+                argsEl.innerHTML = formatJsonHighlight(args || '{}');
+            }
+
+            // 更新结果显示
+            var resultEl = document.getElementById(streamCardId + '_result');
+            if (resultEl) {
+                resultEl.innerHTML = formatJsonHighlight(result || '{}');
+            }
+
+            // 更新参数 section 标签（去掉"流式"字样）
+            var argsLabel = streamCard.querySelector('.tool-section-label');
+            if (argsLabel) {
+                argsLabel.textContent = '参数';
+            }
+
+            // 从流式卡片映射中移除
+            delete streamingToolCards[index];
+
+            // 启动自动折叠倒计时
+            startAutoCollapse(streamCardId);
+
+            area.scrollTop = area.scrollHeight;
+            hideLoading();
+            updateClearButton();
+            return;
+        }
+    }
+
+    // 没有对应的流式卡片，创建新卡片
+    // 用 name + 序号作为唯一标识（同一次对话中可能多次调用同一工具）
+    var cardId = 'tool_' + (++toolCardCounter) + '_' + name;
+
     var card = document.createElement('div');
     card.className = 'tool-card';
-    // 根据工具名选择图标
-    var icon = '\uD83D\uDD27'; // 默认扳手
-    if (name.indexOf('editor_') === 0) icon = '\uD83D\uDCDD'; // 编辑器
-    else if (name.indexOf('file_') === 0) icon = '\uD83D\uDCC1'; // 文件
-    else if (name.indexOf('search') === 0) icon = '\uD83D\uDD0D'; // 搜索
+    card.id = cardId;
+    card.dataset.toolName = name;
+    card.dataset.rawArgs = args || '';
+    card.dataset.rawResult = result || '';
+    card.dataset.viewMode = 'formatted'; // formatted | raw
+    card.dataset.collapseTimer = null;
+
+    // 判断状态
     var isError = (result || '').toLowerCase().indexOf('error') >= 0 || (result || '').toLowerCase().indexOf('失败') >= 0;
-    card.innerHTML = '<span class="tool-icon">' + icon + '</span>' +
-        '<div class="tool-info">' +
-        '<div class="tool-name">' + escapeHtml(name) + '</div>' +
-        (args ? '<div class="tool-args">' + escapeHtml(String(args).substring(0, 80)) + '</div>' : '') +
-        '<div class="tool-result' + (isError ? ' error' : '') + '">' + escapeHtml(String(result || '').substring(0, 100)) + '</div>' +
+    var statusClass = isError ? 'error' : 'success';
+    var statusText = isError ? '失败' : '成功';
+
+    // 工具图标
+    var icon = '\uD83D\uDD27';
+    if (name.indexOf('editor_') === 0) icon = '\uD83D\uDCDD';
+    else if (name.indexOf('file_') === 0) icon = '\uD83D\uDCC1';
+    else if (name.indexOf('search') === 0) icon = '\uD83D\uDD0D';
+    else if (name.indexOf('mt_') === 0) icon = '\uD83D\uDCE6';
+
+    card.innerHTML =
+        '<div class="tool-card-header">' +
+            '<span class="tool-icon">' + icon + '</span>' +
+            '<span class="tool-name" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span>' +
+            '<span class="tool-status ' + statusClass + '">' + statusText + '</span>' +
+            '<span class="expand-icon">▼</span>' +
+        '</div>' +
+        '<div class="tool-card-progress"><div class="tool-card-progress-bar"></div></div>' +
+        '<div class="tool-card-body">' +
+            '<div class="tool-section-label">参数</div>' +
+            '<div class="tool-json-view" id="' + cardId + '_args"></div>' +
+            '<div class="tool-section-label">结果</div>' +
+            '<div class="tool-json-view" id="' + cardId + '_result"></div>' +
+            '<div class="tool-card-footer">' +
+                '<button onclick="toggleJsonView(\'' + cardId + '\')">原始JSON</button>' +
+                '<button onclick="copyToolResult(\'' + cardId + '\')">复制结果</button>' +
+                '<button onclick="collapseToolCard(\'' + cardId + '\')">收起</button>' +
+            '</div>' +
         '</div>';
+
     area.appendChild(card);
     area.scrollTop = area.scrollHeight;
+
+    // 填充 JSON 内容
+    document.getElementById(cardId + '_args').innerHTML = formatJsonHighlight(args || '{}');
+    document.getElementById(cardId + '_result').innerHTML = formatJsonHighlight(result || '{}');
+
+    // 存储
+    toolCardMap[cardId] = card;
+
+    // 启动自动折叠倒计时
+    startAutoCollapse(cardId);
+
     hideLoading();
+    updateClearButton();
+}
+
+/**
+ * 处理流式工具调用 delta（增量构建卡片）
+ * @param {number} index 工具调用索引
+ * @param {string} id 工具调用 ID（可能为空）
+ * @param {string} name 工具名称（可能为空，后续帧才会有）
+ * @param {string} argsDelta 参数增量
+ */
+function handleToolCallDelta(index, id, name, argsDelta) {
+    var area = document.getElementById('toolCallsArea');
+    area.style.display = 'block';
+
+    var cardId = streamingToolCards[index];
+    var card;
+
+    if (!cardId) {
+        // 新工具调用，创建"调用中"状态的卡片
+        cardId = 'tool_stream_' + index;
+        streamingToolCards[index] = cardId;
+        toolCardCounter++;
+
+        card = document.createElement('div');
+        card.className = 'tool-card';
+        card.id = cardId;
+        card.dataset.toolName = name || '';
+        card.dataset.rawArgs = '';
+        card.dataset.rawResult = '';
+        card.dataset.viewMode = 'formatted';
+        card.dataset.isStreaming = 'true';
+
+        var icon = '\uD83D\uDD27';
+        if (name && name.indexOf('editor_') === 0) icon = '\uD83D\uDCDD';
+        else if (name && name.indexOf('file_') === 0) icon = '\uD83D\uDCC1';
+        else if (name && name.indexOf('search') === 0) icon = '\uD83D\uDD0D';
+        else if (name && name.indexOf('mt_') === 0) icon = '\uD83D\uDCE6';
+
+        card.innerHTML =
+            '<div class="tool-card-header">' +
+                '<span class="tool-icon">' + icon + '</span>' +
+                '<span class="tool-name" id="' + cardId + '_name">' + (name ? escapeHtml(name) : '调用中...') + '</span>' +
+                '<span class="tool-status loading">调用中</span>' +
+                '<span class="expand-icon">▼</span>' +
+            '</div>' +
+            '<div class="tool-card-progress"><div class="tool-card-progress-bar"></div></div>' +
+            '<div class="tool-card-body">' +
+                '<div class="tool-section-label">参数（流式）</div>' +
+                '<div class="tool-json-view" id="' + cardId + '_args"></div>' +
+                '<div class="tool-section-label">结果</div>' +
+                '<div class="tool-json-view" id="' + cardId + '_result"><span style="color:#666">等待返回...</span></div>' +
+                '<div class="tool-card-footer">' +
+                    '<button onclick="toggleJsonView(\'' + cardId + '\')">原始JSON</button>' +
+                    '<button onclick="copyToolResult(\'' + cardId + '\')">复制结果</button>' +
+                    '<button onclick="collapseToolCard(\'' + cardId + '\')">收起</button>' +
+                '</div>' +
+            '</div>';
+
+        area.appendChild(card);
+
+        toolCardMap[cardId] = card;
+        // 流式卡片不自动折叠，等执行完再启动
+    } else {
+        card = document.getElementById(cardId);
+    }
+
+    if (!card) return;
+
+    // 更新工具名称（如果有）
+    if (name && name !== '' && card.dataset.toolName !== name) {
+        card.dataset.toolName = name;
+        var nameEl = document.getElementById(cardId + '_name');
+        if (nameEl) {
+            nameEl.textContent = name;
+            nameEl.title = name;
+        }
+        // 更新图标
+        var iconEl = card.querySelector('.tool-icon');
+        if (iconEl) {
+            if (name.indexOf('editor_') === 0) iconEl.textContent = '\uD83D\uDCDD';
+            else if (name.indexOf('file_') === 0) iconEl.textContent = '\uD83D\uDCC1';
+            else if (name.indexOf('search') === 0) iconEl.textContent = '\uD83D\uDD0D';
+            else if (name.indexOf('mt_') === 0) iconEl.textContent = '\uD83D\uDCE6';
+        }
+    }
+
+    // 追加参数 delta
+    if (argsDelta && argsDelta !== '') {
+        var currentArgs = card.dataset.rawArgs || '';
+        var newArgs = currentArgs + argsDelta;
+        card.dataset.rawArgs = newArgs;
+
+        var argsEl = document.getElementById(cardId + '_args');
+        if (argsEl) {
+            // 流式时尝试格式化显示（如果已经是有效JSON就格式化，否则显示原始文本）
+            try {
+                var obj = JSON.parse(newArgs);
+                argsEl.innerHTML = formatJsonHighlight(newArgs);
+            } catch (e) {
+                // 还不是完整 JSON，直接显示原始文本（带光标闪烁效果）
+                argsEl.innerHTML = '<span style="color:#d0d0d0">' + escapeHtml(newArgs) + '</span><span class="stream-cursor">▊</span>';
+            }
+            argsEl.scrollTop = argsEl.scrollHeight;
+        }
+    }
+
+    area.scrollTop = area.scrollHeight;
+    hideLoading();
+    updateClearButton();
+}
+
+/** 启动自动折叠倒计时 */
+function startAutoCollapse(cardId) {
+    var card = document.getElementById(cardId);
+    if (!card) return;
+
+    // 清除已有计时器
+    if (card.collapseTimer) {
+        clearTimeout(card.collapseTimer);
+    }
+
+    var progressBar = card.querySelector('.tool-card-progress-bar');
+    var startTime = Date.now();
+    var duration = AUTO_COLLAPSE_DELAY;
+
+    // 进度条动画
+    function updateProgress() {
+        var elapsed = Date.now() - startTime;
+        var remaining = Math.max(0, 1 - elapsed / duration);
+        progressBar.style.width = (remaining * 100) + '%';
+        if (remaining > 0 && !card.classList.contains('expanded')) {
+            requestAnimationFrame(updateProgress);
+        }
+    }
+    requestAnimationFrame(updateProgress);
+
+    // 倒计时结束后折叠
+    card.collapseTimer = setTimeout(function() {
+        if (!card.classList.contains('expanded')) {
+            collapseToolCard(cardId);
+        }
+        // 折叠后隐藏进度条
+        card.querySelector('.tool-card-progress').style.display = 'none';
+    }, duration);
+}
+
+/** 展开/收起切换 */
+function toggleToolCard(cardId) {
+    var card = document.getElementById(cardId);
+    if (!card) return;
+    if (card.classList.contains('expanded')) {
+        collapseToolCard(cardId);
+    } else {
+        expandToolCard(cardId);
+    }
+}
+
+/** 展开卡片 */
+function expandToolCard(cardId) {
+    var card = document.getElementById(cardId);
+    if (!card) return;
+    card.classList.add('expanded');
+    // 清除自动折叠计时器
+    if (card.collapseTimer) {
+        clearTimeout(card.collapseTimer);
+        card.collapseTimer = null;
+    }
+    // 隐藏进度条
+    card.querySelector('.tool-card-progress').style.display = 'none';
+}
+
+/** 收起卡片 */
+function collapseToolCard(cardId) {
+    var card = document.getElementById(cardId);
+    if (!card) return;
+    card.classList.remove('expanded');
+    // 隐藏进度条
+    card.querySelector('.tool-card-progress').style.display = 'none';
+}
+
+/** 切换 JSON 视图（格式化/原始） */
+function toggleJsonView(cardId) {
+    var card = document.getElementById(cardId);
+    if (!card) return;
+    var argsEl = document.getElementById(cardId + '_args');
+    var resultEl = document.getElementById(cardId + '_result');
+
+    if (card.dataset.viewMode === 'formatted') {
+        // 切换到原始
+        card.dataset.viewMode = 'raw';
+        argsEl.textContent = card.dataset.rawArgs || '{}';
+        resultEl.textContent = card.dataset.rawResult || '{}';
+    } else {
+        // 切换到格式化
+        card.dataset.viewMode = 'formatted';
+        argsEl.innerHTML = formatJsonHighlight(card.dataset.rawArgs || '{}');
+        resultEl.innerHTML = formatJsonHighlight(card.dataset.rawResult || '{}');
+    }
+}
+
+/** 复制工具结果 */
+function copyToolResult(cardId) {
+    var card = document.getElementById(cardId);
+    if (!card) return;
+    var text = card.dataset.rawResult || '';
+    if (typeof LXC !== 'undefined') {
+        // 尝试复制到剪贴板
+        var textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            LXC.toast('已复制到剪贴板');
+        } catch (e) {
+            LXC.toast('复制失败');
+        }
+        document.body.removeChild(textarea);
+    }
+}
+
+/**
+ * 格式化 JSON 并添加语法高亮
+ * 返回 HTML 字符串
+ */
+function formatJsonHighlight(jsonStr) {
+    if (!jsonStr || jsonStr === '') {
+        return '<span style="color:#666">（空）</span>';
+    }
+    try {
+        // 尝试解析为 JSON 对象
+        var obj = JSON.parse(jsonStr);
+        var formatted = JSON.stringify(obj, null, 2);
+        // 语法高亮
+        return syntaxHighlightJson(formatted);
+    } catch (e) {
+        // 不是有效的 JSON，直接返回（纯文本）
+        return '<span style="color:#d0d0d0">' + escapeHtml(jsonStr) + '</span>';
+    }
+}
+
+/**
+ * JSON 语法高亮 */
+function syntaxHighlightJson(json) {
+    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        var cls = 'json-number';
+        if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+                cls = 'json-key';
+            } else {
+                cls = 'json-string';
+            }
+        } else if (/true|false/.test(match)) {
+            cls = 'json-boolean';
+        } else if (/null/.test(match)) {
+            cls = 'json-null';
+        }
+        return '<span class="' + cls + '">' + match + '</span>';
+    });
 }
 function hideToolCalls() {
     var area = document.getElementById('toolCallsArea');
     area.style.display = 'none';
     area.innerHTML = '';
+    // 清空卡片映射和计数器
+    toolCardMap = {};
+    toolCardCounter = 0;
+    streamingToolCards = {};
+    updateClearButton();
 }
 function escapeHtml(str) {
     var div = document.createElement('div');
@@ -419,6 +934,7 @@ function resetPanel() {
     document.getElementById('btnStop').style.display = 'none';
     document.getElementById('statusBar').textContent = 'WebUI 自定义面板 - 通过 LXC 桥接与 Lua 通信';
     isProcessing = false;
+    updateClearButton();
 }
 
 // ===== 键盘快捷键 =====
@@ -436,6 +952,19 @@ document.getElementById('promptInput').addEventListener('keydown', function(e) {
 if (typeof LXC !== 'undefined') {
     LXC.log('panel.html (自定义 WebUI) 已加载');
 }
+
+// ===== 事件委托：统一处理工具卡片头部点击（展开/收起） =====
+document.getElementById('toolCallsArea').addEventListener('click', function(e) {
+    // 找到被点击的卡片头部
+    var header = e.target.closest('.tool-card-header');
+    if (!header) return;
+    // 如果点击的是按钮，不触发展开/收起
+    if (e.target.closest('button')) return;
+    // 找到卡片元素
+    var card = header.closest('.tool-card');
+    if (!card || !card.id) return;
+    toggleToolCard(card.id);
+});
 </script>
 </body>
 </html>

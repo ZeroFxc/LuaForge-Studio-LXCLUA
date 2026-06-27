@@ -45,11 +45,11 @@ import java.util.Arrays;
 public class LuaInvocationHandler implements InvocationHandler {
     private final LuaContext mContext;
     private final LuaObject obj;
-    private static final ArrayList cache = new ArrayList();
+    // 移除静态 cache 防止内存泄漏：
+    // InvocationHandler 本身已经持有 obj 的强引用，只要代理对象存在 obj 就不会被 GC
 
     public LuaInvocationHandler(LuaObject obj) {
         this.obj = obj;
-        cache.add(obj);
         mContext = obj.getLuaState().getContext();
     }
 
@@ -94,8 +94,15 @@ public class LuaInvocationHandler implements InvocationHandler {
                     ret = null;
                 } else {
                     ret = func.call(args);
-                    if (ret != null && ret instanceof Double) {
-                        ret = LuaState.convertLuaNumber((Double) ret, retType);
+                    // Lua 函数返回的数字可能是 Double、Integer、Long 等，
+                    // 需要根据方法返回类型统一转换
+                    if (ret != null && ret instanceof Number) {
+                        Number numRet = (Number) ret;
+                        if (numRet instanceof Long) {
+                            ret = LuaState.convertLuaNumber((Long) numRet, retType);
+                        } else {
+                            ret = LuaState.convertLuaNumber(numRet.doubleValue(), retType);
+                        }
                     }
                 }
             } catch (Exception e) {

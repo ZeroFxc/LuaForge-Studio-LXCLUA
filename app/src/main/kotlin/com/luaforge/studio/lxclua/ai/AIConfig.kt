@@ -1,6 +1,7 @@
 package com.luaforge.studio.lxclua.ai
 
 import android.content.Context
+import android.os.Environment
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.UUID
 
 /** AI 提供商枚举 */
@@ -213,6 +215,87 @@ data class AIConfigData(
     /** 是否配置完成（有 API Key 且全局启用） */
     val isConfigured: Boolean
         get() = enabled && (activeProvider?.isConfigured ?: false)
+
+    companion object {
+        /**
+         * 从 JSON 字符串反序列化为 AIConfigData
+         * 用于 SD 卡配置文件的读取
+         */
+        fun fromJson(json: String): AIConfigData? {
+            return try {
+                val obj = JSONObject(json)
+                val version = obj.optInt("version", 1)
+                AIConfigData(
+                    enabled = obj.optBoolean("enabled", false),
+                    providers = AIProviderConfig.fromJsonList(obj.optString("providers", "")),
+                    activeProviderId = obj.optString("activeProviderId", null)?.takeIf { it.isNotBlank() },
+                    mcpEnabled = obj.optBoolean("mcpEnabled", false),
+                    mcpEndpoint = obj.optString("mcpEndpoint", "http://localhost:8080/mcp"),
+                    mcpTransport = obj.optString("mcpTransport", "streamable_http"),
+                    mcpServers = com.luaforge.studio.lxclua.mcp.MCPServerEntry.fromJsonList(obj.optString("mcpServers", "")),
+                    mcpToolStates = parseToolStatesJsonStatic(obj.optString("mcpToolStates", ""))
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("AIConfigData", "fromJson 解析失败: ${e.message}")
+                null
+            }
+        }
+
+        /**
+         * 序列化为 JSON 字符串
+         * 用于 SD 卡配置文件的写入
+         */
+        fun toJson(config: AIConfigData): String {
+            val obj = JSONObject().apply {
+                put("version", 1)
+                put("enabled", config.enabled)
+                put("providers", JSONArray().apply {
+                    config.providers.forEach { put(AIProviderConfig.toJson(it)) }
+                })
+                config.activeProviderId?.let { put("activeProviderId", it) }
+                put("mcpEnabled", config.mcpEnabled)
+                put("mcpEndpoint", config.mcpEndpoint)
+                put("mcpTransport", config.mcpTransport)
+                put("mcpServers", com.luaforge.studio.lxclua.mcp.MCPServerEntry.toJsonList(config.mcpServers))
+                put("mcpToolStates", serializeToolStatesJsonStatic(config.mcpToolStates))
+            }
+            return obj.toString(2) // 格式化输出，便于阅读
+        }
+
+        /** 静态版本：解析工具状态 JSON */
+        private fun parseToolStatesJsonStatic(json: String): Map<String, Map<String, Boolean>> {
+            if (json.isBlank()) return emptyMap()
+            return try {
+                val root = JSONObject(json)
+                val result = mutableMapOf<String, Map<String, Boolean>>()
+                for (serviceName in root.keys()) {
+                    val toolsJson = root.getJSONObject(serviceName)
+                    val tools = mutableMapOf<String, Boolean>()
+                    for (toolName in toolsJson.keys()) {
+                        tools[toolName] = toolsJson.getBoolean(toolName)
+                    }
+                    result[serviceName] = tools
+                }
+                result
+            } catch (e: Exception) {
+                emptyMap()
+            }
+        }
+
+        /** 静态版本：序列化工具状态为 JSON */
+        private fun serializeToolStatesJsonStatic(states: Map<String, Map<String, Boolean>>): String {
+            if (states.isEmpty()) return ""
+            val root = JSONObject()
+            for ((serviceName, tools) in states) {
+                val toolsJson = JSONObject()
+                for ((toolName, enabled) in tools) {
+                    toolsJson.put(toolName, enabled)
+                }
+                root.put(serviceName, toolsJson)
+            }
+            return root.toString()
+        }
+    }
 }
 
 /** AI 配置持久化管理器 */
@@ -255,8 +338,30 @@ object AIConfigManager {
         android.util.Log.d("AIConfigManager", "[setConfig] 配置已更新, mcpServers: ${config.mcpServers.size} 个, 服务列表: ${config.mcpServers.map { it.id }}")
     }
 
-    /** 异步加载 AI 配置 */
+    /** 异步加载 AI 配置（优先从 SD 卡加载，其次私有目录） */
     suspend fun loadConfig(context: Context) {
+        // 先尝试从 SD 卡加载
+        val sdConfig = loadConfigFromSdCard()
+        if (sdConfig != null) {
+            setConfig(sdConfig)
+            // 同步到私有目录，确保 SD 卡不可用时也能工作
+            try {
+                context.aiDataStore.edit { prefs ->
+                    prefs[Keys.ENABLED] = sdConfig.enabled
+                    prefs[Keys.PROVIDERS_JSON] = AIProviderConfig.toJsonList(sdConfig.providers)
+                    sdConfig.activeProviderId?.let { prefs[Keys.ACTIVE_PROVIDER_ID] = it }
+                    prefs[Keys.MCP_ENABLED] = sdConfig.mcpEnabled
+                    prefs[Keys.MCP_ENDPOINT] = sdConfig.mcpEndpoint
+                    prefs[Keys.MCP_TRANSPORT] = sdConfig.mcpTransport
+                    prefs[Keys.MCP_SERVERS] = com.luaforge.studio.lxclua.mcp.MCPServerEntry.toJsonList(sdConfig.mcpServers)
+                    prefs[Keys.MCP_TOOL_STATES] = serializeToolStatesJson(sdConfig.mcpToolStates)
+                }
+            } catch (_: Exception) { }
+            android.util.Log.i("AIConfigManager", "[loadConfig] 从 SD 卡加载完成, mcpServers: ${_config.mcpServers.size} 个")
+            return
+        }
+
+        // SD 卡没有配置，从私有目录加载
         val prefs = context.aiDataStore.data.first()
         val providersJson = prefs[Keys.PROVIDERS_JSON] ?: ""
 
@@ -300,7 +405,7 @@ object AIConfigManager {
             }
         }
 
-        setConfig(AIConfigData(
+        val config = AIConfigData(
             enabled = prefs[Keys.ENABLED] ?: false,
             providers = providers,
             activeProviderId = prefs[Keys.ACTIVE_PROVIDER_ID] ?: providers.firstOrNull()?.id,
@@ -309,11 +414,14 @@ object AIConfigManager {
             mcpTransport = prefs[Keys.MCP_TRANSPORT] ?: "streamable_http",
             mcpServers = com.luaforge.studio.lxclua.mcp.MCPServerEntry.fromJsonList(prefs[Keys.MCP_SERVERS] ?: ""),
             mcpToolStates = parseToolStatesJson(prefs[Keys.MCP_TOOL_STATES] ?: "")
-        ))
-        android.util.Log.i("AIConfigManager", "[loadConfig] 从磁盘加载完成, mcpServers: ${_config.mcpServers.size} 个")
+        )
+        setConfig(config)
+        // 首次从私有目录加载后，同步到 SD 卡（创建备份）
+        saveConfigToSdCard(context, config)
+        android.util.Log.i("AIConfigManager", "[loadConfig] 从私有目录加载完成, mcpServers: ${_config.mcpServers.size} 个")
     }
 
-    /** 异步保存 AI 配置 */
+    /** 异步保存 AI 配置（同时保存到私有目录和 SD 卡） */
     suspend fun saveConfig(context: Context, config: AIConfigData) {
         setConfig(config)
         context.aiDataStore.edit { prefs ->
@@ -326,6 +434,8 @@ object AIConfigManager {
             prefs[Keys.MCP_SERVERS] = com.luaforge.studio.lxclua.mcp.MCPServerEntry.toJsonList(config.mcpServers)
             prefs[Keys.MCP_TOOL_STATES] = serializeToolStatesJson(config.mcpToolStates)
         }
+        // 同步保存到 SD 卡
+        saveConfigToSdCard(context, config)
     }
 
     /** 更新配置（内存 + 持久化） */
@@ -442,5 +552,70 @@ object AIConfigManager {
             root.put(serviceName, toolsJson)
         }
         return root.toString()
+    }
+
+    // ========== SD 卡配置同步 ==========
+
+    /** SD 卡配置目录：/sdcard/LXC-LUA/config/ */
+    private fun getSdCardConfigDir(): File? {
+        return try {
+            val sdRoot = Environment.getExternalStorageDirectory()
+            val configDir = File(sdRoot, "LXC-LUA/config")
+            if (!configDir.exists()) {
+                configDir.mkdirs()
+            }
+            if (configDir.exists() && configDir.canWrite()) configDir else null
+        } catch (e: Exception) {
+            android.util.Log.w("AIConfigManager", "获取 SD 卡配置目录失败: ${e.message}")
+            null
+        }
+    }
+
+    /** AI 配置的 SD 卡文件路径 */
+    private fun getSdCardAiConfigFile(): File? {
+        return getSdCardConfigDir()?.let { File(it, "ai_config.json") }
+    }
+
+    /**
+     * 保存配置到 SD 卡（JSON 格式，便于手动编辑和备份）
+     * 失败时静默忽略，不影响主流程
+     */
+    private fun saveConfigToSdCard(context: Context, config: AIConfigData) {
+        try {
+            val file = getSdCardAiConfigFile() ?: return
+            val json = AIConfigData.toJson(config)
+            file.writeText(json, Charsets.UTF_8)
+            android.util.Log.d("AIConfigManager", "[SD卡] 配置已保存: ${file.absolutePath}")
+        } catch (e: Exception) {
+            android.util.Log.w("AIConfigManager", "[SD卡] 保存配置失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 从 SD 卡加载配置
+     * 仅当 SD 卡配置存在且需要恢复时使用
+     * @return 配置数据，失败返回 null
+     */
+    private fun loadConfigFromSdCard(): AIConfigData? {
+        return try {
+            val file = getSdCardAiConfigFile() ?: return null
+            if (!file.exists() || !file.canRead()) return null
+            val json = file.readText(Charsets.UTF_8)
+            val config = AIConfigData.fromJson(json)
+            android.util.Log.d("AIConfigManager", "[SD卡] 配置已加载: ${file.absolutePath}")
+            config
+        } catch (e: Exception) {
+            android.util.Log.w("AIConfigManager", "[SD卡] 加载配置失败: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * 合并 SD 卡配置到主配置
+     * 策略：SD 卡配置存在时，以 SD 卡为准（SD 卡作为主存储）
+     * 如果私有目录也有配置，取最新的（通过简单的字段数量判断，或直接以 SD 卡为准）
+     */
+    private fun mergeSdCardConfig(sdConfig: AIConfigData?): AIConfigData? {
+        return sdConfig
     }
 }

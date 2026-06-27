@@ -665,10 +665,10 @@ public class LuaObject implements Serializable {
             if (!isTable() && !isFunction())
                 throw new LuaException("Invalid Object. Must be Table or Function.");
 
-            if (isFunction() && implem.getMethods().length != 1)
-                throw new LuaException("Invalid Object. Must be a interface Method of Function.");
+            if (isFunction() && countAbstractMethods(implem) != 1)
+                throw new LuaException("Invalid Object. Must be a functional interface (single abstract method).");
             if (isTable() && getTable().isList()) {
-                throw new LuaException("Invalid Object. Must be Table is Not Array.");
+                throw new LuaException("Invalid Object. Table must not be an array.");
             }
             Class[] interfaces = new Class[]{implem};
 
@@ -676,6 +676,57 @@ public class LuaObject implements Serializable {
 
             return Proxy.newProxyInstance(implem.getClassLoader(), interfaces, handler);
         }
+    }
+
+    /**
+     * 统计接口的抽象方法数量（排除 default/static 方法和 Object 方法）
+     * 用于判断是否为函数式接口（SAM）
+     */
+    private static int countAbstractMethods(Class<?> iface) {
+        if (!iface.isInterface()) return 0;
+        java.util.Set<String> objectMethods = new java.util.HashSet<>();
+        try {
+            for (java.lang.reflect.Method m : Object.class.getMethods()) {
+                objectMethods.add(m.getName() + getParameterSignature(m));
+            }
+        } catch (Exception ignored) {}
+        java.util.Set<String> methods = new java.util.HashSet<>();
+        java.util.Set<String> defaultMethods = new java.util.HashSet<>();
+        // 递归收集所有接口的方法
+        collectInterfaceMethods(iface, methods, defaultMethods, objectMethods);
+        // 抽象方法数量 = 总方法 - default方法
+        methods.removeAll(defaultMethods);
+        return methods.size();
+    }
+
+    private static void collectInterfaceMethods(Class<?> iface, java.util.Set<String> methods,
+                                                 java.util.Set<String> defaultMethods,
+                                                 java.util.Set<String> objectMethods) {
+        for (java.lang.reflect.Method m : iface.getDeclaredMethods()) {
+            String sig = m.getName() + getParameterSignature(m);
+            if (objectMethods.contains(sig)) continue;
+            if (java.lang.reflect.Modifier.isStatic(m.getModifiers())) continue;
+            if (m.isDefault()) {
+                defaultMethods.add(sig);
+            } else {
+                methods.add(sig);
+            }
+        }
+        // 递归父接口
+        for (Class<?> parent : iface.getInterfaces()) {
+            collectInterfaceMethods(parent, methods, defaultMethods, objectMethods);
+        }
+    }
+
+    private static String getParameterSignature(java.lang.reflect.Method m) {
+        StringBuilder sb = new StringBuilder("(");
+        Class<?>[] params = m.getParameterTypes();
+        for (int i = 0; i < params.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append(params[i].getName());
+        }
+        sb.append(")");
+        return sb.toString();
     }
 
 }

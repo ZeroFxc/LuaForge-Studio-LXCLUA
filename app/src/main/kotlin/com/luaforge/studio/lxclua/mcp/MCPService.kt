@@ -2,6 +2,7 @@ package com.luaforge.studio.lxclua.mcp
 
 import com.luaforge.studio.lxclua.ai.AIConfigManager
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
 import io.modelcontextprotocol.kotlin.sdk.client.Client
 import io.modelcontextprotocol.kotlin.sdk.client.SseClientTransport
 import io.modelcontextprotocol.kotlin.sdk.client.StreamableHttpClientTransport
@@ -13,7 +14,9 @@ import io.modelcontextprotocol.kotlin.sdk.types.Implementation
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -114,7 +117,13 @@ class MCPServiceImpl(
     private val serverTransport: String? = null
 ) : IMCPService {
 
-    private val ktorClient = HttpClient()
+    private val ktorClient = HttpClient {
+        install(HttpTimeout) {
+            connectTimeoutMillis = 30_000    // 连接超时 30 秒
+            requestTimeoutMillis = 60_000    // 请求超时 60 秒
+            socketTimeoutMillis = 60_000     // Socket 超时 60 秒
+        }
+    }
 
     private var sdkClient: Client? = null
     private var transport: Transport? = null
@@ -347,6 +356,17 @@ class MCPServiceImpl(
 object MCPManager {
     private var _service: IMCPService? = null
 
+    /** 应用上下文（用于持久化配置） */
+    private var appContext: android.content.Context? = null
+
+    /**
+     * 初始化 MCP 管理器（应用启动时调用）
+     * @param context 应用上下文
+     */
+    fun init(context: android.content.Context) {
+        appContext = context.applicationContext
+    }
+
     /** 当前 MCP 服务实例（兼容旧 API，使用第一个远程服务器） */
     val service: IMCPService
         get() {
@@ -415,6 +435,30 @@ object MCPManager {
         // 追加本地插件注册的服务器
         val localPluginServers = pluginServerEntries.values.toList()
         return configServers + localPluginServers
+    }
+
+    /**
+     * 自动连接所有已启用的远程 MCP 服务器（应用启动时调用）
+     * 异步执行，不阻塞主线程，连接成功后工具会缓存到 serverToolsCache
+     */
+    fun autoConnectEnabledServers() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val servers = AIConfigManager.currentConfig.mcpServers
+                .filter { it.enabled && it.source == MCPServerSource.REMOTE_URL && it.url.isNotBlank() }
+            if (servers.isEmpty()) {
+                android.util.Log.d("MCPManager", "[autoConnect] 没有已启用的远程 MCP 服务器")
+                return@launch
+            }
+            android.util.Log.i("MCPManager", "[autoConnect] 开始自动连接 ${servers.size} 个远程 MCP 服务器")
+            for (entry in servers) {
+                try {
+                    val result = connectServer(entry)
+                    android.util.Log.i("MCPManager", "[autoConnect] ${entry.name}: ${if (result) "连接成功" else "连接失败"}")
+                } catch (e: Exception) {
+                    android.util.Log.e("MCPManager", "[autoConnect] ${entry.name} 连接异常: ${e.message}")
+                }
+            }
+        }
     }
 
     /** 获取所有服务器的工具列表（合并） */
@@ -815,9 +859,27 @@ object MCPManager {
         val toolStates = currentStates.getOrPut(serverName) { mutableMapOf() }.toMutableMap()
         toolStates[toolName] = enabled
         currentStates[serverName] = toolStates
-        AIConfigManager.updateInMemory(config.copy(mcpToolStates = currentStates))
+        val newConfig = config.copy(mcpToolStates = currentStates)
+        AIConfigManager.updateInMemory(newConfig)
+        // 异步持久化到磁盘
+        persistConfig(newConfig)
         android.util.Log.i("MCPManager", "setRemoteToolState: $serverName/$toolName -> $enabled")
         return true
+    }
+
+    /**
+     * 异步持久化配置到磁盘（IO线程，不阻塞调用方）
+     */
+    private fun persistConfig(config: com.luaforge.studio.lxclua.ai.AIConfigData) {
+        val ctx = appContext ?: return
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                AIConfigManager.saveConfig(ctx, config)
+                android.util.Log.d("MCPManager", "[persistConfig] 配置已持久化")
+            } catch (e: Exception) {
+                android.util.Log.e("MCPManager", "[persistConfig] 持久化失败: ${e.message}", e)
+            }
+        }
     }
 
     /** 持久化所有服务的工具开关状态到配置 */
@@ -832,9 +894,12 @@ object MCPManager {
                 states[serviceName] = toolStates
             }
         }
-        val config = com.luaforge.studio.lxclua.ai.AIConfigManager.currentConfig
-        com.luaforge.studio.lxclua.ai.AIConfigManager.updateInMemory(config.copy(mcpToolStates = states))
-        android.util.Log.d("MCPManager", "[syncToolStatesToConfig] 已持久化 ${states.size} 个服务的工具状态")
+        val config = AIConfigManager.currentConfig
+        val newConfig = config.copy(mcpToolStates = states)
+        AIConfigManager.updateInMemory(newConfig)
+        // 异步持久化到磁盘
+        persistConfig(newConfig)
+        android.util.Log.d("MCPManager", "[syncToolStatesToConfig] 已更新 ${states.size} 个服务的工具状态")
     }
 
     /** 获取服务状态（包含服务启用状态和各工具状态） */

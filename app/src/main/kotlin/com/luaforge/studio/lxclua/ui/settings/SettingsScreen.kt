@@ -1457,18 +1457,17 @@ SettingsListItem(
                     onExpandedChange = { mcpExpanded = it },
                     onConfigChange = { updateAiConfig(it) },
                     onTestConnection = { server ->
-                        scope.launch {
-                            try {
-                                val connected = MCPManager.connectServer(server)
-                                if (connected) {
-                                    toast.showToast(context.getString(R.string.settings_mcp_connection_success_toast, server.name))
-                                    MCPManager.disconnectServer(server)
-                                } else {
-                                    toast.showToast(context.getString(R.string.settings_mcp_connection_failed_toast, server.name))
-                                }
-                            } catch (e: Exception) {
-                                toast.showToast(context.getString(R.string.settings_mcp_connection_error_toast, e.message ?: ""))
+                        try {
+                            val connected = MCPManager.connectServer(server)
+                            if (connected) {
+                                toast.showToast(context.getString(R.string.settings_mcp_connection_success_toast, server.name))
+                            } else {
+                                toast.showToast(context.getString(R.string.settings_mcp_connection_failed_toast, server.name))
                             }
+                            connected
+                        } catch (e: Exception) {
+                            toast.showToast(context.getString(R.string.settings_mcp_connection_error_toast, e.message ?: ""))
+                            false
                         }
                     }
                 )
@@ -2658,7 +2657,7 @@ fun MCPSettingsSection(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onConfigChange: (AIConfigData) -> Unit,
-    onTestConnection: (MCPServerEntry) -> Unit
+    onTestConnection: suspend (MCPServerEntry) -> Boolean
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var addServerName by remember { mutableStateOf("") }
@@ -2669,6 +2668,7 @@ fun MCPSettingsSection(
     var addTransportMenuExpanded by remember { mutableStateOf(false) }
     var expandedServiceId by remember { mutableStateOf<String?>(null) }
     var hierarchyVersion by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     // 获取服务层级结构（含工具列表），hierarchyVersion 变化时重新获取
     val serviceHierarchy = remember(hierarchyVersion) { MCPManager.getServiceHierarchy() }
@@ -2700,7 +2700,10 @@ fun MCPSettingsSection(
                     val serviceInfo = if (isPlugin) {
                         val serviceName = server.id.removePrefix("plugin_service_")
                         serviceHierarchy.find { it["name"] == serviceName && it["source"] == "plugin" }
-                    } else null
+                    } else {
+                        // 远程 MCP 服务器：按服务器名称匹配，source 为 remote
+                        serviceHierarchy.find { it["name"] == server.name && it["source"] == "remote" }
+                    }
                     val tools = (serviceInfo?.get("tools") as? List<*>) ?: emptyList<Any>()
 
                     Column {
@@ -2709,7 +2712,11 @@ fun MCPSettingsSection(
                             subtitle = if (isPlugin) {
                                 val toolCount = serviceInfo?.get("toolCount") as? Int ?: 0
                                 "${stringResource(R.string.settings_mcp_local_plugin)} · $toolCount 个工具"
-                            } else server.url.ifBlank { stringResource(R.string.settings_mcp_no_url) },
+                            } else {
+                                val toolCount = serviceInfo?.get("toolCount") as? Int ?: 0
+                                val urlText = server.url.ifBlank { stringResource(R.string.settings_mcp_no_url) }
+                                if (toolCount > 0) "$urlText · $toolCount 个工具" else urlText
+                            },
                             trailingContent = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Switch(
@@ -2719,13 +2726,26 @@ fun MCPSettingsSection(
                                                 if (it.id == server.id) it.copy(enabled = enabled) else it
                                             }
                                             onConfigChange(config.copy(mcpServers = updated))
-                                            // 同步更新 serviceRegistry，确保 getEnabledServiceTools() 生效
+                                            // 同步更新服务状态
                                             if (isPlugin) {
                                                 val serviceName = server.id.removePrefix("plugin_service_")
                                                 if (enabled) {
                                                     MCPManager.enableService(serviceName)
                                                 } else {
                                                     MCPManager.disableService(serviceName)
+                                                }
+                                            } else {
+                                                // 远程 MCP 服务器：启用时连接，禁用时断开
+                                                scope.launch {
+                                                    if (enabled) {
+                                                        val success = onTestConnection(server)
+                                                        if (success) {
+                                                            hierarchyVersion++
+                                                        }
+                                                    } else {
+                                                        MCPManager.disconnectServer(server)
+                                                        hierarchyVersion++
+                                                    }
                                                 }
                                             }
                                         }
@@ -2776,7 +2796,13 @@ fun MCPSettingsSection(
                                     if (tools.isNotEmpty()) {
                                         expandedServiceId = if (isExpanded) null else server.id
                                     } else {
-                                        onTestConnection(server)
+                                        scope.launch {
+                                            val success = onTestConnection(server)
+                                            if (success) {
+                                                // 连接成功，刷新 UI 显示工具列表
+                                                hierarchyVersion++
+                                            }
+                                        }
                                     }
                                 }
                             }

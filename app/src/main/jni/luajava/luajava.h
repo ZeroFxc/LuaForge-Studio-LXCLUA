@@ -37,13 +37,13 @@ typedef struct {
  * @param idx 栈索引
  * @return 1 表示是 Java 对象，0 表示不是
  */
-#define LUAJAVAOBJECTIND_H "__IsJavaObject"
+#define LUAJAVAOBJECTIND "__IsJavaObject"
 static inline int isJavaObject(lua_State *L, int idx) {
     if (!lua_isuserdata(L, idx))
         return 0;
     if (lua_getmetatable(L, idx) == 0)
         return 0;
-    lua_pushstring(L, LUAJAVAOBJECTIND_H);
+    lua_pushstring(L, LUAJAVAOBJECTIND);
     lua_rawget(L, -2);
     if (lua_isnil(L, -1)) {
         lua_pop(L, 2);

@@ -40,6 +40,10 @@ public class LuaException extends Exception {
         super(str);
     }
 
+    public LuaException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
     /**
      * Will work only on Java 1.4 or later.
      * To work with Java 1.3, comment the first line and uncomment the second one.
