@@ -84,8 +84,8 @@ class MyIdentifierAutoComplete {
      * 初始化默认变量映射
      */
     constructor() {
-        mmap["activity"] = "com.androlua.LuaActivity"
-        mmap["this"] = "com.androlua.LuaActivity"
+        mmap["activity"] = "com.nirithy.lxclua.LuaActivity"
+        mmap["this"] = "com.nirithy.lxclua.LuaActivity"
     }
 
     /**

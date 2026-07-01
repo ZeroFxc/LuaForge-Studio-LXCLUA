@@ -46,12 +46,12 @@ local TooltipCompat = bindClass "androidx.appcompat.widget.TooltipCompat"
 local PagerAdapter = bindClass "androidx.viewpager.widget.PagerAdapter"
 local MaterialColors = bindClass "com.google.android.material.color.MaterialColors"
 local MaterialR = bindClass "com.google.android.material.R"
-local NineBitmapDrawable = bindClass "com.androlua.NineBitmapDrawable"
-local LuaBitmapDrawable = bindClass "com.androlua.LuaBitmapDrawable"
+local NineBitmapDrawable = bindClass "com.nirithy.lxclua.NineBitmapDrawable"
+local LuaBitmapDrawable = bindClass "com.nirithy.lxclua.LuaBitmapDrawable"
 local Glide = bindClass "com.bumptech.glide.Glide"
 local DiskCacheStrategy = bindClass "com.bumptech.glide.load.engine.DiskCacheStrategy"
 local RequestOptions = bindClass "com.bumptech.glide.request.RequestOptions"
-local LuaPagerAdapter = bindClass "github.daisukiKaffuChino.LuaPagerAdapter"
+local LuaPagerAdapter = bindClass "com.nirithy.lxclua.LuaPagerAdapter"
 
 local loadlayout
 local scaleTypeEnum = ScaleType.values()

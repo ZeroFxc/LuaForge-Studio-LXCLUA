@@ -1,6 +1,6 @@
 local context=activity or service
 
-local LuaBitmap=luajava.bindClass "com.androlua.LuaBitmap"
+local LuaBitmap=luajava.bindClass "com.nirithy.lxclua.LuaBitmap"
 local function loadbitmap(path)
   if not path:find("^https*://") and not path:find("%.%a%a%a%a?$") then
     path=path..".png"

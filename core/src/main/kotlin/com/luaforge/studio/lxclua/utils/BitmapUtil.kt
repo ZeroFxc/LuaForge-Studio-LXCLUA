@@ -10,10 +10,10 @@ import android.graphics.PorterDuffColorFilter
 import android.graphics.drawable.BitmapDrawable
 import android.util.TypedValue
 import androidx.annotation.Keep
-import com.androlua.LuaApplication
-import com.androlua.LuaBitmap
-import com.androlua.LuaBitmapDrawable
-import com.androlua.LuaContext
+import com.nirithy.lxclua.LuaApplication
+import com.nirithy.lxclua.LuaBitmap
+import com.nirithy.lxclua.LuaBitmapDrawable
+import com.nirithy.lxclua.LuaContext
 import java.io.File
 
 @Keep
@@ -82,7 +82,7 @@ object BitmapUtil {
                 LuaBitmap.getBitmap(luaContext, fullPath)
             } else {
                 // 尝试直接使用LuaBitmap
-                val luaApp = LuaApplication.getInstance()
+                val luaApp = LuaApplication.instance!!
                 LuaBitmap.getBitmap(luaApp, fullPath)
             }
         } catch (e: Exception) {
@@ -136,7 +136,7 @@ object BitmapUtil {
         return try {
             if (path.startsWith("http://") || path.startsWith("https://")) {
                 // 网络图片
-                val luaApp = LuaApplication.getInstance()
+                val luaApp = LuaApplication.instance!!
                 LuaBitmap.getHttpBitmap(luaApp, path)
             } else {
                 // 本地图片
@@ -305,11 +305,11 @@ object BitmapUtil {
 
     private fun getLuaExtDir(context: Context): String {
         return when (context) {
-            is LuaContext -> context.luaExtDir
+            is LuaContext -> context.luaExtDir ?: context.getExternalFilesDir(null)?.absolutePath ?: context.filesDir.absolutePath
             else -> {
                 val app = context.applicationContext
                 if (app is LuaApplication) {
-                    app.luaExtDir
+                    app.luaExtDir ?: context.getExternalFilesDir(null)?.absolutePath ?: context.filesDir.absolutePath
                 } else {
                     context.getExternalFilesDir(null)?.absolutePath ?: context.filesDir.absolutePath
                 }

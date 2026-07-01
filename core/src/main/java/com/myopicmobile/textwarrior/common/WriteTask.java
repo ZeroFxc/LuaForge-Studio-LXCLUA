@@ -3,7 +3,7 @@ package com.myopicmobile.textwarrior.common;
 import android.app.ProgressDialog;
 import android.os.AsyncTask;
 
-import com.androlua.LuaEditor;
+import com.nirithy.lxclua.LuaEditor;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;

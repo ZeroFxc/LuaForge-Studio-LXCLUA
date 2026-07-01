@@ -113,7 +113,7 @@ fun EditorTopBar(
                     }
 
                     try {
-                        val intent = Intent(context, com.androlua.LuaActivity::class.java)
+                        val intent = Intent(context, com.nirithy.lxclua.LuaActivity::class.java)
                         intent.data = Uri.fromFile(mainLuaFile)
                         intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
                         context.startActivity(intent)

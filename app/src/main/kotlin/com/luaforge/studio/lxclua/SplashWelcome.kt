@@ -30,8 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
-import com.androlua.LuaApplication
-import com.androlua.LuaUtil
+import com.nirithy.lxclua.LuaApplication
+import com.nirithy.lxclua.LuaUtil
 import com.nirithy.luacompose.bridge.ComposeBridge
 import com.luaforge.studio.lxclua.ui.crash.CrashManager
 import com.luaforge.studio.lxclua.ui.editor.persistence.EditorStateUtil
@@ -96,8 +96,8 @@ class SplashWelcome : ComponentActivity() {
         LogCatcher.init(this)
 
         app = application as LuaApplication
-        luaMdDir = app.mdDir
-        localDir = app.getLocalDir()
+        luaMdDir = app.mdDir!!
+        localDir = app.localDir!!
 
         lifecycleScope.launch {
             handleSplashLogic()
@@ -201,7 +201,7 @@ class SplashWelcome : ComponentActivity() {
             // Ignored
         }
 
-        val mainFile = File(app.getLuaPath("main.lua"))
+        val mainFile = File(app.resolveLuaPath("main.lua") ?: return true)
         return !(mainFile.exists() && mainFile.isFile)
     }
 

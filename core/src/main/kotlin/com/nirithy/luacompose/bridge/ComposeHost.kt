@@ -2,7 +2,7 @@ package com.nirithy.luacompose.bridge
 
 import android.content.Context
 import com.nirithy.luacompose.*
-import com.androlua.DebugLogger
+import com.nirithy.lxclua.DebugLogger
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.fillMaxSize

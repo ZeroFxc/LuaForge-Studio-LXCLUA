@@ -357,14 +357,14 @@ object GlideUtil {
     private fun getLuaDir(context: Context): String? {
         return try {
             // 尝试通过反射获取LuaContext的luaDir
-            if (context is com.androlua.LuaContext) {
+            if (context is com.nirithy.lxclua.LuaContext) {
                 return context.luaDir
             }
 
             // 检查父类
             var currentContext: Context? = context
             while (currentContext != null) {
-                if (currentContext is com.androlua.LuaContext) {
+                if (currentContext is com.nirithy.lxclua.LuaContext) {
                     return currentContext.luaDir
                 }
                 if (currentContext is android.content.ContextWrapper) {
@@ -376,7 +376,7 @@ object GlideUtil {
 
             // 尝试获取application
             val app = context.applicationContext
-            if (app is com.androlua.LuaApplication) {
+            if (app is com.nirithy.lxclua.LuaApplication) {
                 return app.localDir
             }
 

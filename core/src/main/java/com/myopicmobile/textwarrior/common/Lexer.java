@@ -10,8 +10,8 @@ package com.myopicmobile.textwarrior.common;
 
 import android.graphics.Rect;
 
-import com.androlua.LuaLexer;
-import com.androlua.LuaTokenTypes;
+import com.nirithy.lxclua.LuaLexer;
+import com.nirithy.lxclua.LuaTokenTypes;
 
 import java.util.ArrayList;
 import java.util.HashMap;

@@ -108,7 +108,7 @@ logInfo("已添加 ui 包函数: 29 个")
 -- ============================================================
 
 -- 3.1 注册常见变量类型映射（用于 obj.method() 成员补全）
-plugin.completion.addVariableType("activity", "com.androlua.LuaActivity")
+plugin.completion.addVariableType("activity", "com.nirithy.lxclua.LuaActivity")
 plugin.completion.addVariableType("context", "android.content.Context")
 plugin.completion.addVariableType("intent", "android.content.Intent")
 plugin.completion.addVariableType("bundle", "android.os.Bundle")
@@ -406,7 +406,7 @@ plugin.menu.addQuickAction("comp_reinit", "🔄 重新初始化", function()
         "toast", "dialog", "confirm", "alert", "input", "progress",
         "show", "hide", "dismiss", "setTitle"
     })
-    plugin.completion.addVariableType("activity", "com.androlua.LuaActivity")
+    plugin.completion.addVariableType("activity", "com.nirithy.lxclua.LuaActivity")
     plugin.completion.addVariableType("context", "android.content.Context")
     plugin.completion.addVariableType("intent", "android.content.Intent")
     plugin.completion.addVariableType("view", "android.view.View")

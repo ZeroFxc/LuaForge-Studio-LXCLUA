@@ -3,7 +3,7 @@ package com.myopicmobile.textwarrior.common;
 import android.app.ProgressDialog;
 import android.os.AsyncTask;
 
-import com.androlua.LuaEditor;
+import com.nirithy.lxclua.LuaEditor;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -80,7 +80,7 @@ public class ReadTask extends AsyncTask {
     protected void onPostExecute(Object result) {
         // TODO: Implement this method
         super.onPostExecute(result);
-        _edit.setText((String) result);
+        _edit.setText((String) result, true);
         _dlg.dismiss();
     }
 

@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:name="com.androlua.LuaApplication"
+        android:name="com.nirithy.lxclua.LuaApplication"
         android:allowBackup="true"
         android:icon="@drawable/icon"
         android:label="LXC-LUA Core"
@@ -14,7 +14,7 @@
         android:theme="@style/AppTheme">
 
         <activity
-            android:name="com.androlua.SplashWelcome"
+            android:name="com.nirithy.lxclua.SplashWelcome"
             android:exported="true"
             android:theme="@style/AppTheme"
             android:windowSoftInputMode="adjustResize|stateHidden">
@@ -25,20 +25,20 @@
         </activity>
 
         <activity
-            android:name="com.androlua.Main"
+            android:name="com.nirithy.lxclua.Main"
             android:exported="true"
             android:launchMode="singleTop"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize|stateHidden" />
 
         <activity
-            android:name="com.androlua.LuaActivity"
+            android:name="com.nirithy.lxclua.LuaActivity"
             android:exported="true"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize|stateHidden" />
 
         <activity
-            android:name="com.androlua.LuaActivityX"
+            android:name="com.nirithy.lxclua.LuaActivityX"
             android:exported="true"
             android:excludeFromRecents="false"
             android:configChanges="keyboardHidden|orientation|screenSize"
@@ -46,12 +46,12 @@
             android:documentLaunchMode="intoExisting" />
 
         <service
-            android:name="com.androlua.LuaService"
+            android:name="com.nirithy.lxclua.LuaService"
             android:enabled="true" />
 
         <service
             android:label="LXC-LUA"
-            android:name="com.androlua.LuaAccessibilityService"
+            android:name="com.nirithy.lxclua.LuaAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:enabled="true"
             android:exported="true">

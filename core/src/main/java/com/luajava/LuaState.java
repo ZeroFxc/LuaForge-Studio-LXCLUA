@@ -172,16 +172,16 @@ public class LuaState {
         return luaState;
     }
 
-    private com.androlua.LuaContext mContext;
+    private com.nirithy.lxclua.LuaContext mContext;
 
-    public void pushContext(com.androlua.LuaContext context) {
+    public void pushContext(com.nirithy.lxclua.LuaContext context) {
         mContext = context;
         pushString("_LuaContext");
         pushJavaObject(context);
         setTable(LUA_REGISTRYINDEX);
     }
 
-    public com.androlua.LuaContext getContext() {
+    public com.nirithy.lxclua.LuaContext getContext() {
         return mContext;
     }
 

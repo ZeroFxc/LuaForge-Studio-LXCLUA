@@ -49,7 +49,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.androlua.LuaActivity
+import com.nirithy.lxclua.LuaActivity
 import com.luaforge.studio.lxclua.ProjectItem
 import com.luaforge.studio.lxclua.R
 import com.luaforge.studio.lxclua.files.FileTree

@@ -5,11 +5,11 @@
 # 保留指定包下的所有类（含子包）
 -keep class android.widget.** { *; }
 -keep class com.android.** { *; }
--keep class com.androlua.** { *; }
+-keep class com.nirithy.lxclua.** { *; }
 -keep class com.luajava.** { *; }
 -keep class com.myopicmobile.** { *; }
--keep class com.nirenr.** { *; }
--keep class github.daisukiKaffuChino.** { *; }
+-keep class com.nirithy.** { *; }
+-keep class com.nirithy.lxclua.** { *; }
 -keep class org.luaj.** { *; }
 
 # 保留 AndroidX 基础组件（排除 Compose 相关类）

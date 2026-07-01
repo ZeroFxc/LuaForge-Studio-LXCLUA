@@ -4,7 +4,7 @@ import android.util.Log;
 
 import com.android.cglib.proxy.MethodInterceptor;
 import com.android.cglib.proxy.MethodProxy;
-import com.androlua.LuaContext;
+import com.nirithy.lxclua.LuaContext;
 
 import java.lang.reflect.Method;
 

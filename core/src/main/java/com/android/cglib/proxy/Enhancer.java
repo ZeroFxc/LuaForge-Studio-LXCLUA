@@ -10,7 +10,7 @@ import com.android.cglib.dx.Label;
 import com.android.cglib.dx.Local;
 import com.android.cglib.dx.MethodId;
 import com.android.cglib.dx.TypeId;
-import com.androlua.LuaUtil;
+import com.nirithy.lxclua.LuaUtil;
 
 import java.io.File;
 import java.io.IOException;

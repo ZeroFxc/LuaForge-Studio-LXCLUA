@@ -33,9 +33,9 @@ import android.util.Log;
 
 import com.android.cglib.proxy.EnhancerInterface;
 import com.android.cglib.proxy.MethodFilter;
-import com.androlua.LuaBitmap;
-import com.androlua.LuaEnhancer;
-import com.androlua.LuaGcable;
+import com.nirithy.lxclua.LuaBitmap;
+import com.nirithy.lxclua.LuaEnhancer;
+import com.nirithy.lxclua.LuaGcable;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;

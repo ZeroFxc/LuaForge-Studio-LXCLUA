@@ -9,5 +9,5 @@
     android:notificationTimeout="0"
     android:canPerformGestures="true"
 
-    android:settingsActivity="com.androlua.Main" /><!--|flagRequestTouchExplorationMode|flagRequestEnhancedWebAccessibility|flagReportViewIds|flagRequestFilterKeyEvents"-->
+    android:settingsActivity="com.nirithy.lxclua.Main" /><!--|flagRequestTouchExplorationMode|flagRequestEnhancedWebAccessibility|flagReportViewIds|flagRequestFilterKeyEvents"-->
 	

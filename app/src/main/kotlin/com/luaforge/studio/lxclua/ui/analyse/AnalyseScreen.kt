@@ -50,8 +50,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
-import com.androlua.LuaLexer
-import com.androlua.LuaTokenTypes
+import com.nirithy.lxclua.LuaLexer
+import com.nirithy.lxclua.LuaTokenTypes
 import com.luaforge.studio.lxclua.R
 import com.luaforge.studio.lxclua.langs.lua.tools.CompleteHashmapUtils
 import com.luaforge.studio.lxclua.utils.LogCatcher

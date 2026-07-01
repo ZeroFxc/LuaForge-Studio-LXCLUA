@@ -103,6 +103,19 @@ kotlin {
     }
 }
 
+// == 编译策略：Java/Kotlin 强制重编，NDK 保留增量 ==
+// core-apk 是导出 APK 的核心载体，源码变更后必须重新构建
+// Kotlin/Java 编译走增量（只编译变更文件），但禁用构建缓存避免过期
+// NDK（C/C++）耗时较长，保留 Gradle 原生增量检测，仅 C 文件变更时触发
+afterEvaluate {
+    tasks.matching {
+        it.name.startsWith("compile") &&
+        (it.name.contains("Kotlin") || it.name.contains("JavaWithJavac"))
+    }.configureEach {
+        outputs.cacheIf { false }
+    }
+}
+
 dependencies {
     api(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
 

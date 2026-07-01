@@ -343,7 +343,7 @@ function 下载文件与进度(文件的绝对下载链接,文件要存放的路
   end
 end
 function 判断进入软件第一次(第一次打开应用事件,又打开应用事件)
-  local setting = activity.getSharedPreferences("com.androlua.demo", 0);
+  local setting = activity.getSharedPreferences("com.nirithy.lxclua.demo", 0);
   user_first = setting.getBoolean("FIRST", true);
   if (user_first) then
     setting.edit().putBoolean("FIRST", false).commit();

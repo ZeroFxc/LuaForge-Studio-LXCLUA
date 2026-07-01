@@ -6,7 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.Keep
 import androidx.recyclerview.widget.RecyclerView
-import com.androlua.LuaActivity
+import com.nirithy.lxclua.LuaActivity
 import com.luajava.LuaException
 import com.luajava.LuaObject
 import com.luajava.LuaState
@@ -218,7 +218,7 @@ object RecyclerAdapterUtil {
     private fun convertLuaTableToList(table: LuaTable<*, *>, luaActivity: LuaActivity): List<Any> {
         val list = ArrayList<Any>()
         try {
-            val L = luaActivity.luaState
+            val L = luaActivity.luaState!!
             L.pushJavaObject(table)
 
             // 先尝试获取长度（假设是数组表）
@@ -426,7 +426,7 @@ class DataAdapterCreatorImpl(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         try {
-            val L = context.luaState
+            val L = context.luaState!!
 
             // 获取loadlayout函数
             val loadlayout = L.getLuaObject("loadlayout")
@@ -578,7 +578,7 @@ class MultiTypeAdapterCreatorImpl(
         val layout = typeMap[viewType] ?: typeMap[0] // 默认使用第一个布局
 
         try {
-            val L = context.luaState
+            val L = context.luaState!!
             val loadlayout = L.getLuaObject("loadlayout")
 
             L.newTable()

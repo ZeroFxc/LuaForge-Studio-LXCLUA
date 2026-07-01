@@ -20,9 +20,9 @@ import java.io.Reader;
 %state xSINGLE_QUOTED_STRING
 %state xBLOCK_STRING
 %state xBLOCK_COMMENT
+%state xREGEX
 
 %{
-
   /**
    * CharSequence 适配器，用于从 CharSequence 读取字符
    */
@@ -127,7 +127,6 @@ import java.io.Reader;
 
   /**
    * 从当前匹配文本中解析块开始标记的等号数量
-   * 用于 [[, [=[, [==[, 等形式
    */
   private void parseBlockBrackets() {
     String text = yytext();
@@ -155,7 +154,6 @@ import java.io.Reader;
 
   /**
    * 获取完整的块内容（长字符串或块注释）
-   * 包含开始标记、内容和结束标记
    * @return 完整的块内容
    */
   public String getBlockContent() {
@@ -193,43 +191,58 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   {LineTerminator}          { return NEW_LINE; }
   {WhiteSpace}              { return WHITE_SPACE; }
 
-  /* 关键字 - 与底层 llex.c luaX_tokens 完全一致 */
+  /* 关键字 - 与 C 层 llex.c luaX_tokens 完全一致 */
   "and"                     { return AND; }
   "asm"                     { return ASM; }
+  "async"                   { return ASYNC; }
+  "await"                   { return AWAIT; }
+  "bool"                    { return BOOL; }
   "break"                   { return BREAK; }
   "case"                    { return CASE; }
   "catch"                   { return CATCH; }
+  "char"                    { return CHAR; }
   "command"                 { return COMMAND; }
+  "concept"                 { return CONCEPT; }
   "const"                   { return CONST; }
   "continue"                { return CONTINUE; }
   "default"                 { return DEFAULT; }
   "defer"                   { return DEFER; }
   "delete"                  { return DELETE; }
   "do"                      { return DO; }
+  "double"                  { return DOUBLE; }
   "else"                    { return ELSE; }
   "elseif"                  { return ELSEIF; }
   "end"                     { return END; }
   "enum"                    { return ENUM; }
+  "export"                  { return EXPORT; }
   "false"                   { return FALSE; }
   "finally"                 { return FINALLY; }
+  "float"                   { return FLOAT; }
   "for"                     { return FOR; }
   "function"                { return FUNCTION; }
   "global"                  { return GLOBAL; }
-  "goto"                    { return GOTO; }
   "guard"                   { return GUARD; }
+  "goto"                    { return GOTO; }
   "if"                      { return IF; }
   "in"                      { return IN; }
-  "as"                      { return AS; }
+  "int"                     { return TYPE_INT; }
   "is"                      { return IS; }
   "instanceof"              { return INSTANCEOF; }
+  "keyword"                 { return KEYWORD; }
   "lambda"                  { return LAMBDA; }
   "let"                     { return LET; }
   "local"                   { return LOCAL; }
+  "long"                    { return LONG; }
+  "namespace"               { return NAMESPACE; }
   "nil"                     { return NIL; }
   "not"                     { return NOT; }
+  "operator"                { return OPERATOR_KW; }
   "or"                      { return OR; }
   "repeat"                  { return REPEAT; }
+  "requires"                { return REQUIRES; }
   "return"                  { return RETURN; }
+  "struct"                  { return STRUCT; }
+  "superstruct"             { return SUPERSTRUCT; }
   "switch"                  { return SWITCH; }
   "take"                    { return TAKE; }
   "match"                   { return MATCH; }
@@ -237,43 +250,26 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   "true"                    { return TRUE; }
   "try"                     { return TRY; }
   "until"                   { return UNTIL; }
+  "using"                   { return USING; }
+  "void"                    { return VOID; }
   "when"                    { return WHEN; }
   "with"                    { return WITH; }
   "while"                   { return WHILE; }
-  "keyword"                 { return KEYWORD; }
-  "operator"                { return OPERATOR_KW; }
-  "$"                       { return DOLLAR; }
-  "export"                  { return EXPORT; }
 
-
-  /* OOP 面向对象关键字 */
+  /* OOP 面向对象关键字（编辑器保留高亮） */
   "abstract"                { return ABSTRACT; }
   "class"                   { return CLASS; }
   "extends"                 { return EXTENDS; }
   "final"                   { return FINAL; }
   "implements"              { return IMPLEMENTS; }
-  "interface"              { return INTERFACE; }
-  "new"                    { return NEW; }
-  "super"                  { return SUPER; }
+  "interface"               { return INTERFACE; }
+  "new"                     { return NEW; }
+  "super"                   { return SUPER; }
   "private"                 { return PRIVATE; }
   "protected"               { return PROTECTED; }
   "public"                  { return PUBLIC; }
   "static"                  { return STATIC; }
-  "async"                   { return ASYNC; }
-  "await"                   { return AWAIT; }
-  "struct"                  { return STRUCT; }
-  "superstruct"             { return SUPERSTRUCT; }
-  "concept"                 { return CONCEPT; }
-  "namespace"               { return NAMESPACE; }
-  "using"                  { return USING; }
-  "requires"               { return REQUIRES; }
-  "bool"                   { return BOOL; }
-  "char"                   { return CHAR; }
-  "double"                 { return DOUBLE; }
-  "float"                  { return FLOAT; }
-  "int"                    { return TYPE_INT; }
-  "long"                   { return LONG; }
-  "void"                   { return VOID; }
+  "as"                      { return AS; }
 
   /* region/endregion 注释 */
   "--region"[^\r\n]*        { return REGION; }
@@ -284,6 +280,13 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
 
   /* 数字 */
   {Number}                  { return NUMBER; }
+
+  /* === 插值字符串前缀 $"..." / $'...' — 必须在普通字符串前匹配 === */
+  \$"([^\"\\]|\\[^\r\n]|\\[\r\n])*\"   { return INTERPSTRING; }
+  \$'([^\'\\]|\\[^\r\n]|\\[\r\n])*\'   { return INTERPSTRING; }
+  /* f"..." / f'...' 插值字符串 */
+  f\"([^\"\\]|\\[^\r\n]|\\[\r\n])*\"   { return INTERPSTRING; }
+  f\'([^\'\\]|\\[^\r\n]|\\[\r\n])*\'   { return INTERPSTRING; }
 
   /* 原生字符串 _raw"..." _raw'...' - 不处理转义 */
   _raw\"[^\"]*\"            { return RAW_STRING; }
@@ -333,11 +336,12 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   /* 单行注释 --... */
   "--"[^\r\n]*              { return SHORT_COMMENT; }
 
-  /* 复合赋值运算符 - 长的优先匹配 */
+  /* === 复合赋值运算符 - 长的优先匹配 === */
   "//="                     { return IDIVEQ; }
   ">>="                     { return SHREQ; }
   "<<="                     { return SHLEQ; }
   "..="                     { return CONCATEQ; }
+  "??="                     { return NULLCOALEQ; }
   "+="                      { return ADDEQ; }
   "-="                      { return SUBEQ; }
   "*="                      { return MULEQ; }
@@ -345,23 +349,25 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   "%="                      { return MODEQ; }
   "&="                      { return BANDEQ; }
   "|="                      { return BOREQ; }
-  "^="                      { return BXOREQ; }
+  "^="                      { return POWEQ; }
   "++"                      { return PLUSPLUS; }
 
-  /* 可选链和空值合并 */
+  /* === 可选链和空值合并 - 长的优先 === */
   "?."                      { return OPTCHAIN; }
   "??"                      { return NULLCOAL; }
   "?"                       { return QUESTION; }
 
-  /* 多字符运算符 - 长的优先匹配 */
+  /* === 多字符运算符 - 长的优先匹配 === */
   "..."                     { return ELLIPSIS; }
   ".."                      { return CONCAT; }
   "//"                      { return DOUBLE_DIV; }
   "=="                      { return EQ; }
+  "!="                      { return NE; }
   "~="                      { return NE; }
   ">="                      { return GE; }
   "<=>"                     { return SPACESHIP; }
   "<="                      { return LE; }
+  "<>"                      { return MERGE; }
   "<<"                      { return BIT_LTLT; }
   ">>"                      { return BIT_RTRT; }
   "::"                      { return DOUBLE_COLON; }
@@ -371,6 +377,8 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   "|?>"                     { return SAFEPIPE; }
   "|>"                      { return PIPE; }
   "<|"                      { return REVPIPE; }
+  "&&"                      { return AND; }
+  "$$"                      { return DOLLDOLL; }
 
   /* 单字符运算符 */
   "+"                       { return PLUS; }
@@ -383,6 +391,7 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   "&"                       { return BIT_AND; }
   "|"                       { return BIT_OR; }
   "~"                       { return BIT_TILDE; }
+  "!"                       { return NOT; }
   "<"                       { return LT; }
   ">"                       { return GT; }
   "="                       { return ASSIGN; }
@@ -399,6 +408,10 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   ":"                       { return COLON; }
   "."                       { return DOT; }
   "@"                       { return AT; }
+  "$"                       { return DOLLAR; }
+
+  /* 正则字面量 /pattern/flags — 仅当 / 紧跟非空白非运算符时尝试 */
+  "/"[^/\ \t\f\r\n0-9\(\)\[\]\{\}\,\;\:\+\-\*\%\^\#\&\|\~\<\>\=\.\@\$\?\!][^/\r\n]*"/"[a-zA-Z]*  { return REGEX; }
 
   /* 未知字符 */
   .                         { return BAD_CHARACTER; }

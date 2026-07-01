@@ -5,7 +5,7 @@ import android.content.res.Configuration
 import android.os.Handler
 import android.os.Looper
 import com.nirithy.luacompose.*
-import com.androlua.DebugLogger
+import com.nirithy.lxclua.DebugLogger
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.runtime.MutableState

@@ -148,7 +148,7 @@ local function env_import(env)
   append(packages, '')
   append(packages, 'java.lang.')
   append(packages, 'java.util.')
-  append(packages, 'com.androlua.')
+  append(packages, 'com.nirithy.lxclua.')
 
   local function import_1(classname)
     for i, p in ipairs(packages) do
@@ -382,9 +382,9 @@ function _M.getids()
   return luajava.ids
 end
 
-local LuaAsyncTask = apply("com.androlua.LuaAsyncTask")
-local LuaThread = apply("com.androlua.LuaThread")
-local LuaTimer = apply("com.androlua.LuaTimer")
+local LuaAsyncTask = apply("com.nirithy.lxclua.LuaAsyncTask")
+local LuaThread = apply("com.nirithy.lxclua.LuaThread")
+local LuaTimer = apply("com.nirithy.lxclua.LuaTimer")
 local Object = apply("java.lang.Object")
 
 

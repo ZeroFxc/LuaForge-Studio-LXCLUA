@@ -1076,7 +1076,7 @@ struct ffi_module {
     static int cast_f(lua_State *L) {
         luaL_checkany(L, 2);
         if (lua_type(L, 2) == LUA_TFUNCTION && !lua_iscfunction(L, 2)) {
-            //mod by nwdxlgzs
+            // Lua function callback
             return luaL_error(L, "Lua Function can not cast to %s", lua_tostring(L, 1));
         }
         ffi::make_cdata(L, check_ct(L, 1), ffi::RULE_CAST, 2);
@@ -1714,7 +1714,7 @@ struct ffi_module {
         lua_pushcclosure(L, tonumber_f, 1);
         lua_setfield(L, -2, "tonumber");
 
-        lua_pushliteral(L, "[ffi] + [cffi] + [byopen] + [@nwdxlgzs]");
+        lua_pushliteral(L, "[ffi] + [cffi] + [byopen]");
         lua_setfield(L, -2, "INFO");
 
         /* NULL = (void *)0 */

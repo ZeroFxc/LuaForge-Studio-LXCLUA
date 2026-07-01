@@ -14,8 +14,8 @@ import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
 
-import com.androlua.util.TimerTaskX;
-import com.androlua.util.TimerX;
+import com.nirithy.lxclua.util.TimerTaskX;
+import com.nirithy.lxclua.util.TimerX;
 
 public class RippleHelper extends Drawable implements View.OnTouchListener {
 

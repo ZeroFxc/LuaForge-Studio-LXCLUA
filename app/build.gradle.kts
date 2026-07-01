@@ -140,9 +140,9 @@ fun getBuildTime(): String = try {
 fun getCurrentYear(): String = LocalDate.now().year.toString()
 
 // 复制 core.apk 到 assets
-// 注意：通过 inputs.dir 显式声明 core / core-apk 的所有源码目录为任务输入，
-// 使 Gradle 增量编译能正确感知源码变化（如修改 DebugLogger.java），
-// 从而强制 :core-apk:assembleRelease 重新执行，而不会使用过期的构建缓存。
+// 源码追踪策略：
+//   - core/core-apk 的 Java/Kotlin 源码变更 → 强制重新编译并复制（增量编译，很快）
+//   - JNI C 源码变更 → 触发复制，但 NDK 编译由 externalNativeBuild 自身增量检测控制（耗时）
 tasks.register<Copy>("copyCoreApkToAssets") {
     dependsOn(":core-apk:assembleRelease")
 
@@ -170,7 +170,16 @@ tasks.register<Copy>("copyCoreApkToAssets") {
             .withPropertyName("coreApkSrcKotlin")
             .withPathSensitivity(PathSensitivity.RELATIVE)
     }
-    from(project(":core-apk").layout.buildDirectory.file("outputs/apk/release/core-apk-release.apk"))
+
+    // 声明 JNI 源码目录为输入（C 文件变更时触发复制，但 NDK 编译由自身增量控制）
+    val jniDir = rootProject.file("app/src/main/jni")
+    if (jniDir.exists()) {
+        inputs.dir(jniDir)
+            .withPropertyName("jniSrc")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    }
+
+    from(project(":core-apk").layout.buildDirectory.file("intermediates/apk/release/core-apk-release.apk"))
     into(layout.projectDirectory.dir("src/main/assets"))
     rename { "core.apk" }
 }

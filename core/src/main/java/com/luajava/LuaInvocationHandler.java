@@ -26,7 +26,7 @@ package com.luajava;
 
 import android.util.Log;
 
-import com.androlua.LuaContext;
+import com.nirithy.lxclua.LuaContext;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;

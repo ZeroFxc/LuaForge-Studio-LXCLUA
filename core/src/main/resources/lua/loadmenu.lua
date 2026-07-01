@@ -6,7 +6,7 @@ local _G=_G
 local insert = table.insert
 local new = luajava.new
 local bindClass = luajava.bindClass
-local LuaDrawable=luajava.bindClass "com.androlua.LuaDrawable"
+local LuaDrawable=luajava.bindClass "com.nirithy.lxclua.LuaDrawable"
 local loadbitmap=require "loadbitmap"
 local textColorPrimary
 
