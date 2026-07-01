@@ -2,7 +2,6 @@ import java.time.LocalDate
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -14,9 +13,9 @@ android {
     defaultConfig {
         applicationId = "com.luaforge.studio.lxclua"
         minSdk = 24
-        targetSdk = 36
-        versionCode = 20260627
-        versionName = "1.2.0"
+        targetSdk = 35
+        versionCode = 20260630
+        versionName = "1.2.2"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -141,9 +140,36 @@ fun getBuildTime(): String = try {
 fun getCurrentYear(): String = LocalDate.now().year.toString()
 
 // 复制 core.apk 到 assets
+// 注意：通过 inputs.dir 显式声明 core / core-apk 的所有源码目录为任务输入，
+// 使 Gradle 增量编译能正确感知源码变化（如修改 DebugLogger.java），
+// 从而强制 :core-apk:assembleRelease 重新执行，而不会使用过期的构建缓存。
 tasks.register<Copy>("copyCoreApkToAssets") {
     dependsOn(":core-apk:assembleRelease")
 
+    // 声明 core 模块所有源码为输入，任何源码变动都会使本任务过期
+    inputs.dir(project(":core").layout.projectDirectory.dir("src/main/java"))
+        .withPropertyName("coreSrcJava")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    val coreKotlinSrc = project(":core").layout.projectDirectory.dir("src/main/kotlin")
+    if (coreKotlinSrc.asFile.exists()) {
+        inputs.dir(coreKotlinSrc)
+            .withPropertyName("coreSrcKotlin")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    }
+
+    // 声明 core-apk 模块自己的源码为输入
+    val coreApkJavaSrc = project(":core-apk").layout.projectDirectory.dir("src/main/java")
+    if (coreApkJavaSrc.asFile.exists()) {
+        inputs.dir(coreApkJavaSrc)
+            .withPropertyName("coreApkSrcJava")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    }
+    val coreApkKotlinSrc = project(":core-apk").layout.projectDirectory.dir("src/main/kotlin")
+    if (coreApkKotlinSrc.asFile.exists()) {
+        inputs.dir(coreApkKotlinSrc)
+            .withPropertyName("coreApkSrcKotlin")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    }
     from(project(":core-apk").layout.buildDirectory.file("outputs/apk/release/core-apk-release.apk"))
     into(layout.projectDirectory.dir("src/main/assets"))
     rename { "core.apk" }
@@ -201,8 +227,8 @@ dependencies {
     api(libs.gson)
     api(libs.ktoast)
     
-    api("org.eclipse.jdt:ecj:3.33.0")
-    api("com.android.tools:r8:8.2.42")
+    api("org.eclipse.jdt:ecj:3.46.0")
+    api("com.android.tools:r8:9.1.31")
     api("io.github.kyant0:backdrop-android:2.0.0-alpha01")
 
     // MCP Kotlin SDK

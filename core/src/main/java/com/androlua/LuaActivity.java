@@ -58,6 +58,8 @@ import com.luajava.LuaState;
 import com.luajava.LuaStateFactory;
 
 import com.luaforge.studio.lxclua.core.R;
+import com.nirithy.luacompose.bridge.ComposeBridge;
+import com.nirithy.luacompose.bridge.ComposeHostKt;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -152,11 +154,13 @@ public class LuaActivity extends AppCompatActivity
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
+    DebugLogger.log("LuaActivity", "onCreate 开始, class=" + getClass().getSimpleName());
 
     StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
     StrictMode.setThreadPolicy(policy);
 
     super.onCreate(null);
+    DebugLogger.log("LuaActivity", "super.onCreate 完成");
 
     WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
     DisplayMetrics outMetrics = new DisplayMetrics();
@@ -213,61 +217,84 @@ public class LuaActivity extends AppCompatActivity
       if (arg == null) arg = new Object[0];
 
       luaPath = getLuaPath();
+      DebugLogger.log("LuaActivity", "luaPath=" + luaPath);
       pageName = new File(luaPath).getName();
       int idx = pageName.lastIndexOf(".");
       if (idx > 0) pageName = pageName.substring(0, idx);
+      DebugLogger.log("LuaActivity", "pageName=" + pageName + ", luaDir=" + luaDir);
 
       luaLpath =
           (luaDir + "/?.lua;" + luaDir + "/lua/?.lua;" + luaDir + "/?/settings.json;") + luaLpath;
+      DebugLogger.log("LuaActivity", "initLua 开始");
       initLua();
+      DebugLogger.log("LuaActivity", "initLua 完成");
 
       mLuaDexLoader = new LuaDexLoader(this);
       mLuaDexLoader.loadLibs();
       sLuaActivityMap.put(pageName, this);
+      DebugLogger.log("LuaActivity", "doFile 开始: " + luaPath);
       doFile(luaPath, arg);
+      DebugLogger.log("LuaActivity", "doFile 完成");
+      // 触发 compose.render() 的首次渲染（必须在 doFile 返回后调用，避免 Lua VM 重入）
+      DebugLogger.log("LuaActivity", "refreshAfterLoad 调用");
+      ComposeBridge.INSTANCE.refreshAfterLoad();
+      DebugLogger.log("LuaActivity", "refreshAfterLoad 完成, rootState=" + ComposeBridge.INSTANCE.getRootState().getValue() + ", luaError=" + ComposeBridge.INSTANCE.getLuaError().getValue());
       isCreate = true;
       if (!pageName.equals("main")) runFunc("main", arg);
       runFunc(pageName, arg);
       runFunc("onCreate", savedInstanceState);
       if (!isSetViewed) {
-        TypedArray array =
-            getTheme()
-                .obtainStyledAttributes(
-                    new int[] {
-                      android.R.attr.colorBackground,
-                      android.R.attr.textColorPrimary,
-                      android.R.attr.textColorHighlightInverse,
-                    });
-        int backgroundColor = array.getColor(0, 0xFF00FF);
-        int textColor = array.getColor(1, 0xFF00FF);
-        array.recycle();
-        status.setTextColor(textColor);
-        layout.setBackgroundColor(backgroundColor);
+        // 检查 Lua 是否通过 compose.render() 声明了 Compose UI
+        // 或是否有 Lua 错误需要显示（确保错误信息能通过 ComposeView 展示）
+        boolean hasRoot = ComposeBridge.INSTANCE.getRootState().getValue() != null;
+        boolean hasError = ComposeBridge.INSTANCE.getLuaError().getValue() != null;
+        DebugLogger.log("LuaActivity", "setContentView 决策: hasRoot=" + hasRoot + ", hasError=" + hasError + ", isSetViewed=" + isSetViewed);
+        if (hasRoot || hasError) {
+          DebugLogger.log("LuaActivity", "创建 ComposeView");
+          setContentView(ComposeHostKt.createComposeView(this));
+          DebugLogger.log("LuaActivity", "ComposeView 设置完成");
+        } else {
+          DebugLogger.log("LuaActivity", "fallback 到 LinearLayout（无 Compose UI）");
+          TypedArray array =
+              getTheme()
+                  .obtainStyledAttributes(
+                      new int[] {
+                        android.R.attr.colorBackground,
+                        android.R.attr.textColorPrimary,
+                        android.R.attr.textColorHighlightInverse,
+                      });
+          int backgroundColor = array.getColor(0, 0xFF00FF);
+          int textColor = array.getColor(1, 0xFF00FF);
+          array.recycle();
+          status.setTextColor(textColor);
+          layout.setBackgroundColor(backgroundColor);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-          WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
-          boolean isLightBg = ColorUtils.calculateLuminance(backgroundColor) > 0.5;
-          WindowInsetsControllerCompat controller =
-              WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+            boolean isLightBg = ColorUtils.calculateLuminance(backgroundColor) > 0.5;
+            WindowInsetsControllerCompat controller =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
 
-          if (controller != null) {
-            controller.setAppearanceLightStatusBars(isLightBg);
-            controller.setAppearanceLightNavigationBars(isLightBg);
+            if (controller != null) {
+              controller.setAppearanceLightStatusBars(isLightBg);
+              controller.setAppearanceLightNavigationBars(isLightBg);
+            }
+
+            ViewCompat.setOnApplyWindowInsetsListener(
+                layout,
+                (v, insets) -> {
+                  Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+                  v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+                  return insets;
+                });
           }
 
-          ViewCompat.setOnApplyWindowInsetsListener(
-              layout,
-              (v, insets) -> {
-                Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-                v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-                return insets;
-              });
+          setContentView(layout);
         }
-
-        setContentView(layout);
       }
     } catch (Exception e) {
+      DebugLogger.logError("LuaActivity", "onCreate 异常", e);
       sendMsg(e.getMessage());
       setContentView(layout);
       return;
@@ -297,6 +324,17 @@ public class LuaActivity extends AppCompatActivity
             new androidx.activity.OnBackPressedCallback(true) {
               @Override
               public void handleOnBackPressed() {
+                // ★ 优先检查 ComposeBridge 的导航回退栈
+                com.nirithy.luacompose.navigation.NavBackStack backStack =
+                    com.nirithy.luacompose.bridge.ComposeBridge.INSTANCE.getActiveBackStack();
+                DebugLogger.log("LuaActivity", "handleOnBackPressed: backStack=" + (backStack != null ? backStack.getSize() : "null"));
+                if (backStack != null && backStack.getSize() > 1) {
+                  DebugLogger.log("LuaActivity", "handleOnBackPressed: 移除栈顶, 当前栈大小=" + backStack.getSize());
+                  backStack.removeAt(backStack.getSize() - 1);
+                  DebugLogger.log("LuaActivity", "handleOnBackPressed: 移除后栈大小=" + backStack.getSize());
+                  return;
+                }
+                // 然后检查 Lua 的 onBackPressed 回调
                 Object ret = runFunc("onBackPressed");
                 if (ret != null && ret.getClass() == Boolean.class && (Boolean) ret) {
                   // Lua 返回 true，拦截返回事件
@@ -1213,6 +1251,12 @@ public class LuaActivity extends AppCompatActivity
     L.pop(1);
     initENV();
 
+    // 注入 Compose API 到 Lua 环境，让 Lua 脚本可以使用 compose.* 系列 API
+    DebugLogger.log("LuaActivity", "ComposeBridge.inject 开始");
+    ComposeBridge.INSTANCE.setAndroidContext(this);
+    ComposeBridge.INSTANCE.inject(L);
+    DebugLogger.log("LuaActivity", "ComposeBridge.inject 完成");
+
     JavaFunction print = new LuaPrint(this, L);
     print.register("print");
 
@@ -1332,6 +1376,7 @@ public class LuaActivity extends AppCompatActivity
       setResult(ok, res);
       throw new LuaException(errorReason(ok) + ": " + L.toString(-1));
     } catch (LuaException e) {
+      DebugLogger.logError("LuaActivity", "doFile 失败: " + e.getMessage(), e);
       setTitle(errorReason(ok));
       setContentView(layout);
       sendMsg(e.getMessage());

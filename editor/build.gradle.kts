@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
 }
 
 object Versions {
@@ -13,7 +12,7 @@ version = Versions.versionName
 
 android {
     namespace = "io.github.rosemoe.sora"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 21

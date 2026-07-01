@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -8,7 +9,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 23
+        minSdk = 24
 
         vectorDrawables {
             useSupportLibrary = true
@@ -49,6 +50,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        compose = true
     }
 
     packaging {
@@ -71,9 +73,24 @@ kotlin {
 dependencies {
     api(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
 
+    // KSP 注解依赖（SOURCE 保留，不打入 APK）
+    compileOnly(project(":annotations"))
+
+    // Compose Runtime（供 luacompose 桥接使用）
+    api(libs.compose.ui)
+    api(libs.compose.ui.graphics)
+    api(libs.compose.material3)
+    api(libs.compose.foundation)
+    api(libs.compose.animation)
+    api(libs.compose.material.icons.extended)
+
     // Navigation
     api(libs.navigation.fragment)
     api(libs.navigation.ui)
+
+    // Navigation3 (Compose 原生导航)
+    api(libs.navigation3.runtime)
+    api(libs.navigation3.ui)
 
     // Material Design
     api(libs.material)
@@ -116,4 +133,7 @@ dependencies {
 
     // HTTP Client (OkHttp)
     api(libs.okhttp)
+
+    // KSP 处理器
+    ksp(project(":compiler"))
 }

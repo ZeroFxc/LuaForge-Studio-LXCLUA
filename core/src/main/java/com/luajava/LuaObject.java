@@ -24,12 +24,18 @@
 
 package com.luajava;
 
+import android.util.Log;
+
 import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringTokenizer;
 
 /**
@@ -654,6 +660,9 @@ public class LuaObject implements Serializable {
             for (int i = 0; st.hasMoreTokens(); i++)
                 interfaces[i] = Class.forName(st.nextToken());
 
+            // 检查 Lua table 是否实现了所有接口的抽象方法，打印缺失方法警告
+            checkMissingAbstractMethods(interfaces);
+
             InvocationHandler handler = new LuaInvocationHandler(this);
 
             return Proxy.newProxyInstance(this.getClass().getClassLoader(), interfaces, handler);
@@ -672,9 +681,79 @@ public class LuaObject implements Serializable {
             }
             Class[] interfaces = new Class[]{implem};
 
+            // 检查 Lua table 是否实现了所有接口的抽象方法（仅 table 模式，function 模式走 SAM 不需要检查）
+            if (isTable()) {
+                checkMissingAbstractMethods(interfaces);
+            }
+
             InvocationHandler handler = new LuaInvocationHandler(this);
 
             return Proxy.newProxyInstance(implem.getClassLoader(), interfaces, handler);
+        }
+    }
+
+    /**
+     * 检查 Lua table 是否实现了接口的所有抽象方法，打印缺失方法警告
+     * 帮助用户在创建代理时发现可能遗漏的方法实现
+     *
+     * @param interfaces 要检查的接口数组
+     */
+    private void checkMissingAbstractMethods(Class<?>[] interfaces) {
+        if (!isTable()) return;
+
+        Set<String> objectMethods = new HashSet<>();
+        try {
+            for (java.lang.reflect.Method m : Object.class.getMethods()) {
+                objectMethods.add(m.getName());
+            }
+        } catch (Exception ignored) {}
+
+        ArrayList<String> missing = new ArrayList<>();
+        for (Class<?> iface : interfaces) {
+            if (!iface.isInterface()) continue;
+            collectMissingAbstractNames(iface, objectMethods, missing);
+        }
+
+        if (!missing.isEmpty()) {
+            StringBuilder sb = new StringBuilder("Lua table 未实现以下接口方法（将返回默认值，可能引发 NPE）:\n");
+            for (String name : missing) {
+                sb.append("  - ").append(name).append("\n");
+            }
+            sb.append("目标接口: ");
+            for (int i = 0; i < interfaces.length; i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(interfaces[i].getSimpleName());
+            }
+            Log.w("LuaProxy", sb.toString());
+        }
+    }
+
+    /**
+     * 递归收集接口中未被 Lua table 实现的抽象方法名
+     */
+    private void collectMissingAbstractNames(Class<?> iface, Set<String> objectMethods,
+                                              ArrayList<String> missing) {
+        for (java.lang.reflect.Method m : iface.getDeclaredMethods()) {
+            if (objectMethods.contains(m.getName())) continue;
+            if (Modifier.isStatic(m.getModifiers())) continue;
+            if (m.isDefault()) continue;
+            // 检查 Lua table 中是否有该方法
+            try {
+                LuaObject field = getField(m.getName());
+                if (field.isNil()) {
+                    if (!missing.contains(m.getName())) {
+                        missing.add(m.getName());
+                    }
+                }
+            } catch (LuaException ignored) {
+                if (!missing.contains(m.getName())) {
+                    missing.add(m.getName());
+                }
+            }
+        }
+        // 递归父接口
+        for (Class<?> parent : iface.getInterfaces()) {
+            collectMissingAbstractNames(parent, objectMethods, missing);
         }
     }
 

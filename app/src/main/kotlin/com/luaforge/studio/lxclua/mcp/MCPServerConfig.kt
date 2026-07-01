@@ -34,7 +34,7 @@ data class MCPServerEntry(
                         enabled = obj.optBoolean("enabled", true),
                         source = try { MCPServerSource.valueOf(obj.optString("source", "REMOTE_URL")) } catch (_: Exception) { MCPServerSource.REMOTE_URL },
                         url = obj.optString("url", ""),
-                        pluginId = obj.optString("pluginId", null),
+                        pluginId = obj.optString("pluginId", ""),
                         transport = obj.optString("transport", "streamable_http")
                     )
                 }

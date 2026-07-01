@@ -111,7 +111,7 @@ data class AIProviderConfig(
                 supportsTools = obj.optBoolean("supportsTools", false),
                 maxToolRounds = obj.optInt("maxToolRounds", 10),
                 isPluginRegistered = obj.optBoolean("isPluginRegistered", false),
-                pluginId = obj.optString("pluginId", null),
+                pluginId = obj.optString("pluginId", ""),
                 registeredModels = regModels
             )
         }
@@ -228,7 +228,7 @@ data class AIConfigData(
                 AIConfigData(
                     enabled = obj.optBoolean("enabled", false),
                     providers = AIProviderConfig.fromJsonList(obj.optString("providers", "")),
-                    activeProviderId = obj.optString("activeProviderId", null)?.takeIf { it.isNotBlank() },
+                    activeProviderId = obj.optString("activeProviderId", "").takeIf { it.isNotBlank() },
                     mcpEnabled = obj.optBoolean("mcpEnabled", false),
                     mcpEndpoint = obj.optString("mcpEndpoint", "http://localhost:8080/mcp"),
                     mcpTransport = obj.optString("mcpTransport", "streamable_http"),

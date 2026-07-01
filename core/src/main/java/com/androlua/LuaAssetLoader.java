@@ -13,13 +13,10 @@ import java.io.InputStream;
 
 public class LuaAssetLoader extends JavaFunction {
 
-    private final LuaState L;
-
     private final Context mContext;
 
     public LuaAssetLoader(LuaContext luaContext, LuaState L) {
         super(L);
-        this.L = L;
         mContext = luaContext.getContext();
     }
 

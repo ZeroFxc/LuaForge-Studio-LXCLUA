@@ -52,6 +52,7 @@ extern int luaopen_luaparser(lua_State *L);
 
 #include <android/log.h>
 #include <memory.h>
+#include <stdint.h>
 #include <zlib.h>
 
 #define LOG_TAG "lua"
@@ -75,6 +76,10 @@ static jmethodID get_stack_trace_method = NULL;
 
 static jclass java_function_class = NULL;
 static jmethodID java_function_method = NULL;
+static jfieldID java_function_L_field = NULL;
+
+static jclass luastate_factory_class = NULL;
+static jmethodID luastate_factory_get_existing_state = NULL;
 
 static jclass luajava_api_class = NULL;
 static jclass java_lang_class = NULL;
@@ -372,6 +377,36 @@ static void init(JNIEnv *javaEnv, lua_State *L) {
                 (*javaEnv)->GetMethodID(javaEnv, java_function_class, "execute", "()I");
         if (!java_function_method) {
             luaL_error(L, "Could not find <execute> method in JavaFunction");
+        }
+    }
+
+    if (java_function_L_field == NULL) {
+        java_function_L_field =
+                (*javaEnv)->GetFieldID(javaEnv, java_function_class, "L", "Lcom/luajava/LuaState;");
+        if (!java_function_L_field) {
+            luaL_error(L, "Could not find <L> field in JavaFunction");
+        }
+    }
+
+    if (luastate_factory_class == NULL) {
+        tempClass = (*javaEnv)->FindClass(javaEnv, "com/luajava/LuaStateFactory");
+
+        if (tempClass == NULL) {
+            luaL_error(L, "Could not find LuaStateFactory class");
+        }
+
+        if ((luastate_factory_class = (*javaEnv)->NewGlobalRef(javaEnv, tempClass)) == NULL) {
+            luaL_error(L, "Could not bind to LuaStateFactory class");
+        }
+        (*javaEnv)->DeleteLocalRef(javaEnv, tempClass);
+    }
+
+    if (luastate_factory_get_existing_state == NULL) {
+        luastate_factory_get_existing_state =
+                (*javaEnv)->GetStaticMethodID(javaEnv, luastate_factory_class,
+                                              "getExistingState", "(J)Lcom/luajava/LuaState;");
+        if (!luastate_factory_get_existing_state) {
+            luaL_error(L, "Could not find <getExistingState> method in LuaStateFactory");
         }
     }
 
@@ -2456,6 +2491,20 @@ int luaJavaFunctionCall(lua_State *L) {
         return 0;
     }
 
+    /* 更新 JavaFunction 的 L 字段为调用线程的 LuaState，
+     * 修复协程中调用 JavaFunction 时使用了主线程 LuaState 导致栈数据错误的问题 */
+    {
+        jlong statePtr = (jlong)(uintptr_t)L;
+        jobject luaState = (*javaEnv)->CallStaticObjectMethod(javaEnv,
+                luastate_factory_class, luastate_factory_get_existing_state,
+                statePtr);
+        if (luaState != NULL) {
+            (*javaEnv)->SetObjectField(javaEnv, *obj, java_function_L_field,
+                                       luaState);
+            (*javaEnv)->DeleteLocalRef(javaEnv, luaState);
+        }
+    }
+
     ret = (*javaEnv)->CallIntMethod(javaEnv, *obj, java_function_method);
 
     checkError(javaEnv, L);
@@ -2529,7 +2578,7 @@ static void set_info(lua_State *L) {
     lua_pushliteral(L, "DifierLine");
     lua_settable(L, -3);
     lua_pushliteral(L, "_VERSION");
-    lua_pushliteral(L, "20260625");
+    lua_pushliteral(L, "20260629");
     lua_settable(L, -3);
 }
 

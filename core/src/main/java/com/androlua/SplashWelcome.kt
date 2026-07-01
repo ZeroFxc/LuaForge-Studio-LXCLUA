@@ -39,12 +39,15 @@ class SplashWelcome : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DebugLogger.init(this)
+        DebugLogger.log("SplashWelcome", "onCreate 开始")
         //setContentView(R.layout.welcome)
 
         window.apply {
             WindowCompat.setDecorFitsSystemWindows(this, false)
             WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars =
                 true
+            @Suppress("DEPRECATION")
             statusBarColor = Color.TRANSPARENT
             addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
         }
@@ -54,8 +57,10 @@ class SplashWelcome : ComponentActivity() {
         localDir = app.localDir
 
         if (checkInfo()) {
+            DebugLogger.log("SplashWelcome", "checkInfo=true, 需要更新/解压")
             checkAndStartUpdate()
         } else {
+            DebugLogger.log("SplashWelcome", "checkInfo=false, 直接启动")
             startActivity()
         }
     }
@@ -80,6 +85,7 @@ class SplashWelcome : ComponentActivity() {
     }
 
     private fun startMainActivity() {
+        DebugLogger.log("SplashWelcome", "startMainActivity -> 跳转 Main")
         Intent(this@SplashWelcome, Main::class.java).apply {
             if (isVersionChanged) {
                 putExtra("isVersionChanged", isVersionChanged)
@@ -133,6 +139,7 @@ class SplashWelcome : ComponentActivity() {
     }
 
     private fun onUpdate() {
+        DebugLogger.log("SplashWelcome", "onUpdate 开始解压 assets 和 lua")
         try {
             val L = LuaStateFactory.newLuaState()
             L.openLibs()

@@ -19,3 +19,6 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# KSP 生成的组件注册代码（反射调用，必须保留）
+-keep class com.nirithy.luacompose.generated.** { *; }

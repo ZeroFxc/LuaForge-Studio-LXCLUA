@@ -7,8 +7,10 @@ public class Main extends LuaActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        DebugLogger.log("Main", "onCreate 开始");
         // TODO: Implement this method
         super.onCreate(savedInstanceState);
+        DebugLogger.log("Main", "super.onCreate 完成");
         if (savedInstanceState == null && getIntent().getData() != null)
             runFunc("onNewIntent", getIntent());
         if (getIntent().getBooleanExtra("isVersionChanged", false) && (savedInstanceState == null)) {

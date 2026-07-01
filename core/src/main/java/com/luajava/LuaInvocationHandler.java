@@ -79,6 +79,11 @@ public class LuaInvocationHandler implements InvocationHandler {
             Class<?> retType = method.getReturnType();
 
             if (func.isNil()) {
+                // 方法未在 Lua table 中实现，返回默认值并打印警告日志
+                // 保留默认返回值是为了兼容性：用户只需重写关心的方法，其余自动返回默认值
+                Log.w("LuaInvocationHandler", String.format(
+                        "[%s] 未实现方法 '%s'，返回默认值",
+                        method.getDeclaringClass().getSimpleName(), methodName));
                 if (retType.equals(boolean.class) || retType.equals(Boolean.class))
                     return false;
                 else if (retType.isPrimitive() || Number.class.isAssignableFrom(retType))

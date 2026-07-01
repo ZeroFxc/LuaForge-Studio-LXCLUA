@@ -32,6 +32,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.androlua.LuaApplication
 import com.androlua.LuaUtil
+import com.nirithy.luacompose.bridge.ComposeBridge
 import com.luaforge.studio.lxclua.ui.crash.CrashManager
 import com.luaforge.studio.lxclua.ui.editor.persistence.EditorStateUtil
 import com.luaforge.studio.lxclua.ui.editor.viewmodel.CompletionDataManager
@@ -246,6 +247,10 @@ class SplashWelcome : ComponentActivity() {
                     message = getString(R.string.splash_loading_libs)
                 )
                 L.openLibs()
+
+                // 注入 Compose API 到 Lua 环境
+                ComposeBridge.setAndroidContext(this@SplashWelcome)
+                ComposeBridge.inject(L)
 
                 // 阶段2: 执行更新脚本
                 _loadingState.value = LoadingState(

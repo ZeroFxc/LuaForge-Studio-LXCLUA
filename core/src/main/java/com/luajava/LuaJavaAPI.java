@@ -1161,9 +1161,102 @@ public final class LuaJavaAPI {
             EnhancerInterface obj = (EnhancerInterface) cls.newInstance();
             obj.setMethodInterceptor_Enhancer(new LuaAbstractMethodInterceptor(L.getLuaObject(-1)));
             L.pushJavaObject(obj);
+            // 检查抽象方法是否全部实现，打印缺失方法警告
+            checkAbstractMethodsMissing(clazz, L.getLuaObject(-1));
             return 1;
         } catch (Exception e) {
             throw new LuaException("创建抽象类代理失败: " + e.toString(), e);
+        }
+    }
+
+    /**
+     * 检查抽象类/接口中所有抽象方法是否在 Lua table 中实现，打印缺失方法警告
+     */
+    private static void checkAbstractMethodsMissing(Class<?> clazz, LuaObject luaObj) {
+        if (!luaObj.isTable()) return;
+        java.util.ArrayList<String> missing = new java.util.ArrayList<>();
+        java.util.HashSet<String> objectMethods = new java.util.HashSet<>();
+        try {
+            for (java.lang.reflect.Method m : Object.class.getMethods()) {
+                objectMethods.add(m.getName());
+            }
+        } catch (Exception ignored) {}
+        collectMissingAbstract(clazz, objectMethods, missing, luaObj);
+        if (!missing.isEmpty()) {
+            StringBuilder sb = new StringBuilder("Lua table 未实现以下抽象方法（将返回默认值，可能引发 NPE）:\n");
+            for (String name : missing) {
+                sb.append("  - ").append(name).append("\n");
+            }
+            sb.append("目标类: ").append(clazz.getSimpleName());
+            Log.w("LuaAbstractProxy", sb.toString());
+        }
+    }
+
+    private static void collectMissingAbstract(Class<?> clazz, java.util.HashSet<String> objectMethods,
+                                                java.util.ArrayList<String> missing, LuaObject luaObj) {
+        // 遍历当前类声明的抽象方法
+        for (java.lang.reflect.Method m : clazz.getDeclaredMethods()) {
+            if (objectMethods.contains(m.getName())) continue;
+            if (java.lang.reflect.Modifier.isStatic(m.getModifiers())) continue;
+            if (!java.lang.reflect.Modifier.isAbstract(m.getModifiers())) continue;
+            try {
+                LuaObject field = luaObj.getField(m.getName());
+                if (field.isNil() && !missing.contains(m.getName())) {
+                    missing.add(m.getName());
+                }
+            } catch (LuaException ignored) {
+                if (!missing.contains(m.getName())) {
+                    missing.add(m.getName());
+                }
+            }
+        }
+        // 递归父类
+        Class<?> superClass = clazz.getSuperclass();
+        if (superClass != null && superClass != Object.class) {
+            collectMissingAbstract(superClass, objectMethods, missing, luaObj);
+        }
+        // 遍历接口
+        for (Class<?> iface : clazz.getInterfaces()) {
+            for (java.lang.reflect.Method m : iface.getDeclaredMethods()) {
+                if (objectMethods.contains(m.getName())) continue;
+                if (java.lang.reflect.Modifier.isStatic(m.getModifiers())) continue;
+                if (m.isDefault()) continue;
+                try {
+                    LuaObject field = luaObj.getField(m.getName());
+                    if (field.isNil() && !missing.contains(m.getName())) {
+                        missing.add(m.getName());
+                    }
+                } catch (LuaException ignored) {
+                    if (!missing.contains(m.getName())) {
+                        missing.add(m.getName());
+                    }
+                }
+            }
+            for (Class<?> parent : iface.getInterfaces()) {
+                collectInterfaceMissing(parent, objectMethods, missing, luaObj);
+            }
+        }
+    }
+
+    private static void collectInterfaceMissing(Class<?> iface, java.util.HashSet<String> objectMethods,
+                                                 java.util.ArrayList<String> missing, LuaObject luaObj) {
+        for (java.lang.reflect.Method m : iface.getDeclaredMethods()) {
+            if (objectMethods.contains(m.getName())) continue;
+            if (java.lang.reflect.Modifier.isStatic(m.getModifiers())) continue;
+            if (m.isDefault()) continue;
+            try {
+                LuaObject field = luaObj.getField(m.getName());
+                if (field.isNil() && !missing.contains(m.getName())) {
+                    missing.add(m.getName());
+                }
+            } catch (LuaException ignored) {
+                if (!missing.contains(m.getName())) {
+                    missing.add(m.getName());
+                }
+            }
+        }
+        for (Class<?> parent : iface.getInterfaces()) {
+            collectInterfaceMissing(parent, objectMethods, missing, luaObj);
         }
     }
 
@@ -3993,7 +4086,12 @@ public final class LuaJavaAPI {
             // 查找 Lua 函数实现
             LuaObject func = methodMap.get(name);
             if (func == null) {
-                throw new LuaException("接口 " + iface.getName() + " 的方法 " + name + " 未实现");
+                // 方法未实现，返回默认值并打印警告
+                // 与 LuaInvocationHandler 行为一致：用户只需重写关心的方法
+                Log.w("MultiMethodProxy", String.format(
+                        "[%s] 未实现方法 '%s'，返回默认值",
+                        iface.getSimpleName(), name));
+                return getDefaultReturnValue(method.getReturnType());
             }
             // 调用 Lua 函数
             return invokeLuaFunc(func, args, method.getReturnType());

@@ -347,7 +347,6 @@ class MCPServiceImpl(
                     else -> primitive.content.toDoubleOrNull() ?: primitive.content
                 } ?: primitive.content
             }
-            else -> element.toString()
         }
     }
 }

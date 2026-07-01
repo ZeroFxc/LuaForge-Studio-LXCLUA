@@ -72,6 +72,7 @@ class LineStyles(override var line: Int) : LineAnchorStyle(line) {
 
     fun getElementAt(index: Int) = styles[index]
 
+    @Suppress("UNCHECKED_CAST")
     fun <T : LineAnchorStyle> findOne(type: Class<T>): T? {
         return styles.find { type.isInstance(it) } as T?
     }

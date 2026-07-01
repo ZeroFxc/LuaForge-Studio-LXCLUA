@@ -6,13 +6,11 @@ import com.luajava.LuaState;
 
 public class LuaPrint extends JavaFunction {
 
-    private final LuaState L;
     private final LuaContext mLuaContext;
     private final StringBuilder output = new StringBuilder();
 
     public LuaPrint(LuaContext luaContext, LuaState L) {
         super(L);
-        this.L = L;
         mLuaContext = luaContext;
     }
 

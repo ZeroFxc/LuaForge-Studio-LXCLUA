@@ -1,8 +1,8 @@
-//import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
-    //alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -39,12 +39,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    /* 新的 Kotlin compilerOptions 配置
-    kotlin {
-        compilerOptions {
-            jvmTarget = JvmTarget.JVM_17
-        }
-    }*/
+    buildFeatures {
+        compose = true
+    }
 
     signingConfigs {
         getByName("debug") {
@@ -100,10 +97,28 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
     api(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
 
     api(project(":core"))
+
+    // Compose 运行时（必须显式依赖，否则导出 APK 中 Compose 不会初始化）
+    api(libs.compose.ui)
+    api(libs.compose.ui.graphics)
+    api(libs.compose.material3)
+    api(libs.compose.foundation)
+    api(libs.compose.animation)
+    api(libs.compose.material.icons.extended)
+    api(libs.activity.compose)
+    api(libs.lifecycle.runtime.ktx)
+    api(libs.lifecycle.viewmodel.compose)
+    api(libs.navigation.compose)
 
     // Navigation
     api(libs.navigation.fragment)

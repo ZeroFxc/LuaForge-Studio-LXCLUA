@@ -105,7 +105,7 @@
     <string name="error_check_failed">Failed to check file: %s</string>
     <string name="unknown_error">Unknown error</string>
     <string name="file_label">File: %s</string>
-    <string name="author_note">LXC-LUA is dedicated to providing the best mobile development experience for Lua developers, with full support for the LXCLUA 20260625 standard library and common extensions.</string>
+    <string name="author_note">LXC-LUA is dedicated to providing the best mobile development experience for Lua developers, with full support for the LXCLUA 20260629 standard library and common extensions.</string>
     <string name="build_time_label">Build time: %s</string>
     <string name="close">Close</string>
     <string name="copy">Copy</string>
@@ -117,7 +117,7 @@
     <string name="dev_w_role">Developer</string>
     <string name="dev_kotlin_name">Kotlin</string>
     <string name="dev_kotlin_role">Language</string>
-    <string name="dev_lua_name">LXCLUA 20260625</string>
+    <string name="dev_lua_name">LXCLUA 20260629</string>
     <string name="dev_lua_role">Core Engine</string>
     <string name="dev_android_name">Android</string>
     <string name="dev_android_role">Platform</string>
@@ -441,7 +441,7 @@
     <string name="code_editor_analyzing_deps">Analyzing project dependencies, please wait...</string>
     <string name="code_editor_preparing">Preparing...</string>
     <string name="code_editor_file_icon_desc">%s File</string>
-    <string name="download_progress_count_and_size">%d / %d · %s / %s</string>
+    <string name="download_progress_count_and_size" formatted="false">%d / %d · %s / %s</string>
 
     <string name="editor_back">Back</string>
     <string name="editor_from_left">from the</string>
@@ -781,7 +781,7 @@
     <string name="settings_ai_not_configured">Please configure and enable AI first</string>
     <string name="settings_ai_stream">AI Stream Output</string>
     <string name="settings_ai_stream_desc">When enabled, AI responses will be displayed in real-time word by word in the panel</string>
-    <string name="settings_ai_connection_success_toast">Connected | Model: %s | Response: %s</string>
+    <string name="settings_ai_connection_success_toast" formatted="false">Connected | Model: %s | Response: %s</string>
     <string name="settings_ai_connection_timeout">Connection test timed out (15s). Please check network or API address</string>
 
     <!-- MCP Settings -->

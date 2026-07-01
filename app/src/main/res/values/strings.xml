@@ -105,7 +105,7 @@
     <string name="error_check_failed">检查文件失败: %s</string>
     <string name="unknown_error">未知错误</string>
     <string name="file_label">文件: %s</string>
-    <string name="author_note">LXC-LUA 致力于为 LXC-LUA 开发者提供最佳的移动端开发体验，支持完整的 LXCLUA 20260625 标准库和常用扩展。</string>
+    <string name="author_note">LXC-LUA 致力于为 LXC-LUA 开发者提供最佳的移动端开发体验，支持完整的 LXCLUA 20260629 标准库和常用扩展。</string>
     <string name="build_time_label">构建时间: %s</string>
     <string name="close">关闭</string>
     <string name="copy">复制</string>
@@ -117,7 +117,7 @@
     <string name="dev_w_role">Developer</string>
     <string name="dev_kotlin_name">Kotlin</string>
     <string name="dev_kotlin_role">Language</string>
-    <string name="dev_lua_name">LXCLUA 20260625</string>
+    <string name="dev_lua_name">LXCLUA 20260629</string>
     <string name="dev_lua_role">Core Engine</string>
     <string name="dev_android_name">Android</string>
     <string name="dev_android_role">Platform</string>
@@ -441,7 +441,7 @@
     <string name="code_editor_analyzing_deps">正在分析项目依赖，请稍候...</string>
     <string name="code_editor_preparing">正在准备...</string>
     <string name="code_editor_file_icon_desc">%s 文件</string>
-    <string name="download_progress_count_and_size">%d / %d · %s / %s</string>
+    <string name="download_progress_count_and_size" formatted="false">%d / %d · %s / %s</string>
 
     <string name="editor_back">返回</string>
     <string name="editor_from_left">从左侧</string>
@@ -819,7 +819,7 @@
     <!-- AI 设置扩展 -->
     <string name="settings_ai_stream">AI 流式输出</string>
     <string name="settings_ai_stream_desc">启用后，AI 响应将在面板中实时逐字显示，适合观察生成过程</string>
-    <string name="settings_ai_connection_success_toast">连接成功 | 模型: %s | 响应: %s</string>
+    <string name="settings_ai_connection_success_toast" formatted="false">连接成功 | 模型: %s | 响应: %s</string>
     <string name="settings_ai_connection_timeout">连接测试超时 (15秒)，请检查网络或 API 地址</string>
 
     <!-- AI 多提供商 -->

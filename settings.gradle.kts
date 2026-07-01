@@ -27,5 +27,7 @@ include(
     ":app",
     ":core",
     ":core-apk",
-    ":signer"
+    ":signer",
+    ":annotations",
+    ":compiler"
 )
