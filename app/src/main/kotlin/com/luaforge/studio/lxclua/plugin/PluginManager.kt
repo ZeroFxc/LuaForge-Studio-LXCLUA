@@ -178,7 +178,7 @@ object PluginManager {
     val multiSelectedProjectIds = mutableStateListOf<String>()
     
     // 项目徽章状态: projectId -> BadgeInfo
-    data class BadgeInfo(val text: String, val color: Long)
+    data class BadgeInfo(val text: String, val color: Long, val pluginId: String = "")
     val projectBadges = mutableStateMapOf<String, BadgeInfo>()
     
     // 插件注册的项目卡片菜单项
@@ -206,7 +206,37 @@ object PluginManager {
     )
     val bottomPanelItems = mutableStateListOf<BottomPanelItem>()
     val activeBottomPanelKey = mutableStateOf<String?>(null)
-    
+
+    // ========== 插件UI扩展：工具栏按钮 ==========
+    /**
+     * 工具栏按钮条目（插件通过 plugin.ui.addToolbarButton 注册）
+     */
+    data class ToolbarActionEntry(
+        val key: String,             // 唯一key = pluginId:extensionPoint:id
+        val pluginId: String,
+        val extensionPoint: String,  // 扩展点位置（UIExtensionPoints常量）
+        val actionId: String,        // 按钮ID（插件内唯一）
+        val tooltip: String,         // 提示文本/按钮文字
+        val priority: Int,           // 优先级（数字越小越靠前）
+        val onClick: Runnable        // 点击回调
+    )
+    val toolbarActionEntries = mutableStateListOf<ToolbarActionEntry>()
+
+    // ========== 插件UI扩展：菜单项 ==========
+    /**
+     * 菜单项条目（插件通过 plugin.ui.addMenuItem 注册）
+     */
+    data class MenuItemEntry(
+        val key: String,
+        val pluginId: String,
+        val extensionPoint: String,
+        val itemId: String,
+        val title: String,
+        val priority: Int,
+        val onClick: Runnable
+    )
+    val menuItemEntries = mutableStateListOf<MenuItemEntry>()
+
     // 当前主页项目列表数据（供插件读取）
     val currentProjectItems = mutableStateListOf<ProjectItem>()
     
@@ -487,11 +517,8 @@ object PluginManager {
         quickActionsMap.keys.removeAll { it.startsWith("${pluginId}_") }
         updateQuickActions()
         
-        // 移除菜单项
-        UIState.removePluginMenuItems(pluginId)
-        
-        // 移除文件树菜单项
-        UIState.removeFileTreeMenuItems(pluginId)
+        // 移除菜单项、文件树菜单、工具栏/FAB/分类栏扩展
+        UIState.removePluginUI(pluginId)
         
         // 移除侧滑栏菜单项
         com.luaforge.studio.lxclua.plugin.state.NavigationState.clearPluginSidebarItems(pluginId)
@@ -510,14 +537,30 @@ object PluginManager {
         if (bottomPanelItems.none { it.key == activeBottomPanelKey.value }) {
             activeBottomPanelKey.value = bottomPanelItems.firstOrNull()?.key
         }
-        
+
+        // 移除UI扩展点（Compose 扩展）
+        com.luaforge.studio.lxclua.plugin.state.UIExtensionManager.unregisterExtensions(pluginId)
+
+        // 移除工具栏按钮扩展
+        toolbarActionEntries.removeAll { it.pluginId == pluginId }
+
+        // 移除菜单项扩展
+        menuItemEntries.removeAll { it.pluginId == pluginId }
+
+        // 移除项目卡片菜单项（注意：现有projectCardMenuItems不带pluginId，这里只清理以pluginId_开头的key）
+        projectCardMenuItems.removeAll { it.key.startsWith("${pluginId}_") }
+
+        // 移除该插件设置的所有项目徽章
+        val badgesToRemove = projectBadges.filter { it.value.pluginId == pluginId }.keys
+        badgesToRemove.forEach { projectBadges.remove(it) }
+
         // 移除注册的资源
         com.luaforge.studio.lxclua.plugin.bridge.PluginResourceRegistry.removeAllPluginAssets(pluginId)
         
         // 移除注册的快捷键
         com.luaforge.studio.lxclua.plugin.bridge.PluginShortcut.removeAllPluginShortcuts(pluginId)
         
-        // 移除注册     // 移除注册的语法高亮规则
+        // 移除注册的语法高亮规则
         com.luaforge.studio.lxclua.plugin.bridge.PluginSyntax.removePluginLanguages(pluginId)
         
         // 移除编辑器装饰
@@ -686,6 +729,10 @@ object PluginManager {
                 .apply()
                 
             scanPlugins(context)
+            
+            // 触发插件卸载完成事件
+            EventManager.fireEvent(PluginEvents.ON_PLUGIN_UNINSTALL, pluginId)
+            
             return success
         }
         return false
@@ -742,6 +789,9 @@ object PluginManager {
             
             scanPlugins(context)
             
+            // 触发插件安装成功事件
+            EventManager.fireEvent(PluginEvents.ON_PLUGIN_INSTALL, manifest.id)
+            
             return Result.success(manifest)
         } catch (e: Exception) {
             return Result.failure(e)
@@ -779,6 +829,9 @@ object PluginManager {
             sourceDir.copyRecursively(destDir, overwrite = true)
             
             scanPlugins(context)
+            
+            // 触发插件安装成功事件
+            EventManager.fireEvent(PluginEvents.ON_PLUGIN_INSTALL, manifest.id)
             
             return Result.success(manifest)
         } catch (e: Exception) {

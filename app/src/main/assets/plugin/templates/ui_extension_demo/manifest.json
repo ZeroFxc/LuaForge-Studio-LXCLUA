@@ -1,0 +1,10 @@
+{
+  "id": "ui_extension_demo",
+  "name": "UI扩展演示",
+  "version": "1.0.0",
+  "author": "LXC-LUA",
+  "description": "演示UI扩展点、工具栏按钮、菜单项、事件系统的完整用法",
+  "minApiVersion": 1,
+  "main": "main.lua",
+  "permissions": []
+}

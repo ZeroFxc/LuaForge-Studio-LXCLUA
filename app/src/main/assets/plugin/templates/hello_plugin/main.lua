@@ -158,6 +158,31 @@ plugin.menu.addQuickAction("check_locale", "语言环境", function()
     plugin.ui.showMessage("国际化信息", info)
 end)
 
+-- ============================================
+-- Java 反射 API 调用规则（重要！）
+-- ============================================
+-- 在 LXC-LUA 插件中，Java 对象是 UserData 类型。
+-- 通过 plugin.reflect 获取到的 Java 实例，调用其方法时
+-- 必须使用 . （点号），不能使用 : （冒号）。
+-- : 会隐式传入 self 作为第一个参数，导致参数错位报错。
+--
+-- 错误写法：
+--   local result = obj:someMethod(arg)
+--   local str = obj:toString()
+--
+-- 正确写法：
+--   local result = obj.someMethod(arg)
+--   local str = obj.toString()
+--
+-- 访问 Java 字段也用 . ：
+--   local value = obj.fieldName
+--
+-- 本插件使用 plugin.reflect 封装模块调用 Java：
+--   plugin.reflect.newInstance / callMethod / callStaticMethod /
+--   getField / setField / getStaticField / setStaticField / loadClass
+-- 详细用法可参考 java_api_demo 示例插件。
+-- ============================================
+
 -- 12. Java 反射测试 - 加载类
 plugin.menu.addQuickAction("java_load_class", "加载类", function()
     local clazz = plugin.reflect.loadClass("com.luaforge.studio.lxclua.plugin.ReflectionTestClass")

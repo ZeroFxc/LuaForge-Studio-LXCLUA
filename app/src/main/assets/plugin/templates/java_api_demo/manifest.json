@@ -1,0 +1,12 @@
+{
+  "id": "com.example.java_api_demo",
+  "name": "Java API 演示",
+  "version": "1.0.0",
+  "description": "演示Java反射API的正确用法，使用.调用方法而非:",
+  "author": "Nirithy",
+  "type": "lua",
+  "pluginType": "normal",
+  "main": "main.lua",
+  "apiVersion": 1,
+  "category": "demo"
+}

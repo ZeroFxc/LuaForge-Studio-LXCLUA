@@ -10,6 +10,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import com.luajava.LuaObject
 
 /**
  * 动画浮点状态包装器
@@ -39,13 +40,64 @@ class AnimatedFloat(
     /** Lua 可读 .value */
     fun getValue(): Float = animatedValue.value
 
+    /** Lua 通过 .value 访问时，luajava 会隐式传入 self 作为第一个参数，需要重载匹配 */
+    @Suppress("UNUSED_PARAMETER")
+    fun getValue(ignored: Any?): Float {
+        return getValue()
+    }
+
     /** Lua 设置目标值，触发动画 */
     fun setTarget(target: Float) {
         targetValue.value = target
     }
 
+    /** Lua 直接设置当前值（跳过动画，用于拖拽跟手） */
+    fun snapTo(value: Float) {
+        animatedValue.value = value
+        targetValue.value = value
+    }
+
+    /** 兼容 : 语法调用（多传 self 参数） */
+    @Suppress("UNUSED_PARAMETER")
+    fun setTarget(ignored: Any?, target: Float) {
+        targetValue.value = target
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    fun snapTo(ignored: Any?, value: Float) {
+        animatedValue.value = value
+        targetValue.value = value
+    }
+
     companion object {
-        /** 根据 Lua 传入的 spec 表创建 AnimationSpec */
+        /** 根据 Lua 传入的 spec 表（LuaObject）创建 AnimationSpec */
+        fun parseSpec(luaTable: LuaObject?): AnimationSpec<Float>? {
+            if (luaTable == null) return null
+            val type = try { luaTable.getField("type")?.getString() } catch (_: Exception) { "spring" }
+            when (type) {
+                "tween" -> {
+                    val durationMs = try { luaTable.getField("durationMs")?.getNumber()?.toInt() } catch (_: Exception) { 300 } ?: 300
+                    val easingName = try { luaTable.getField("easing")?.getString() } catch (_: Exception) { "FastOutSlowIn" } ?: "FastOutSlowIn"
+                    val easing: Easing = when (easingName) {
+                        "Linear" -> LinearEasing
+                        "FastOutSlowIn" -> FastOutSlowInEasing
+                        "FastOutLinearIn" -> FastOutLinearInEasing
+                        "LinearOutSlowIn" -> LinearOutSlowInEasing
+                        else -> FastOutSlowInEasing
+                    }
+                    return tween(durationMillis = durationMs, easing = easing)
+                }
+                "spring" -> {
+                    val dampingRatio = try { luaTable.getField("dampingRatio")?.getNumber()?.toFloat() } catch (_: Exception) { 0.55f } ?: 0.55f
+                    val stiffness = try { luaTable.getField("stiffness")?.getNumber()?.toFloat() } catch (_: Exception) { 600f } ?: 600f
+                    return spring(dampingRatio = dampingRatio, stiffness = stiffness)
+                }
+                null -> return spring()
+                else -> return spring()
+            }
+        }
+
+        /** 根据 Lua 传入的 spec 表（Map）创建 AnimationSpec（向后兼容） */
         fun parseSpec(spec: Map<*, *>?): AnimationSpec<Float> {
             if (spec == null) return spring()
             val type = spec["type"] as? String ?: "spring"

@@ -199,12 +199,19 @@ fun CodeEditorView(
                         lastSyntaxError = null
                         syntaxError = null
                     } else {
-                        val line = (result["line"] as? Number)?.toInt() ?: 1
-                        val message = result["message"] as? String ?: "UnknownError"
-                        val errorPair = line to message
-                        lastSyntaxError = errorPair
-                        if (expansionRatio < 0.4f) {
-                            syntaxError = errorPair
+                        // 解析器不可用时跳过（原生模块未加载），不作为语法错误显示
+                        val available = result["available"] as? Boolean ?: true
+                        if (!available) {
+                            lastSyntaxError = null
+                            syntaxError = null
+                        } else {
+                            val line = (result["line"] as? Number)?.toInt() ?: 1
+                            val message = result["message"] as? String ?: "UnknownError"
+                            val errorPair = line to message
+                            lastSyntaxError = errorPair
+                            if (expansionRatio < 0.4f) {
+                                syntaxError = errorPair
+                            }
                         }
                     }
                 }

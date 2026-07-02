@@ -1,0 +1,12 @@
+{
+  "id": "com.example.event_intercept_demo",
+  "name": "事件拦截演示",
+  "version": "1.0.0",
+  "description": "演示事件监听和拦截机制",
+  "author": "Nirithy",
+  "type": "lua",
+  "pluginType": "normal",
+  "main": "main.lua",
+  "apiVersion": 1,
+  "category": "demo"
+}

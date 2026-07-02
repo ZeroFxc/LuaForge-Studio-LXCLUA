@@ -63,6 +63,8 @@ import com.luaforge.studio.lxclua.ui.settings.SettingsManager
 import com.luaforge.studio.lxclua.utils.LogCatcher
 import com.luaforge.studio.lxclua.utils.NonBlockingToastState
 import com.luaforge.studio.lxclua.utils.TransitionUtil
+import com.luaforge.studio.lxclua.plugin.state.EventManager
+import com.luaforge.studio.lxclua.plugin.state.PluginEvents
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -243,13 +245,21 @@ fun CodeEditScreen(
         com.luaforge.studio.lxclua.plugin.PluginManager.activeViewModel = viewModel
         com.luaforge.studio.lxclua.plugin.PluginManager.activePanelState = panelState
         com.luaforge.studio.lxclua.plugin.PluginManager.currentProjectPath.value = projectPath
-        com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent("onEditorInit", projectPath)
+        // 触发编辑器初始化事件
+        com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent(PluginEvents.ON_EDITOR_INIT, projectPath)
+        EventManager.fireEvent(PluginEvents.ON_EDITOR_INIT, projectPath)
         com.luaforge.studio.lxclua.plugin.bridge.PluginShortcut.ensureSubscribed()
         onDispose {
+            // 触发编辑器关闭事件和当前文件关闭事件
+            com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent(PluginEvents.ON_EDITOR_CLOSE, projectPath)
+            EventManager.fireEvent(PluginEvents.ON_EDITOR_CLOSE, projectPath)
+            // 关闭所有打开的文件时触发 ON_FILE_CLOSE
+            viewModel.openFiles.forEach { fileState ->
+                EventManager.fireEvent(PluginEvents.ON_FILE_CLOSE, fileState.file.absolutePath)
+            }
             com.luaforge.studio.lxclua.plugin.PluginManager.activeViewModel = null
             com.luaforge.studio.lxclua.plugin.PluginManager.activePanelState = null
             com.luaforge.studio.lxclua.plugin.PluginManager.currentProjectPath.value = null
-            com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent("onEditorClose", projectPath)
         }
     }
 
@@ -285,6 +295,19 @@ fun CodeEditScreen(
             showInitialLoader = false
             viewModel.onInitialLoaderShown()
         }
+    }
+
+    // 文本变化防抖：监听 textChangeVersion，300ms 内无新变化才触发 ON_TEXT_CHANGED 事件
+    val textChangeVersion = viewModel.textChangeVersion
+    LaunchedEffect(textChangeVersion) {
+        if (textChangeVersion == 0) return@LaunchedEffect
+        delay(300)
+        val activeFile = viewModel.activeFileState ?: return@LaunchedEffect
+        EventManager.fireEvent(
+            PluginEvents.ON_TEXT_CHANGED,
+            activeFile.file.absolutePath,
+            activeFile.content
+        )
     }
 
     // 监听导航到 API 阅览器的请求
@@ -370,8 +393,18 @@ fun CodeEditScreen(
             }
             if (result.startsWith("error:")) {
                 toast.showToast(context.getString(R.string.code_editor_backup_failed, result.substringAfter("error: ")))
+                // 触发项目备份失败事件
+                EventManager.fireEvent(
+                    PluginEvents.ON_PROJECT_BACKUP,
+                    projectPath, "", false
+                )
             } else {
                 toast.showToast(context.getString(R.string.code_editor_backup_success, result))
+                // 触发项目备份成功事件
+                EventManager.fireEvent(
+                    PluginEvents.ON_PROJECT_BACKUP,
+                    projectPath, result, true
+                )
             }
             isBackingUp = false
         }

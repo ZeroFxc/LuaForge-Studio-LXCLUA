@@ -28,11 +28,15 @@ import com.google.gson.TypeAdapter
 import com.google.gson.reflect.TypeToken
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonWriter
+import com.luaforge.studio.lxclua.plugin.state.EventManager
+import com.luaforge.studio.lxclua.plugin.state.PluginEvents
 import com.luaforge.studio.lxclua.ui.theme.ThemeType
 import com.luaforge.studio.lxclua.utils.IconManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
@@ -94,6 +98,53 @@ private object PreferencesKeys {
 
     // 【新增】AI 流式输出开关
     val AI_STREAM_ENABLED = booleanPreferencesKey("ai_stream_enabled")
+
+    // 【新增】首页布局模式
+    val HOME_LAYOUT_MODE = stringPreferencesKey("home_layout_mode")
+    // 【新增】用户自定义项目分类（JSON 数组）
+    val HOME_CATEGORIES = stringPreferencesKey("home_categories")
+    // 【新增】显示"继续上次项目"提示
+    val HOME_SHOW_RECENT = booleanPreferencesKey("home_show_recent")
+    // 【新增】是否启用分类功能
+    val HOME_CATEGORY_ENABLED = booleanPreferencesKey("home_category_enabled")
+    // 【新增】上次打开的项目 ID
+    val LAST_OPENED_PROJECT_ID = stringPreferencesKey("last_opened_project_id")
+    // 【新增】项目标签（JSON数组）
+    val PROJECT_TAGS = stringPreferencesKey("project_tags")
+    // 【新增】项目标签映射（JSON对象 Map<String, Set<String>>）
+    val PROJECT_TAGS_MAP = stringPreferencesKey("project_tags_map")
+    // 【新增】最近项目列表（JSON数组，最多5个）
+    val RECENT_PROJECTS = stringPreferencesKey("recent_projects")
+    // 【新增】显示项目修改时间
+    val SHOW_PROJECT_MODIFIED_TIME = booleanPreferencesKey("show_project_modified_time")
+    // 【新增】显示项目路径
+    val SHOW_PROJECT_PATH = booleanPreferencesKey("show_project_path")
+    // 【新增】卡片圆角（0小/1中/2大）
+    val CARD_CORNER_RADIUS = intPreferencesKey("card_corner_radius")
+    // 【新增】自动打开上次项目
+    val AUTO_OPEN_LAST_PROJECT = booleanPreferencesKey("auto_open_last_project")
+    // 【新增】分类栏位置（TOP/BOTTOM）
+    val CATEGORY_BAR_POSITION = stringPreferencesKey("category_bar_position")
+    // 【新增】卡片密度（COMPACT/COMFORTABLE/LARGE）
+    val HOME_DENSITY = stringPreferencesKey("home_density")
+    // 【新增】项目封面映射（JSON对象 Map<String, ProjectCover>）
+    val PROJECT_COVER_MAP = stringPreferencesKey("project_cover_map")
+    // 【新增】自定义项目排序（JSON数组）
+    val CUSTOM_PROJECT_ORDER = stringPreferencesKey("custom_project_order")
+    // 【新增】备份路径
+    val BACKUP_PATH = stringPreferencesKey("backup_path")
+    // 【新增】显示标签筛选栏
+    val SHOW_TAG_FILTER_BAR = booleanPreferencesKey("show_tag_filter_bar")
+    // 【新增】显示最近项目条
+    val SHOW_RECENT_PROJECTS_BAR = booleanPreferencesKey("show_recent_projects_bar")
+    // 【新增】用户自定义模板列表（JSON数组）
+    val USER_TEMPLATES = stringPreferencesKey("user_templates")
+    // 【新增】最近项目卡片宽度（0=紧凑120dp, 1=标准150dp, 2=宽180dp）
+    val RECENT_CARD_WIDTH = intPreferencesKey("recent_card_width")
+    // 【新增】最近项目卡片自定义宽度(dp)，范围80-240，优先级高于recentCardWidth
+    val RECENT_CARD_WIDTH_DP = intPreferencesKey("recent_card_width_dp")
+    // 【新增】回收站保留天数（默认7天，范围3-30）
+    val TRASH_RETENTION_DAYS = intPreferencesKey("trash_retention_days")
 }
 
 // 排序方式枚举
@@ -101,7 +152,8 @@ enum class SortOrder {
     NAME_ASC,           // 名称 A-Z
     NAME_DESC,          // 名称 Z-A
     DATE_MODIFIED_NEWEST, // 修改时间 最新
-    DATE_MODIFIED_OLDEST  // 修改时间 最早
+    DATE_MODIFIED_OLDEST, // 修改时间 最早
+    CUSTOM              // 自定义拖拽排序
 }
 
 // Toast 位置枚举
@@ -109,9 +161,78 @@ enum class ToastPosition {
     TOP, BOTTOM
 }
 
+// 首页布局模式
+enum class HomeLayoutMode {
+    CARD,   // 大卡片展开
+    FLAT    // 扁平列表
+}
+
+// 卡片密度
+enum class HomeDensity {
+    COMPACT,    // 紧凑
+    COMFORTABLE, // 舒适
+    LARGE       // 大
+}
+
+// 分类栏位置
+enum class CategoryBarPosition {
+    TOP, BOTTOM
+}
+
+// 封面类型
+enum class CoverType {
+    SOLID_COLOR, IMAGE
+}
+
+// 项目标签数据类
+data class ProjectTag(
+    val id: String,
+    val name: String,
+    val color: Long = 0xFF6750A4
+)
+
+// 项目封面数据类
+data class ProjectCover(
+    val type: CoverType = CoverType.SOLID_COLOR,
+    val colorValue: Int = 0xFF6750A4.toInt(),
+    val imagePath: String = "",
+    val alpha: Float = 1.0f,  // 封面透明度 0.3~1.0
+    val offsetX: Float = 0f,  // 图片X轴偏移量（拖拽调整位置）
+    val offsetY: Float = 0f   // 图片Y轴偏移量（拖拽调整位置）
+)
+
+// 项目分类数据类
+data class ProjectCategory(
+    val id: String = "",
+    val name: String = "",
+    val projectIds: Set<String> = emptySet(),
+    val color: Long = 0xFF6750A4,
+    val icon: String? = null  // 分类图标，可空，null表示使用默认图标
+)
+
+// 模板类型枚举
+enum class TemplateType {
+    PRESET, // 预设模板（内置assets）
+    USER    // 用户自定义模板
+}
+
+// 项目模板数据类
+data class ProjectTemplate(
+    val id: String,
+    val name: String,
+    val description: String = "",
+    val type: TemplateType = TemplateType.USER,
+    val path: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
 object SettingsManager {
 
-    private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** 单线程调度器，确保写入操作严格按顺序执行，避免并发竞态 */
+    private val saveDispatcher = Dispatchers.IO.limitedParallelism(1)
+    private val saveScope = CoroutineScope(SupervisorJob() + saveDispatcher)
+    /** 待处理的保存任务，用于防抖合并多次快速保存 */
+    private var pendingSaveJob: Job? = null
 
     /** 自定义 Gson 实例，支持 Compose Color 的序列化 */
     private val gson: Gson by lazy {
@@ -160,6 +281,24 @@ object SettingsManager {
     fun updateSettings(newSettings: SettingsData) {
         currentSettings = newSettings
         notifyListeners()
+    }
+
+    /**
+     * 从磁盘重新加载设置（用于返回主页时自愈恢复）
+     * 仅在 settingsLoaded 为 true 时执行，避免覆盖未加载完成的设置
+     */
+    suspend fun reloadSettingsFromDisk(context: Context) {
+        if (!settingsLoaded) return
+        // 优先从 SD 卡加载（最新备份），回退到 DataStore
+        val sdSettings = loadSettingsFromSdCard(context)
+        if (sdSettings != null) {
+            updateSettings(sdSettings)
+            android.util.Log.d("SettingsManager", "设置已从 SD 卡重新加载")
+            return
+        }
+        // SD 卡无数据，从 DataStore 重新加载
+        loadSavedSettings(context)
+        android.util.Log.d("SettingsManager", "设置已从 DataStore 重新加载")
     }
 
     // 通知所有监听器
@@ -254,11 +393,11 @@ object SettingsManager {
         val completionCaseSensitive =
             preferences[PreferencesKeys.COMPLETION_CASE_SENSITIVE] ?: false
 
-        val selectedAppIconName = preferences[PreferencesKeys.SELECTED_APP_ICON] ?: "PLAY_STORE"
+        val selectedAppIconName = preferences[PreferencesKeys.SELECTED_APP_ICON] ?: "DEFAULT"
         val selectedAppIcon = try {
             IconManager.AppIcon.valueOf(selectedAppIconName)
         } catch (_: Exception) {
-            IconManager.AppIcon.PLAY_STORE
+            IconManager.AppIcon.DEFAULT
         }
 
         // 加载排序方式
@@ -306,6 +445,106 @@ object SettingsManager {
         // 【新增】加载 AI 流式输出开关
         val aiStreamEnabled = preferences[PreferencesKeys.AI_STREAM_ENABLED] ?: false
 
+        // 【新增】加载首页设置
+        val homeLayoutModeName = preferences[PreferencesKeys.HOME_LAYOUT_MODE] ?: "CARD"
+        val homeLayoutMode = try { HomeLayoutMode.valueOf(homeLayoutModeName) } catch (_: Exception) { HomeLayoutMode.CARD }
+        val homeCategoriesJson = preferences[PreferencesKeys.HOME_CATEGORIES] ?: "[]"
+        val homeCategories: List<ProjectCategory> = try {
+            val type = object : TypeToken<List<ProjectCategory>>() {}.type
+            val raw: List<ProjectCategory> = Gson().fromJson(homeCategoriesJson, type) ?: emptyList()
+            // 迁移：确保icon字段安全（旧数据可能无icon字段，Gson默认null，String?可接受）
+            raw.map { cat ->
+                // copy不传icon时默认保留原值，显式传递cat.icon确保无异常
+                cat.copy(icon = cat.icon)
+            }
+        } catch (_: Exception) { emptyList() }
+        val homeShowRecent = preferences[PreferencesKeys.HOME_SHOW_RECENT] ?: true
+        val homeCategoryEnabled = preferences[PreferencesKeys.HOME_CATEGORY_ENABLED] ?: true
+        val lastOpenedProjectId = preferences[PreferencesKeys.LAST_OPENED_PROJECT_ID] ?: ""
+
+        // 加载项目标签
+        val projectTagsJson = preferences[PreferencesKeys.PROJECT_TAGS] ?: "[]"
+        val homeProjectTags: List<ProjectTag> = try {
+            val type = object : TypeToken<List<ProjectTag>>() {}.type
+            Gson().fromJson(projectTagsJson, type)
+        } catch (_: Exception) { emptyList() }
+        val projectTagsMapJson = preferences[PreferencesKeys.PROJECT_TAGS_MAP] ?: "{}"
+        val projectTagsMap: Map<String, Set<String>> = try {
+            val type = object : TypeToken<Map<String, Set<String>>>() {}.type
+            Gson().fromJson(projectTagsMapJson, type)
+        } catch (_: Exception) { emptyMap() }
+
+        // 加载最近项目
+        val recentProjectsJson = preferences[PreferencesKeys.RECENT_PROJECTS] ?: "[]"
+        val recentProjects: List<String> = try {
+            val type = object : TypeToken<List<String>>() {}.type
+            Gson().fromJson(recentProjectsJson, type)
+        } catch (_: Exception) { emptyList() }
+
+        // 加载首页显示开关
+        val showProjectModifiedTime = preferences[PreferencesKeys.SHOW_PROJECT_MODIFIED_TIME] ?: true
+        val showProjectPath = preferences[PreferencesKeys.SHOW_PROJECT_PATH] ?: true
+        val cardCornerRadius = preferences[PreferencesKeys.CARD_CORNER_RADIUS] ?: 1
+        val autoOpenLastProject = preferences[PreferencesKeys.AUTO_OPEN_LAST_PROJECT] ?: false
+        val showTagFilterBar = preferences[PreferencesKeys.SHOW_TAG_FILTER_BAR] ?: true
+        val showRecentProjectsBar = preferences[PreferencesKeys.SHOW_RECENT_PROJECTS_BAR] ?: true
+
+        // 加载分类栏位置
+        val categoryBarPositionName = preferences[PreferencesKeys.CATEGORY_BAR_POSITION] ?: "TOP"
+        val categoryBarPosition = try { CategoryBarPosition.valueOf(categoryBarPositionName) } catch (_: Exception) { CategoryBarPosition.TOP }
+
+        // 加载卡片密度
+        val homeDensityName = preferences[PreferencesKeys.HOME_DENSITY] ?: "COMFORTABLE"
+        val homeDensity = try { HomeDensity.valueOf(homeDensityName) } catch (_: Exception) { HomeDensity.COMFORTABLE }
+
+        // 加载项目封面映射
+        val projectCoverMapJson = preferences[PreferencesKeys.PROJECT_COVER_MAP] ?: "{}"
+        val projectCoverMap: Map<String, ProjectCover> = try {
+            val type = object : TypeToken<Map<String, ProjectCover>>() {}.type
+            val raw: Map<String, ProjectCover> = Gson().fromJson(projectCoverMapJson, type) ?: emptyMap()
+            // 迁移旧数据：alpha为0（Gson默认值）时修正为1.0f
+            raw.mapValues { (_, cover) ->
+                var migrated = cover
+                if (migrated.alpha <= 0f) migrated = migrated.copy(alpha = 1.0f)
+                migrated
+            }
+        } catch (_: Exception) { emptyMap() }
+
+        // 加载自定义排序
+        val customProjectOrderJson = preferences[PreferencesKeys.CUSTOM_PROJECT_ORDER] ?: "[]"
+        val customProjectOrder: List<String> = try {
+            val type = object : TypeToken<List<String>>() {}.type
+            Gson().fromJson(customProjectOrderJson, type)
+        } catch (_: Exception) { emptyList() }
+
+        // 加载备份路径
+        val backupPath = preferences[PreferencesKeys.BACKUP_PATH] ?: ""
+
+        // 加载用户自定义模板列表
+        val userTemplatesJson = preferences[PreferencesKeys.USER_TEMPLATES] ?: "[]"
+        val userTemplates: List<ProjectTemplate> = try {
+            val type = object : TypeToken<List<ProjectTemplate>>() {}.type
+            Gson().fromJson(userTemplatesJson, type)
+        } catch (_: Exception) { emptyList() }
+
+        // 加载最近项目卡片宽度（默认1=标准）
+        val recentCardWidth = preferences[PreferencesKeys.RECENT_CARD_WIDTH] ?: 1
+        // 加载最近项目卡片自定义宽度(dp)，0表示未设置（使用旧枚举映射）
+        val recentCardWidthDpRaw = preferences[PreferencesKeys.RECENT_CARD_WIDTH_DP] ?: 0
+        // 迁移：如果未设置自定义宽度，从旧枚举映射
+        val recentCardWidthDp = if (recentCardWidthDpRaw in 80..240) {
+            recentCardWidthDpRaw
+        } else {
+            when (recentCardWidth) {
+                0 -> 120
+                2 -> 180
+                else -> 150
+            }
+        }
+
+        // 回收站保留天数
+        val trashRetentionDays = (preferences[PreferencesKeys.TRASH_RETENTION_DAYS] ?: 7).coerceIn(3, 30)
+
         val additionalProjectPathsJson = preferences[PreferencesKeys.ADDITIONAL_PROJECT_PATHS] ?: "[]"
         val additionalProjectPaths: List<String> = try {
             val type = object : TypeToken<List<String>>() {}.type
@@ -350,6 +589,29 @@ object SettingsManager {
                 hexColorHighlightEnabled = hexColorHighlightEnabled,
                 enableSwipeGesture = enableSwipeGesture,  // 【新增】
                 aiStreamEnabled = aiStreamEnabled,         // 【新增】
+                homeLayoutMode = homeLayoutMode,          // 【新增】
+                homeCategories = homeCategories,          // 【新增】
+                homeCategoryEnabled = homeCategoryEnabled, // 【新增】
+                homeProjectTags = homeProjectTags,        // 【新增】
+                projectTagsMap = projectTagsMap,          // 【新增】
+                recentProjects = recentProjects,          // 【新增】
+                showProjectModifiedTime = showProjectModifiedTime, // 【新增】
+                showProjectPath = showProjectPath,        // 【新增】
+                cardCornerRadius = cardCornerRadius,      // 【新增】
+                autoOpenLastProject = autoOpenLastProject, // 【新增】
+                categoryBarPosition = categoryBarPosition, // 【新增】
+                homeDensity = homeDensity,                // 【新增】
+                projectCoverMap = projectCoverMap,        // 【新增】
+                customProjectOrder = customProjectOrder,  // 【新增】
+                backupPath = backupPath,                  // 【新增】
+                showTagFilterBar = showTagFilterBar,      // 【新增】
+                showRecentProjectsBar = showRecentProjectsBar, // 【新增】
+                homeShowRecent = homeShowRecent,          // 【新增】
+                lastOpenedProjectId = lastOpenedProjectId, // 【新增】
+                userTemplates = userTemplates,            // 【新增】用户自定义模板
+                recentCardWidth = recentCardWidth,        // 【新增】最近项目卡片宽度
+                recentCardWidthDp = recentCardWidthDp,    // 【新增】最近项目卡片自定义宽度(dp)
+                trashRetentionDays = trashRetentionDays,  // 【新增】回收站保留天数
             )
         )
         settingsLoaded = true
@@ -418,18 +680,87 @@ object SettingsManager {
 
             // 【新增】保存 AI 流式输出开关
             preferences[PreferencesKeys.AI_STREAM_ENABLED] = currentSettings.aiStreamEnabled
+
+            // 【新增】保存首页设置
+            preferences[PreferencesKeys.HOME_LAYOUT_MODE] = currentSettings.homeLayoutMode.name
+            val homeCategoriesJson = Gson().toJson(currentSettings.homeCategories)
+            preferences[PreferencesKeys.HOME_CATEGORIES] = homeCategoriesJson
+            preferences[PreferencesKeys.HOME_SHOW_RECENT] = currentSettings.homeShowRecent
+            preferences[PreferencesKeys.HOME_CATEGORY_ENABLED] = currentSettings.homeCategoryEnabled
+            preferences[PreferencesKeys.CATEGORY_BAR_POSITION] = currentSettings.categoryBarPosition.name
+            preferences[PreferencesKeys.HOME_DENSITY] = currentSettings.homeDensity.name
+            preferences[PreferencesKeys.LAST_OPENED_PROJECT_ID] = currentSettings.lastOpenedProjectId
+
+            // 保存标签相关
+            preferences[PreferencesKeys.PROJECT_TAGS] = Gson().toJson(currentSettings.homeProjectTags)
+            preferences[PreferencesKeys.PROJECT_TAGS_MAP] = Gson().toJson(currentSettings.projectTagsMap)
+
+            // 保存最近项目
+            preferences[PreferencesKeys.RECENT_PROJECTS] = Gson().toJson(currentSettings.recentProjects)
+
+            // 保存首页显示开关
+            preferences[PreferencesKeys.SHOW_PROJECT_MODIFIED_TIME] = currentSettings.showProjectModifiedTime
+            preferences[PreferencesKeys.SHOW_PROJECT_PATH] = currentSettings.showProjectPath
+            preferences[PreferencesKeys.CARD_CORNER_RADIUS] = currentSettings.cardCornerRadius
+            preferences[PreferencesKeys.AUTO_OPEN_LAST_PROJECT] = currentSettings.autoOpenLastProject
+            preferences[PreferencesKeys.SHOW_TAG_FILTER_BAR] = currentSettings.showTagFilterBar
+            preferences[PreferencesKeys.SHOW_RECENT_PROJECTS_BAR] = currentSettings.showRecentProjectsBar
+
+            // 保存分类栏位置和密度
+            preferences[PreferencesKeys.CATEGORY_BAR_POSITION] = currentSettings.categoryBarPosition.name
+            preferences[PreferencesKeys.HOME_DENSITY] = currentSettings.homeDensity.name
+
+            // 保存封面和自定义排序
+            preferences[PreferencesKeys.PROJECT_COVER_MAP] = Gson().toJson(currentSettings.projectCoverMap)
+            preferences[PreferencesKeys.CUSTOM_PROJECT_ORDER] = Gson().toJson(currentSettings.customProjectOrder)
+
+            // 保存备份路径
+            preferences[PreferencesKeys.BACKUP_PATH] = currentSettings.backupPath
+
+            // 保存用户自定义模板列表
+            preferences[PreferencesKeys.USER_TEMPLATES] = Gson().toJson(currentSettings.userTemplates)
+
+            // 保存最近项目卡片宽度
+            preferences[PreferencesKeys.RECENT_CARD_WIDTH] = currentSettings.recentCardWidth
+            preferences[PreferencesKeys.RECENT_CARD_WIDTH_DP] = currentSettings.recentCardWidthDp
+            // 保存回收站保留天数
+            preferences[PreferencesKeys.TRASH_RETENTION_DAYS] = currentSettings.trashRetentionDays
         }
         // 同步保存到 SD 卡
         saveSettingsToSdCard(context)
         notifyListeners()
+        // 触发设置变更事件，传递当前完整设置的 JSON
+        try {
+            EventManager.fireEvent(PluginEvents.ON_SETTINGS_CHANGED, Gson().toJson(currentSettings))
+        } catch (_: Exception) {}
     }
 
-    // 保存设置（在后台协程中执行）
+    /**
+     * 保存设置（防抖：合并短时间内的多次调用，只执行最后一次写入）
+     * 使用单线程调度器确保写入严格按顺序执行，避免并发竞态导致数据丢失
+     */
     fun saveSettings(context: Context) {
         if (!settingsLoaded) {
             return
         }
-        saveScope.launch {
+        // 取消之前的待处理保存任务，合并为一次写入
+        pendingSaveJob?.cancel()
+        pendingSaveJob = saveScope.launch {
+            // 延迟200ms，合并快速连续的多次调用
+            delay(200)
+            saveSettingsAsync(context)
+        }
+    }
+
+    /**
+     * 立即同步保存设置（跳过防抖），用于关键场景如退出前保存
+     */
+    fun saveSettingsImmediate(context: Context) {
+        if (!settingsLoaded) {
+            return
+        }
+        pendingSaveJob?.cancel()
+        pendingSaveJob = saveScope.launch {
             saveSettingsAsync(context)
         }
     }
@@ -525,6 +856,142 @@ object SettingsManager {
     }
 
     /**
+     * 保存上次打开的项目 ID
+     * 在打开项目时调用，用于首页"继续上次项目"功能
+     */
+    fun saveLastOpenedProject(projectId: String, context: Context) {
+        val current = currentSettings
+        val newSettings = current.copy(
+            lastOpenedProjectId = projectId,
+            homeLayoutMode = current.homeLayoutMode ?: HomeLayoutMode.CARD,
+            homeCategories = current.homeCategories ?: emptyList(),
+        )
+        updateSettings(newSettings)
+        saveSettings(context)
+    }
+
+    /**
+     * 添加项目到最近打开列表（FIFO，去重，最多5个）
+     */
+    fun pushRecentProject(projectId: String, context: Context) {
+        val current = currentSettings
+        val list = current.recentProjects.toMutableList()
+        list.remove(projectId) // 去重
+        list.add(0, projectId) // 添加到头部
+        val trimmed = if (list.size > 5) list.take(5) else list
+        val newSettings = current.copy(recentProjects = trimmed)
+        updateSettings(newSettings)
+        saveSettings(context)
+    }
+
+    /**
+     * 获取备份目录
+     */
+    fun getBackupDirectory(): File {
+        val path = currentSettings.backupPath
+        val dir = if (path.isNotBlank()) {
+            File(path)
+        } else {
+            File(Environment.getExternalStorageDirectory(), "LXC-LUA/backups")
+        }
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    /**
+     * 获取用户模板目录
+     */
+    fun getTemplatesDirectory(): File {
+        val dir = File(Environment.getExternalStorageDirectory(), "LXC-LUA/templates")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    /**
+     * 添加用户模板到设置
+     * @param template 要添加的模板
+     * @param context 上下文用于保存设置
+     */
+    fun addUserTemplate(template: ProjectTemplate, context: Context) {
+        val current = currentSettings
+        val list = current.userTemplates.toMutableList()
+        // 移除同ID模板（去重）
+        list.removeAll { it.id == template.id }
+        list.add(template)
+        val newSettings = current.copy(userTemplates = list)
+        updateSettings(newSettings)
+        saveSettings(context)
+    }
+
+    /**
+     * 删除用户模板
+     * @param templateId 模板ID
+     * @param context 上下文用于保存设置
+     * @param deleteFile 是否同时删除模板zip文件
+     */
+    fun removeUserTemplate(templateId: String, context: Context, deleteFile: Boolean = true) {
+        val current = currentSettings
+        val list = current.userTemplates.toMutableList()
+        val removed = list.find { it.id == templateId }
+        list.removeAll { it.id == templateId }
+        val newSettings = current.copy(userTemplates = list)
+        updateSettings(newSettings)
+        saveSettings(context)
+        // 同时删除文件
+        if (deleteFile && removed != null && removed.path.isNotBlank()) {
+            try {
+                val file = File(removed.path)
+                if (file.exists()) file.delete()
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * 根据ID获取用户模板
+     */
+    fun getUserTemplate(templateId: String): ProjectTemplate? {
+        return currentSettings.userTemplates.find { it.id == templateId }
+    }
+
+    /**
+     * 设置项目标签
+     */
+    fun setProjectTags(projectId: String, tagIds: Set<String>, context: Context) {
+        val current = currentSettings
+        val newMap = current.projectTagsMap.toMutableMap()
+        newMap[projectId] = tagIds
+        val newSettings = current.copy(projectTagsMap = newMap)
+        updateSettings(newSettings)
+        saveSettings(context)
+    }
+
+    /**
+     * 设置项目封面
+     */
+    fun setProjectCover(projectId: String, cover: ProjectCover?, context: Context) {
+        val current = currentSettings
+        val newMap = current.projectCoverMap.toMutableMap()
+        if (cover != null) {
+            newMap[projectId] = cover
+        } else {
+            newMap.remove(projectId)
+        }
+        val newSettings = current.copy(projectCoverMap = newMap)
+        updateSettings(newSettings)
+        saveSettings(context)
+    }
+
+    /**
+     * 更新自定义项目排序
+     */
+    fun updateCustomOrder(orderedIds: List<String>, context: Context) {
+        val current = currentSettings
+        val newSettings = current.copy(customProjectOrder = orderedIds)
+        updateSettings(newSettings)
+        saveSettings(context)
+    }
+
+    /**
      * 保存设置到 SD 卡（JSON 格式）
      * 失败时静默忽略，不影响主流程
      */
@@ -549,8 +1016,76 @@ object SettingsManager {
             if (!file.exists() || !file.canRead()) return null
             val json = file.readText(Charsets.UTF_8)
             val settings = gson.fromJson(json, SettingsData::class.java)
+            // Gson 绕过构造函数，新字段可能为 null，需要兜底
+            // 不能用 copy()（会触发 Kotlin 非空检查），故直接构造
+            val safe = SettingsData(
+                themeType = settings.themeType ?: ThemeType.BLUE,
+                darkMode = settings.darkMode ?: DarkMode.FOLLOW_SYSTEM,
+                projectStoragePath = settings.projectStoragePath ?: "/storage/emulated/0/LXC-LUA/project/",
+                additionalProjectPaths = settings.additionalProjectPaths ?: emptyList(),
+                fontSizeScale = settings.fontSizeScale,
+                shapeSizeIndex = settings.shapeSizeIndex,
+                fontFamilyType = settings.fontFamilyType ?: FontFamilyType.DEFAULT,
+                dynamicColor = settings.dynamicColor,
+                editorFontType = settings.editorFontType ?: EditorFontType.GEORGIA_MONO_ITALIC,
+                customFontPath = settings.customFontPath ?: "",
+                enableTabHistory = settings.enableTabHistory,
+                classNameColor = settings.classNameColor,
+                localVariableColor = settings.localVariableColor,
+                keywordColor = settings.keywordColor,
+                functionNameColor = settings.functionNameColor,
+                literalColor = settings.literalColor,
+                commentColor = settings.commentColor,
+                selectedLineColor = settings.selectedLineColor,
+                indentGuideEnabled = settings.indentGuideEnabled,
+                selectedAppIcon = settings.selectedAppIcon ?: IconManager.AppIcon.DEFAULT,
+                completionCaseSensitive = settings.completionCaseSensitive,
+                sortOrder = settings.sortOrder ?: SortOrder.NAME_ASC,
+                pinnedProjects = settings.pinnedProjects ?: emptySet(),
+                smartSortingEnabled = settings.smartSortingEnabled,
+                toastPosition = settings.toastPosition ?: ToastPosition.BOTTOM,
+                toastBorderEnabled = settings.toastBorderEnabled,
+                editorWordWrap = settings.editorWordWrap,
+                languageTag = settings.languageTag ?: "zh",
+                hexColorHighlightEnabled = settings.hexColorHighlightEnabled,
+                enableSwipeGesture = settings.enableSwipeGesture,
+                aiStreamEnabled = settings.aiStreamEnabled,
+                homeLayoutMode = settings.homeLayoutMode ?: HomeLayoutMode.CARD,
+                // 迁移分类数据：确保icon字段不为非空null，修复旧数据Gson反序列化问题
+                homeCategories = (settings.homeCategories ?: emptyList()).map { cat ->
+                    cat.copy(icon = cat.icon)  // icon已改为可空，copy时直接传递
+                },
+                homeCategoryEnabled = settings.homeCategoryEnabled,
+                homeProjectTags = settings.homeProjectTags ?: emptyList(),
+                projectTagsMap = settings.projectTagsMap ?: emptyMap(),
+                recentProjects = settings.recentProjects ?: emptyList(),
+                showProjectModifiedTime = settings.showProjectModifiedTime,
+                showProjectPath = settings.showProjectPath,
+                cardCornerRadius = settings.cardCornerRadius,
+                autoOpenLastProject = settings.autoOpenLastProject,
+                categoryBarPosition = settings.categoryBarPosition ?: CategoryBarPosition.TOP,
+                homeDensity = settings.homeDensity ?: HomeDensity.COMFORTABLE,
+                // 迁移封面数据：alpha为0时修正为1.0f，旧数据无offsetX/offsetY时默认为0
+                projectCoverMap = (settings.projectCoverMap ?: emptyMap()).mapValues { (_, cover) ->
+                    var migrated = cover
+                    if (migrated.alpha <= 0f) migrated = migrated.copy(alpha = 1.0f)
+                    // Gson反序列化新字段缺失时会设为0f（Float默认值），0f是合理默认值，无需额外处理
+                    migrated
+                },
+                customProjectOrder = settings.customProjectOrder ?: emptyList(),
+                backupPath = settings.backupPath ?: "",
+                showTagFilterBar = settings.showTagFilterBar,
+                showRecentProjectsBar = settings.showRecentProjectsBar,
+                homeShowRecent = settings.homeShowRecent,
+                lastOpenedProjectId = settings.lastOpenedProjectId ?: "",
+                userTemplates = settings.userTemplates ?: emptyList(),
+                recentCardWidth = settings.recentCardWidth.takeIf { it in 0..2 } ?: 1,
+                recentCardWidthDp = (settings.recentCardWidthDp as? Int)?.takeIf { it in 80..240} ?: when(settings.recentCardWidth.takeIf { it in 0..2 } ?: 1) {
+                    0 -> 120; 2 -> 180; else -> 150
+                },
+            )
             android.util.Log.d("SettingsManager", "[SD卡] 设置已加载: ${file.absolutePath}")
-            settings
+            safe
         } catch (e: Exception) {
             android.util.Log.w("SettingsManager", "[SD卡] 加载设置失败: ${e.message}")
             null
@@ -578,7 +1113,7 @@ data class SettingsData(
     val commentColor: Color = Color(0xFFA7A8A8),
     val selectedLineColor: Color = Color(0x1A000000),
     val indentGuideEnabled: Boolean = true,
-    val selectedAppIcon: IconManager.AppIcon = IconManager.AppIcon.PLAY_STORE,
+    val selectedAppIcon: IconManager.AppIcon = IconManager.AppIcon.DEFAULT,
     val completionCaseSensitive: Boolean = false,
     val sortOrder: SortOrder = SortOrder.NAME_ASC,
     val pinnedProjects: Set<String> = emptySet(),
@@ -590,4 +1125,27 @@ data class SettingsData(
     val hexColorHighlightEnabled: Boolean = false,  // 【新增】十六进制颜色高亮开关
     val enableSwipeGesture: Boolean = false,         // 【新增】滑动手势开关
     val aiStreamEnabled: Boolean = false,             // 【新增】AI 流式输出开关
+    val homeLayoutMode: HomeLayoutMode = HomeLayoutMode.CARD,  // 【新增】首页布局模式
+    val homeCategories: List<ProjectCategory> = emptyList(),   // 【新增】项目分类
+    val homeCategoryEnabled: Boolean = true,          // 【新增】是否启用分类功能
+    val homeProjectTags: List<ProjectTag> = emptyList(), // 【新增】项目标签
+    val projectTagsMap: Map<String, Set<String>> = emptyMap(), // 【新增】项目标签映射
+    val recentProjects: List<String> = emptyList(), // 【新增】最近项目列表
+    val showProjectModifiedTime: Boolean = true, // 【新增】显示修改时间
+    val showProjectPath: Boolean = true, // 【新增】显示项目路径
+    val cardCornerRadius: Int = 1, // 【新增】卡片圆角 0小/1中/2大
+    val autoOpenLastProject: Boolean = false, // 【新增】自动打开上次项目
+    val categoryBarPosition: CategoryBarPosition = CategoryBarPosition.TOP, // 【新增】分类栏位置
+    val homeDensity: HomeDensity = HomeDensity.COMFORTABLE, // 【新增】卡片密度
+    val projectCoverMap: Map<String, ProjectCover> = emptyMap(), // 【新增】项目封面映射
+    val customProjectOrder: List<String> = emptyList(), // 【新增】自定义排序
+    val backupPath: String = "", // 【新增】备份路径
+    val showTagFilterBar: Boolean = true, // 【新增】显示标签筛选栏
+    val showRecentProjectsBar: Boolean = true, // 【新增】显示最近项目条
+    val homeShowRecent: Boolean = true,               // 【新增】显示"继续上次项目"
+    val lastOpenedProjectId: String = "",             // 【新增】上次打开的项目 ID
+    val userTemplates: List<ProjectTemplate> = emptyList(), // 【新增】用户自定义模板列表
+    val recentCardWidth: Int = 1,                     // 【新增】最近项目卡片宽度 0=紧凑120dp,1=标准150dp,2=宽180dp
+    val recentCardWidthDp: Int = 150,                 // 【新增】最近项目卡片自定义宽度(dp)，范围80-240
+    val trashRetentionDays: Int = 7,                  // 【新增】回收站保留天数，默认7天，范围3-30
 )

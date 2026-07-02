@@ -34,7 +34,12 @@ class LuaBrush(
     val centerX: Double = 0.5,
     val centerY: Double = 0.5,
     val radius: Double = 1.0,
-    val colors: List<Long> = emptyList()
+    val colors: List<Long> = emptyList(),
+    val startX: Double = 0.0,
+    val startY: Double = 0.0,
+    val endX: Double = 0.0,
+    val endY: Double = 1.0,
+    val tileMode: String = "Clamp"
 ) {
     fun toComposeBrush(): androidx.compose.ui.graphics.Brush {
         return when (type) {
@@ -43,6 +48,20 @@ class LuaBrush(
                     colors = colors.map { androidx.compose.ui.graphics.Color(it.toInt()) },
                     center = androidx.compose.ui.geometry.Offset(centerX.toFloat(), centerY.toFloat()),
                     radius = radius.toFloat()
+                )
+            }
+            "verticalGradient" -> {
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    colors = colors.map { androidx.compose.ui.graphics.Color(it.toInt()) },
+                    startY = startY.toFloat(),
+                    endY = endY.toFloat()
+                )
+            }
+            "linearGradient" -> {
+                androidx.compose.ui.graphics.Brush.linearGradient(
+                    colors = colors.map { androidx.compose.ui.graphics.Color(it.toInt()) },
+                    start = androidx.compose.ui.geometry.Offset(startX.toFloat(), startY.toFloat()),
+                    end = androidx.compose.ui.geometry.Offset(endX.toFloat(), endY.toFloat())
                 )
             }
             else -> androidx.compose.ui.graphics.Brush.radialGradient(

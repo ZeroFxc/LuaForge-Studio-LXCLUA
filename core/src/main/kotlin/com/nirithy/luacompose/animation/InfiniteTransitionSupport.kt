@@ -4,6 +4,8 @@ import com.nirithy.luacompose.logE
 import com.nirithy.luacompose.logW
 import androidx.compose.animation.core.InfiniteRepeatableSpec
 import androidx.compose.animation.core.InfiniteTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -59,13 +61,17 @@ fun InfiniteTransitionRenderer(node: ComposeNode) {
         "Restart" -> RepeatMode.Restart
         else -> RepeatMode.Reverse
     }
+    val easing = when (node.props["easing"] as? String) {
+        "Linear" -> LinearEasing
+        else -> FastOutSlowInEasing
+    }
 
     // 在 @Composable 上下文中创建动画（这里不会有 luajava 调用问题）
     val animValue by transition.animateFloat(
         initialValue = initialValue,
         targetValue = targetValue,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMs),
+            animation = tween(durationMs, easing = easing),
             repeatMode = repeatMode
         ),
         label = "LuaInfiniteFloat"
@@ -75,8 +81,9 @@ fun InfiniteTransitionRenderer(node: ComposeNode) {
     if (childrenFn != null) {
         // 将 animatedValue 作为 float 参数传给 Lua 函数
         // try-catch 只包裹 luajava 调用（非 @Composable），Compose 渲染放在外部
+        // ★ 转 Double 传给 Lua，避免 Java Float userdata 无法匹配 Double 参数
         val result: Any? = try {
-            childrenFn.call(animValue)
+            childrenFn.call(animValue.toDouble())
         } catch (e: Exception) {
             logE(TAG) { "children 函数调用失败: ${e.message}" }
             null

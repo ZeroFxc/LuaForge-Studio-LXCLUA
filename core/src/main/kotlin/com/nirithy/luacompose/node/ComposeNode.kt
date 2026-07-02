@@ -1,6 +1,7 @@
 package com.nirithy.luacompose.node
 
 import com.luajava.LuaObject
+import com.nirithy.luacompose.state.StateWrapper
 
 /**
  * Compose UI 节点
@@ -25,12 +26,52 @@ class ComposeNode(
         childrenFunc: LuaObject? = this.childrenFunc
     ): ComposeNode = ComposeNode(type, props, children, callbacks, childrenFunc)
 
-    inline fun <reified T> prop(key: String): T? = props[key] as? T
-    fun stringProp(key: String): String? = props[key] as? String
-    fun boolProp(key: String, default: Boolean = false): Boolean = (props[key] as? Boolean) ?: default
-    fun floatProp(key: String, default: Float = 0f): Float {
-        val v = props[key]
-        return when (v) { is Number -> v.toFloat(); else -> default }
+    /**
+     * 从 props 中获取值，自动解包 StateWrapper
+     * 在 @Composable 上下文中调用 getValue() 会自动订阅 Compose Snapshot 系统
+     */
+    inline fun <reified T> prop(key: String): T? {
+        val value = props[key] ?: return null
+        return when {
+            value is StateWrapper<*> -> (value.getValue() as? T) ?: (value as T)
+            else -> value as? T
+        }
     }
+
+    /** 从 props 中获取字符串，自动解包 StateWrapper */
+    fun stringProp(key: String): String? {
+        val value = props[key] ?: return null
+        if (value is StateWrapper<*>) return value.getValue()?.toString()
+        return value as? String
+    }
+
+    /** 从 props 中获取布尔值，自动解包 StateWrapper */
+    fun boolProp(key: String, default: Boolean = false): Boolean {
+        val value = props[key] ?: return default
+        if (value is StateWrapper<*>) return (value.getValue() as? Boolean) ?: default
+        return (value as? Boolean) ?: default
+    }
+
+    /** 从 props 中获取浮点数，自动解包 StateWrapper */
+    fun floatProp(key: String, default: Float = 0f): Float {
+        val value = props[key] ?: return default
+        if (value is StateWrapper<*>) {
+            val v = value.getValue()
+            return when (v) { is Number -> v.toFloat(); else -> default }
+        }
+        return when (value) { is Number -> value.toFloat(); else -> default }
+    }
+
     fun callback(key: String): LuaObject? = callbacks[key]
+
+    /**
+     * 释放节点树中所有 LuaObject 引用，帮助 Lua GC 回收
+     * 在旧节点树被替换前调用，避免内存泄漏
+     */
+    fun release() {
+        // 递归释放子节点
+        for (child in children) {
+            child.release()
+        }
+    }
 }

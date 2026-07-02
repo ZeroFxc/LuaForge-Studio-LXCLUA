@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import com.nirithy.luacompose.animation.AnimationPlugin
 import com.nirithy.luacompose.component.AndroidViewComponent
+import com.nirithy.luacompose.component.BackHandlerComponent
 import com.nirithy.luacompose.component.BoxWithConstraintsComponent
 import com.nirithy.luacompose.component.ComplementComponents
 import com.nirithy.luacompose.component.ContainerComponents
@@ -31,6 +32,10 @@ import com.nirithy.luacompose.state.StateWrapper
 import com.luajava.JavaFunction
 import com.luajava.LuaObject
 import com.luajava.LuaState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Dispatchers
 
 /**
  * Compose-Lua 桥接核心
@@ -55,6 +60,13 @@ object ComposeBridge {
     internal var activeLuaFunc: LuaObject? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /** 主线程协程作用域，用于 Animatable/delay 等异步操作 */
+    var mainScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        private set
+
+    /** Lua 线程锁，保护 LuaState 并发访问 */
+    val luaLock: Any = Any()
+
     // 状态缓存：每次刷新时按调用顺序返回同一 StateWrapper
     internal val stateCache = mutableListOf<StateWrapper<*>>()
     internal var stateIndex = 0
@@ -66,6 +78,9 @@ object ComposeBridge {
     // NavBackStack 缓存：按调用顺序返回同一实例
     internal val navBackStackCache = mutableListOf<com.nirithy.luacompose.navigation.NavBackStack>()
     internal var navBackStackIndex = 0
+
+    // 定时器任务追踪，用于 resetState 时统一清理
+    internal val timerJobs = mutableListOf<kotlinx.coroutines.Job>()
 
     // ========== SharedTransition 作用域栈 ==========
     /** 当前活跃的 SharedTransitionScope 栈，每层 SharedTransitionLayout 入栈，用于 sharedElement 修饰符获取上下文 */
@@ -180,6 +195,12 @@ object ComposeBridge {
     // 动画状态缓存
     internal val animatedFloats = mutableListOf<AnimatedFloat>()
     internal var animIndex = 0
+    // Dp 动画缓存
+    internal val animatedDps = mutableListOf<AnimatedDp>()
+    internal var animDpIndex = 0
+    // 颜色动画缓存
+    internal val animatedColors = mutableListOf<AnimatedColor>()
+    internal var animColorIndex = 0
 
     // ========== 注入入口 ==========
 
@@ -197,7 +218,7 @@ object ComposeBridge {
             LayoutComponents, DisplayComponents, InputComponents,
             ContainerComponents, BoxWithConstraintsComponent, IconComponent,
             AnimationPlugin, CanvasPlugin, EffectPlugin, Navigation3Plugin(),
-            AndroidViewComponent, ComplementComponents,
+            AndroidViewComponent, ComplementComponents, BackHandlerComponent,
         )
         PluginRegistry.applyToComponentRegistry()
         logD(TAG) { "[inject] 组件渲染器注册完成，共 ${ComponentRegistry.componentCount()} 个" }
@@ -216,6 +237,8 @@ object ComposeBridge {
         registerRememberFactory(L)
         registerRememberKeysFactory(L)
         registerDerivedStateFactory(L)
+        registerSpringFactory(L)
+        registerTweenFactory(L)
         registerAnimateFloatFactory(L)
         registerAnimateFloatRecomposeFactory(L)
         registerAnimateFloatTweenFactory(L)
@@ -244,6 +267,8 @@ object ComposeBridge {
         registerBrushRadialGradient(L)
         registerStrokeTable(L)
         registerColorCompanion(L)
+        registerSnackbarHostState(L)
+        registerShowSnackbar(L)
 
         // 枚举表
         registerFontWeightTable(L)
@@ -263,9 +288,6 @@ object ComposeBridge {
         registerDisposableEffectApi(L)
         registerKeyApi(L)
 
-        // 快速路径组件
-        registerFastPathComponents(L)
-
         // 导航 API
         Navigation3Plugin.injectNavigationApis(L)
 
@@ -273,19 +295,31 @@ object ComposeBridge {
         verifyAndSetGlobal(L)
     }
 
-    private fun resetState() {
+    internal fun resetState() {
         activeLuaFunc = null
         rootState.value = null
+        luaError.value = null
+        recomposeTrigger.value = 0L
         stateCache.clear(); stateIndex = 0
         rememberCache.clear(); rememberIndex = 0
         animatedFloats.clear(); animIndex = 0
-        navBackStackCache.clear(); activeBackStack = null
+        animatedDps.clear(); animDpIndex = 0
+        animatedColors.clear(); animColorIndex = 0
+        navBackStackCache.clear(); navBackStackIndex = 0
+        activeBackStack = null
         activeSharedTransitionScopes.clear()
         activeAnimatedVisibilityScopes.clear()
         backgroundColor.value = Color.Unspecified
         themeColors.value = themeColors.value // 重置为默认值
         themeTypography.value = themeTypography.value
         themeShapes.value = themeShapes.value
+        refreshPending = false
+        // 取消所有定时器任务
+        timerJobs.forEach { try { it.cancel() } catch (_: Exception) {} }
+        timerJobs.clear()
+        // 取消旧协程作用域并重建
+        mainScope.cancel()
+        mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     }
 
     private fun registerKspComponents() {
@@ -298,21 +332,6 @@ object ComposeBridge {
         } catch (e: Exception) {
             logW(TAG) { "[inject] KSP 生成的组件注册失败: ${e.message}" }
         }
-    }
-
-    private fun registerFastPathComponents(L: LuaState) {
-        val components = listOf("Column", "Row", "Box", "LazyColumn", "LazyRow", "Text", "Button", "TextButton",
-            "OutlinedButton", "IconButton", "TextField", "OutlinedTextField", "Checkbox", "Switch", "Slider",
-            "Card", "Surface", "Scaffold", "Spacer", "Divider", "VerticalDivider",
-            "AnimatedVisibility", "AnimatedContent", "Crossfade", "Canvas", "BoxWithConstraints",
-            "Icon", "InfiniteTransition", "LaunchedEffect", "key", "DisposableEffect",
-            "NavDisplay", "AndroidView", "FloatingActionButton", "AssistChip", "FilterChip",
-            "InputChip", "SuggestionChip", "TabRow", "Tab", "ScrollableTabRow",
-            "ModalNavigationDrawer", "SearchBar", "DatePicker", "DatePickerDialog",
-            "TimePicker", "LinearProgressIndicator", "CircularProgressIndicator",
-            "Badge", "BadgedBox", "SharedTransitionLayout")
-        logD(TAG) { "[inject] 注册 ${components.size} 个快速路径组件" }
-        for (c in components) registerComponentFactory(L, c, c)
     }
 
     private fun verifyAndSetGlobal(L: LuaState) {
@@ -412,7 +431,7 @@ object ComposeBridge {
             return
         }
         // 重置状态索引，确保 state() / remember() 按调用顺序返回缓存的同一对象
-        stateIndex = 0; rememberIndex = 0; animIndex = 0; navBackStackIndex = 0
+        stateIndex = 0; rememberIndex = 0; animIndex = 0; animDpIndex = 0; animColorIndex = 0; navBackStackIndex = 0
         // 依赖追踪：递增 buildCycle，同步所有 StateWrapper
         StateWrapper.syncBuildCycle(stateCache)
         try {
@@ -422,6 +441,11 @@ object ComposeBridge {
             when (result) {
                 is ComposeNode -> {
                     logI(TAG) { "[refreshNodeTree] 渲染成功! 根节点=${result.type}, 子节点=${result.children.size}个, 耗时=${elapsed}ms" }
+                    // 释放旧节点树中的 LuaObject 引用，帮助 Lua GC 回收
+                    val oldRoot = rootState.value
+                    if (oldRoot != null) {
+                        oldRoot.release()
+                    }
                     rootState.value = result
                     luaError.value = null
                     dumpNodeTree(result, 0)

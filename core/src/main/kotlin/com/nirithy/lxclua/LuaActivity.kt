@@ -644,6 +644,11 @@ open class LuaActivity : AppCompatActivity(), OnReceiveListener, LuaContext {
         sLuaActivityMap.remove(pageName)
         runFunc("onDestroy")
 
+        // 清理ComposeBridge全局状态（在luaState关闭前执行，避免回调访问已关闭状态）
+        try {
+            com.nirithy.luacompose.bridge.ComposeBridge.resetState()
+        } catch (_: Exception) {}
+
         if (mLuaDexLoader != null) {
             try {
                 mLuaDexLoader!!.cleanupOldFiles()

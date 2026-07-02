@@ -4,15 +4,52 @@ import android.content.Context
 import android.net.Uri
 import com.luaforge.studio.lxclua.ProjectItem
 import com.luaforge.studio.lxclua.ui.project.TemplateItem
+import com.luaforge.studio.lxclua.ui.settings.SettingsManager
+import com.luaforge.studio.lxclua.ui.settings.TemplateType
+import com.luaforge.studio.lxclua.ui.settings.ProjectTemplate
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Date
+import java.util.UUID
 import java.util.zip.ZipFile
 
 object ProjectUtil {
+
+    /**
+     * 缩短文件路径显示，将常见外部存储前缀替换为 /sdcard/
+     * 例如 /storage/emulated/0/xxx -> /sdcard/xxx
+     *      /storage/self/primary/xxx -> /sdcard/xxx
+     * @param path 原始文件路径
+     * @return 缩短后的路径
+     */
+    fun shortenPath(path: String): String {
+        if (path.isEmpty()) return path
+        // 按优先级依次替换常见前缀
+        val prefixes = listOf(
+            "/storage/emulated/0/",
+            "/storage/self/primary/",
+            "/sdcard/"
+        )
+        for (prefix in prefixes) {
+            if (path.startsWith(prefix, ignoreCase = true)) {
+                return "/sdcard/" + path.removePrefix(prefix).removePrefix("/")
+            }
+        }
+        // /storage/emulated/legacy 等变体
+        if (path.startsWith("/storage/emulated/", ignoreCase = true)) {
+            val afterStorage = path.removePrefix("/storage/emulated/")
+            val slashIdx = afterStorage.indexOf('/')
+            if (slashIdx >= 0) {
+                return "/sdcard/" + afterStorage.substring(slashIdx + 1)
+            }
+        }
+        return path
+    }
 
     /**
      * 从目录加载项目
@@ -156,7 +193,7 @@ object ProjectUtil {
     }
 
     /**
-     * 加载模板列表
+     * 加载模板列表（包括预设模板和用户自定义模板）
      */
     suspend fun loadTemplates(
         context: Context,
@@ -166,7 +203,7 @@ object ProjectUtil {
             try {
                 val templates = mutableListOf<TemplateItem>()
 
-                // 列出 assets/templates 目录下的 zip 文件
+                // 列出 assets/templates 目录下的 zip 文件（预设模板）
                 val assetManager = context.assets
                 val templateFiles = assetManager.list("templates") ?: emptyArray()
 
@@ -182,19 +219,32 @@ object ProjectUtil {
                         // 尝试提取预览图片
                         val previewUri = extractPreviewImage(context, fileName)
 
+                        // 预设模板的描述
+                        val description = when {
+                            fileName.equals("Default.zip", ignoreCase = true) -> "空白项目模板，包含基础项目结构"
+                            fileName.contains("lua", ignoreCase = true) -> "Lua脚本项目模板"
+                            else -> "预设模板"
+                        }
+
                         templates.add(
                             TemplateItem(
                                 name = templateName,
                                 zipFileName = fileName,
-                                previewUri = previewUri
+                                previewUri = previewUri,
+                                description = description
                             )
                         )
                     }
                 }
 
+                // 加载用户自定义模板（从设置中获取元数据，并结合文件系统）
+                val userTemplateItems = loadUserTemplateItems(context)
+                templates.addAll(userTemplateItems)
+
                 // 按名称排序，但把Default.zip放在第一个
                 templates.sortWith(
                     compareBy(
+                        { it.isUserTemplate }, // 预设模板排在前面
                         { !it.zipFileName.equals("Default.zip", ignoreCase = true) },
                         { it.name }
                     ))
@@ -270,7 +320,7 @@ object ProjectUtil {
     }
 
     /**
-     * 从缓存加载模板预览
+     * 从缓存加载模板预览（支持预设模板和用户模板）
      */
     fun loadTemplatePreview(
         context: Context,
@@ -287,7 +337,7 @@ object ProjectUtil {
     }
 
     /**
-     * 解压模板文件
+     * 解压模板文件（支持预设模板和用户模板）
      */
     fun extractTemplate(
         context: Context,
@@ -300,55 +350,61 @@ object ProjectUtil {
         val cacheDir = File(context.cacheDir, "template_extract")
         cacheDir.mkdirs()
 
-        // 从 assets 读取 zip 文件
-        val assetManager = context.assets
-        assetManager.open("templates/${template.zipFileName}").use { inputStream ->
-            // 将 zip 文件复制到临时文件
+        // 获取模板zip文件：用户模板从文件系统读取，预设模板从assets复制到临时文件
+        val zipFile: File = if (template.isUserTemplate && template.filePath != null) {
+            File(template.filePath)
+        } else {
+            // 从 assets 读取 zip 文件到临时文件
+            val assetManager = context.assets
             val tempZipFile = File(cacheDir, "${template.zipFileName}.temp")
-            FileOutputStream(tempZipFile).use { outputStream ->
-                inputStream.copyTo(outputStream)
+            assetManager.open("templates/${template.zipFileName}").use { inputStream ->
+                FileOutputStream(tempZipFile).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
             }
+            tempZipFile
+        }
 
-            // 解压 zip 文件
-            ZipFile(tempZipFile).use { zipFile ->
-                for (entry in zipFile.entries()) {
-                    // 跳过 Preview.png 文件
-                    if (entry.name.equals("Preview.png", ignoreCase = true)) {
-                        continue
+        // 解压 zip 文件
+        ZipFile(zipFile).use { zip ->
+            for (entry in zip.entries()) {
+                // 跳过 Preview.png 文件
+                if (entry.name.equals("Preview.png", ignoreCase = true)) {
+                    continue
+                }
+
+                val entryFile = File(projectDir, entry.name)
+
+                if (entry.isDirectory) {
+                    entryFile.mkdirs()
+                } else {
+                    // 确保父目录存在
+                    entryFile.parentFile?.mkdirs()
+
+                    // 写入文件
+                    zip.getInputStream(entry).use { zipInputStream ->
+                        FileOutputStream(entryFile).use { fileOutputStream ->
+                            zipInputStream.copyTo(fileOutputStream)
+                        }
                     }
 
-                    val entryFile = File(projectDir, entry.name)
-
-                    if (entry.isDirectory) {
-                        entryFile.mkdirs()
-                    } else {
-                        // 确保父目录存在
-                        entryFile.parentFile?.mkdirs()
-
-                        // 写入文件
-                        zipFile.getInputStream(entry).use { zipInputStream ->
-                            FileOutputStream(entryFile).use { fileOutputStream ->
-                                zipInputStream.copyTo(fileOutputStream)
-                            }
+                    // 如果是 settings.json 或 main.lua，需要替换内容
+                    when {
+                        entry.name.endsWith("settings.json") -> {
+                            updateSettingsFile(entryFile, projectName, packageName, debugMode)
                         }
 
-                        // 如果是 settings.json 或 main.lua，需要替换内容
-                        when {
-                            entry.name.endsWith("settings.json") -> {
-                                // 这里不处理globalUtils，由saveSettingsFile处理
-                                updateSettingsFile(entryFile, projectName, packageName, debugMode)
-                            }
-
-                            entry.name.endsWith("main.lua") -> {
-                                updateMainLuaFile(entryFile, projectName)
-                            }
+                        entry.name.endsWith("main.lua") -> {
+                            updateMainLuaFile(entryFile, projectName)
                         }
                     }
                 }
             }
+        }
 
-            // 清理临时文件
-            tempZipFile.delete()
+        // 清理临时文件（仅清理assets临时文件）
+        if (!template.isUserTemplate || template.filePath == null) {
+            zipFile.delete()
         }
 
         // 清理缓存目录
@@ -596,6 +652,332 @@ object ProjectUtil {
             }
 
             info
+        }
+    }
+
+    /**
+     * 备份项目到zip文件
+     * @param projectDir 项目目录
+     * @param backupDir 备份目录
+     * @param backupName 备份文件名（不含扩展名）
+     * @return 备份文件，失败返回null
+     */
+    fun backupProjectToZip(projectDir: File, backupDir: File, backupName: String): File? {
+        return try {
+            if (!backupDir.exists()) backupDir.mkdirs()
+            val zipFile = File(backupDir, "$backupName.zip")
+            FileUtil.createZip(projectDir, zipFile)
+            zipFile
+        } catch (e: Exception) {
+            android.util.Log.e("ProjectUtil", "备份项目失败", e)
+            null
+        }
+    }
+
+    /**
+     * 从zip备份还原项目到目标目录
+     * @return 是否成功
+     */
+    fun restoreProjectFromZip(zipFile: File, targetDir: File): Boolean {
+        return try {
+            if (targetDir.exists()) {
+                targetDir.deleteRecursively()
+            }
+            targetDir.mkdirs()
+            FileUtil.extractZip(zipFile, targetDir)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("ProjectUtil", "还原项目失败", e)
+            false
+        }
+    }
+
+    /**
+     * 从用户模板目录加载模板项（结合SettingsManager元数据）
+     */
+    private fun loadUserTemplateItems(context: Context): List<TemplateItem> {
+        val templateDir = SettingsManager.getTemplatesDirectory()
+        if (!templateDir.exists() || !templateDir.isDirectory) return emptyList()
+
+        // 获取设置中保存的模板元数据（id -> ProjectTemplate）
+        val metadataMap = SettingsManager.currentSettings.userTemplates.associateBy { it.id }
+
+        val zipFiles = templateDir.listFiles()
+            ?.filter { it.isFile && it.extension.equals("zip", ignoreCase = true) }
+            ?: return emptyList()
+
+        // 清理元数据中不存在对应文件的条目（可选，保持一致性）
+        val existingFilePaths = zipFiles.map { it.absolutePath }.toSet()
+        val staleMetadata = metadataMap.values.filter { it.path !in existingFilePaths }
+        if (staleMetadata.isNotEmpty()) {
+            // 异步清理失效的元数据
+            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                try {
+                    val current = SettingsManager.currentSettings
+                    val validTemplates = current.userTemplates.filter { it.path in existingFilePaths }
+                    SettingsManager.updateSettings(current.copy(userTemplates = validTemplates))
+                    SettingsManager.saveSettings(context)
+                } catch (_: Exception) {}
+            }
+        }
+
+        return zipFiles.mapNotNull { zipFile ->
+            try {
+                // 查找对应的元数据（通过路径匹配）
+                val meta = metadataMap.values.find { it.path == zipFile.absolutePath }
+                val templateId = meta?.id ?: "user_${zipFile.nameWithoutExtension}"
+                val displayName = meta?.name ?: zipFile.nameWithoutExtension
+                val description = meta?.description ?: "用户自定义模板"
+
+                // 提取预览图
+                val previewUri = extractPreviewFromUserZip(context, zipFile)
+
+                TemplateItem(
+                    name = displayName,
+                    zipFileName = "user_${zipFile.name}",
+                    previewPath = null,
+                    previewUri = previewUri,
+                    isUserTemplate = true,
+                    filePath = zipFile.absolutePath,
+                    description = description
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    /**
+     * 从用户模板目录加载模板（公开方法，保持向后兼容）
+     */
+    fun loadUserTemplates(context: Context): List<TemplateItem> {
+        return loadUserTemplateItems(context)
+    }
+
+    /**
+     * 从用户zip模板提取预览图
+     */
+    private fun extractPreviewFromUserZip(context: Context, zipFile: File): Uri? {
+        return try {
+            val cacheDir = File(context.cacheDir, "template_previews")
+            cacheDir.mkdirs()
+            val previewFile = File(cacheDir, "user_${zipFile.name}.preview.png")
+            if (previewFile.exists()) return Uri.fromFile(previewFile)
+
+            ZipFile(zipFile).use { zip ->
+                val entry = zip.entries().toList().find {
+                    it.name.equals("Preview.png", ignoreCase = true) ||
+                            it.name.equals("icon.png", ignoreCase = true)
+                } ?: return null
+                zip.getInputStream(entry).use { input ->
+                    FileOutputStream(previewFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+            Uri.fromFile(previewFile)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 从Uri导入模板zip文件（用于文件选择器返回的Uri）
+     * 将zip文件复制到用户模板目录，并在SettingsManager中注册元数据
+     * @return 导入成功返回TemplateItem，失败返回null
+     */
+    fun importTemplateFromUri(context: Context, uri: Uri, templateName: String? = null): TemplateItem? {
+        return try {
+            val templateDir = SettingsManager.getTemplatesDirectory()
+
+            // 从Uri获取原始文件名
+            val originalName = getFileNameFromUri(context, uri) ?: "template_${System.currentTimeMillis()}.zip"
+            val baseName = templateName ?: originalName.substringBeforeLast(".")
+            val safeBaseName = baseName.replace(Regex("[^a-zA-Z0-9_\\-\\u4e00-\\u9fa5]"), "_")
+
+            // 生成目标文件名（避免重名）
+            var destFile = File(templateDir, "$safeBaseName.zip")
+            var counter = 1
+            while (destFile.exists()) {
+                destFile = File(templateDir, "${safeBaseName}_$counter.zip")
+                counter++
+            }
+
+            // 复制文件
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(destFile).use { output ->
+                    input.copyTo(output)
+                }
+            } ?: return null
+
+            // 验证zip文件有效性
+            try {
+                ZipFile(destFile).use { /* 能打开即有效 */ }
+            } catch (e: Exception) {
+                destFile.delete()
+                return null
+            }
+
+            // 生成模板ID并注册元数据
+            val templateId = UUID.randomUUID().toString()
+            val projectTemplate = ProjectTemplate(
+                id = templateId,
+                name = destFile.nameWithoutExtension,
+                description = "用户导入的模板",
+                type = TemplateType.USER,
+                path = destFile.absolutePath,
+                createdAt = System.currentTimeMillis()
+            )
+            SettingsManager.addUserTemplate(projectTemplate, context)
+
+            // 提取预览图
+            val previewUri = extractPreviewFromUserZip(context, destFile)
+
+            TemplateItem(
+                name = destFile.nameWithoutExtension,
+                zipFileName = "user_${destFile.name}",
+                previewUri = previewUri,
+                isUserTemplate = true,
+                filePath = destFile.absolutePath,
+                description = "用户导入的模板"
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("ProjectUtil", "从Uri导入模板失败", e)
+            null
+        }
+    }
+
+    /**
+     * 从Uri获取文件名
+     */
+    private fun getFileNameFromUri(context: Context, uri: Uri): String? {
+        return try {
+            var fileName: String? = null
+            if (uri.scheme == "content") {
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val displayNameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (displayNameIndex != -1) {
+                            fileName = cursor.getString(displayNameIndex)
+                        }
+                    }
+                }
+            }
+            if (fileName == null) {
+                fileName = uri.path?.substringAfterLast("/")
+            }
+            fileName
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 导入模板zip到用户模板目录（从File对象，保持向后兼容）
+     * @return 是否成功
+     */
+    fun importTemplateFromZip(context: Context, zipFile: File): Boolean {
+        return try {
+            val templateDir = SettingsManager.getTemplatesDirectory()
+            val destFile = File(templateDir, zipFile.name)
+            // 如果同名文件存在，加时间戳
+            val finalFile = if (destFile.exists()) {
+                val name = zipFile.nameWithoutExtension
+                val ext = zipFile.extension
+                val ts = System.currentTimeMillis()
+                File(templateDir, "${name}_$ts.$ext")
+            } else {
+                destFile
+            }
+            zipFile.copyTo(finalFile, overwrite = true)
+
+            // 注册元数据
+            val templateId = UUID.randomUUID().toString()
+            val projectTemplate = ProjectTemplate(
+                id = templateId,
+                name = finalFile.nameWithoutExtension,
+                description = "用户导入的模板",
+                type = TemplateType.USER,
+                path = finalFile.absolutePath,
+                createdAt = System.currentTimeMillis()
+            )
+            SettingsManager.addUserTemplate(projectTemplate, context)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("ProjectUtil", "导入模板失败", e)
+            false
+        }
+    }
+
+    /**
+     * 删除用户模板（同时删除文件和设置中的元数据）
+     */
+    fun deleteUserTemplate(context: Context, template: TemplateItem): Boolean {
+        return try {
+            if (!template.isUserTemplate) return false
+
+            // 从SettingsManager中查找并移除元数据
+            val current = SettingsManager.currentSettings
+            val metaToRemove = current.userTemplates.find { it.path == template.filePath }
+            if (metaToRemove != null) {
+                SettingsManager.removeUserTemplate(metaToRemove.id, context, deleteFile = true)
+            } else {
+                // 元数据不存在但文件存在，直接删除文件
+                if (!template.filePath.isNullOrBlank()) {
+                    val file = File(template.filePath)
+                    if (file.exists()) file.delete()
+                }
+            }
+
+            // 清理预览缓存
+            try {
+                val cacheDir = File(context.cacheDir, "template_previews")
+                val previewFile = File(cacheDir, "${template.zipFileName}.preview.png")
+                if (previewFile.exists()) previewFile.delete()
+            } catch (_: Exception) {}
+
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("ProjectUtil", "删除用户模板失败", e)
+            false
+        }
+    }
+
+    /**
+     * 保存项目为用户模板
+     */
+    fun saveProjectAsTemplate(projectDir: File, templateName: String, context: Context): File? {
+        return try {
+            val templateDir = SettingsManager.getTemplatesDirectory()
+            val safeName = templateName.replace(Regex("[^a-zA-Z0-9_\\-\\u4e00-\\u9fa5]"), "_")
+            val zipFile = File(templateDir, "$safeName.zip")
+
+            // 避免重名
+            var finalFile = zipFile
+            var counter = 1
+            while (finalFile.exists()) {
+                finalFile = File(templateDir, "${safeName}_$counter.zip")
+                counter++
+            }
+
+            FileUtil.createZip(projectDir, finalFile)
+
+            // 注册元数据
+            val templateId = UUID.randomUUID().toString()
+            val projectTemplate = ProjectTemplate(
+                id = templateId,
+                name = finalFile.nameWithoutExtension,
+                description = "从项目保存的模板",
+                type = TemplateType.USER,
+                path = finalFile.absolutePath,
+                createdAt = System.currentTimeMillis()
+            )
+            SettingsManager.addUserTemplate(projectTemplate, context)
+
+            finalFile
+        } catch (e: Exception) {
+            android.util.Log.e("ProjectUtil", "保存模板失败", e)
+            null
         }
     }
 }

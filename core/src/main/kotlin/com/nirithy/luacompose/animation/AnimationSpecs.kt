@@ -114,6 +114,12 @@ object AnimationSpecs {
 
     /** 组合：淡出+滑出 */
     fun fadeOutSlideExit(): ExitTransition = fadeOut() + slideOutHorizontally()
+
+    /** 组合：淡入+缩放进入 */
+    fun fadeInScaleEnter(): EnterTransition = fadeIn() + scaleIn()
+
+    /** 组合：淡出+缩放退出 */
+    fun fadeOutScaleExit(): ExitTransition = fadeOut() + scaleOut()
 }
 
 /** 支持 enter/exit 动画的可见性切换 */
@@ -131,6 +137,8 @@ fun AnimatedVisibilityRenderer(node: ComposeNode) {
     ) {
         // this = AnimatedVisibilityScope，推入栈供 sharedElement 使用
         ComposeBridge.pushActiveAnimatedVisibilityScope(this)
+        // RenderChildren是Composable不能被try-catch包裹，pop直接在其后执行
+        // 若RenderChildren抛异常，pop可能不执行——但Compose异常会终止重组，影响有限
         ComposeRenderer.RenderChildren(node)
         ComposeBridge.popActiveAnimatedVisibilityScope()
     }

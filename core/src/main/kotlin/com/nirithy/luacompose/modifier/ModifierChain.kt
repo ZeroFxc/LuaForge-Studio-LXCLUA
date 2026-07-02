@@ -36,10 +36,13 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import com.luajava.LuaObject
+import kotlin.math.roundToInt
 import com.nirithy.luacompose.bridge.ComposeBridge
 import com.nirithy.luacompose.draw.DrawScopeWrapper
 import com.nirithy.luacompose.gesture.GestureConfig
@@ -104,6 +107,16 @@ class ModifierChain {
     fun height(h: Float): ModifierChain { modifier = modifier.height(h.dp); return this }
     fun aspectRatio(ratio: Float): ModifierChain { modifier = modifier.aspectRatio(ratio); return this }
 
+    /** 按比例填充最大宽度（Lambda 版本），回调返回 0~1 的比例 */
+    fun fillMaxWidthLambda(callback: com.luajava.LuaObject): ModifierChain {
+        modifier = modifier.fillMaxWidth(
+            try {
+                synchronized(ComposeBridge.luaLock) { callback.call() }?.let { (it as? Number)?.toFloat() } ?: 1f
+            } catch (_: Exception) { 1f }
+        )
+        return this
+    }
+
     /** 尺寸约束：最小/最大宽高 */
     fun widthIn(min: Float, max: Float): ModifierChain {
         modifier = modifier.widthIn(min.dp, max.dp); return this
@@ -120,6 +133,12 @@ class ModifierChain {
     fun offset(x: Float, y: Float): ModifierChain {
         modifier = modifier.offset(x.dp, y.dp); return this
     }
+
+    /** 像素级偏移（px 单位），用于拖拽等需要像素精度的场景，与 dragAmount 单位一致 */
+    fun offsetPx(x: Float, y: Float): ModifierChain {
+        modifier = modifier.offset { IntOffset(x.roundToInt(), y.roundToInt()) }
+        return this
+    }
     /**
      * 动态偏移（Lambda 版本），Lua 回调应返回 {x=..., y=...} 表
      * 读取 recomposeTrigger 确保 Compose 在 mutableState 变更时重新计算偏移，
@@ -132,12 +151,22 @@ class ModifierChain {
             @Suppress("UNUSED_EXPRESSION")
             ComposeBridge.recomposeTrigger.value
             try {
-                val result = callback.call()
-                (result as? Map<*, *>)?.let {
-                    val px = ((it["x"] as? Number)?.toFloat() ?: 0f)
-                    val py = ((it["y"] as? Number)?.toFloat() ?: 0f)
-                    androidx.compose.ui.unit.IntOffset(px.toInt(), py.toInt())
-                } ?: androidx.compose.ui.unit.IntOffset.Zero
+                val result = synchronized(ComposeBridge.luaLock) { callback.call() }
+                // Lua 返回的表是 LuaObject，不是 Map，需要用 getField 取值
+                val px: Float
+                val py: Float
+                if (result is LuaObject) {
+                    val xNum = try { result.getField("x")?.getNumber()?.toFloat() } catch (_: Exception) { null }
+                    val yNum = try { result.getField("y")?.getNumber()?.toFloat() } catch (_: Exception) { null }
+                    px = xNum ?: 0f
+                    py = yNum ?: 0f
+                } else if (result is Map<*, *>) {
+                    px = ((result["x"] as? Number)?.toFloat() ?: 0f)
+                    py = ((result["y"] as? Number)?.toFloat() ?: 0f)
+                } else {
+                    px = 0f; py = 0f
+                }
+                androidx.compose.ui.unit.IntOffset(px.toInt(), py.toInt())
             } catch (e: Exception) {
                 androidx.compose.ui.unit.IntOffset.Zero
             }
@@ -157,7 +186,7 @@ class ModifierChain {
             @Suppress("UNUSED_EXPRESSION")
             ComposeBridge.recomposeTrigger.value
             try {
-                val degrees = (callback.call() as? Number)?.toFloat() ?: 0f
+                val degrees = (synchronized(ComposeBridge.luaLock) { callback.call() } as? Number)?.toFloat() ?: 0f
                 this.rotationZ = degrees
             } catch (_: Exception) {}
         }
@@ -197,7 +226,7 @@ class ModifierChain {
             @Suppress("UNUSED_EXPRESSION")
             ComposeBridge.recomposeTrigger.value
             try {
-                val result = callback.call()
+                val result = synchronized(ComposeBridge.luaLock) { callback.call() }
                 (result as? Map<*, *>)?.let {
                     this.translationX = ((it["translationX"] as? Number)?.toFloat() ?: 0f)
                     this.translationY = ((it["translationY"] as? Number)?.toFloat() ?: 0f)
@@ -224,11 +253,15 @@ class ModifierChain {
     fun padding(all: Float): ModifierChain {
         modifier = modifier.padding(all.dp); return this
     }
-    /** 四边独立内边距（Lua 可以直接 padding(16, 0, 0, 0)） */
+    /** 水平+垂直内边距（padding(horizontal, vertical)） */
+    fun padding(horizontal: Float, vertical: Float): ModifierChain {
+        modifier = modifier.padding(horizontal = horizontal.dp, vertical = vertical.dp); return this
+    }
+    /** 四边独立内边距 */
     fun padding(start: Float, top: Float, end: Float, bottom: Float): ModifierChain {
         modifier = modifier.padding(start = start.dp, top = top.dp, end = end.dp, bottom = bottom.dp); return this
     }
-    /** 水平+垂直内边距 */
+    /** 水平+垂直内边距（别名，兼容旧代码） */
     fun paddingHv(horizontal: Float, vertical: Float): ModifierChain {
         modifier = modifier.padding(horizontal = horizontal.dp, vertical = vertical.dp); return this
     }
@@ -347,7 +380,7 @@ class ModifierChain {
     /** 元素尺寸变化时回调，传入 width, height（像素） */
     fun onSizeChanged(callback: LuaObject): ModifierChain {
         modifier = modifier.onSizeChanged { size ->
-            try { callback.call(size.width.toDouble(), size.height.toDouble()) }
+            try { synchronized(ComposeBridge.luaLock) { callback.call(size.width.toDouble(), size.height.toDouble()) } }
             catch (_: Exception) {}
         }
         return this
@@ -355,13 +388,33 @@ class ModifierChain {
 
     // ========== 裁剪 ==========
 
-    /** 裁剪为圆角矩形 */
+    /** 裁剪为圆角矩形（传入半径 dp） */
     fun clip(radius: Float): ModifierChain {
         modifier = modifier.clip(RoundedCornerShape(radius.dp)); return this
+    }
+    /** 裁剪为 Shape 形状（传入 RoundedCornerShape/CircleShape/LuaShape 对象） */
+    fun clip(shape: Any): ModifierChain {
+        val composeShape: androidx.compose.ui.graphics.Shape? = when (shape) {
+            is androidx.compose.ui.graphics.Shape -> shape
+            is com.nirithy.luacompose.graphics.LuaShape -> shape.toComposeShape()
+            else -> null
+        }
+        if (composeShape != null) {
+            modifier = modifier.clip(composeShape)
+        }
+        return this
     }
     /** 裁剪为圆形 */
     fun clipCircle(): ModifierChain {
         modifier = modifier.clip(CircleShape); return this
+    }
+
+    /** 设置合成策略，传 "Offscreen" 启用离屏渲染（用于 BlendMode 混合） */
+    fun compositingStrategy(strategy: String): ModifierChain {
+        if (strategy == "Offscreen") {
+            modifier = modifier.graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+        }
+        return this
     }
 
     // ========== 手势 ==========
@@ -370,6 +423,11 @@ class ModifierChain {
     fun pointerInput(onDrag: LuaObject): ModifierChain {
         ensureGestureConfig().onDrag = onDrag; return this
     }
+    /** 多参数绑定（Lua: pointerInput(key1, key2, callback)），key1/key2 用于稳定 key，忽略 */
+    fun pointerInput(key1: Float, key2: Float, onDrag: LuaObject): ModifierChain {
+        ensureGestureConfig().onDrag = onDrag; return this
+    }
+    /** 完整手势绑定（onDragStart, onDrag, onDragEnd） */
     fun pointerInputFull(onDragStart: LuaObject, onDrag: LuaObject, onDragEnd: LuaObject): ModifierChain {
         val cfg = ensureGestureConfig()
         cfg.onDragStart = onDragStart
@@ -399,7 +457,7 @@ class ModifierChain {
             interactionSource = MutableInteractionSource(),
             indication = null,
             onClick = {
-                try { callback.call() } catch (_: Exception) {}
+                try { synchronized(ComposeBridge.luaLock) { callback.call() } } catch (_: Exception) {}
             }
         )
         return this

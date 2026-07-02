@@ -35,7 +35,7 @@
     <string name="unpin">撤顶</string>
     <string name="overwrite">覆盖</string>
     <string name="clone">共存</string>
-    <string name="debug_mode">调试模式</string>
+    <string name="debug_mode">Debug</string>
 
     <!-- 项目相关 -->
     <string name="project_deleted">项目已删除: %s</string>
@@ -477,7 +477,7 @@
     <string name="attribute_sdk_title">SDK 版本</string>
     <string name="attribute_min_sdk">最小 SDK</string>
     <string name="attribute_target_sdk">目标 SDK</string>
-    <string name="attribute_debug_enable">启用调试模式</string>
+    <string name="attribute_debug_enable">启用Debug</string>
     <string name="attribute_permission_title">权限</string>
     <string name="attribute_permission_count">已选择 %d 个权限</string>
     <string name="attribute_permission_manage">管理权限</string>
@@ -851,4 +851,22 @@
     <string name="settings_mcp_source_remote">远程 URL</string>
     <string name="settings_mcp_transport_streamable_http">Streamable HTTP</string>
     <string name="settings_mcp_transport_sse">SSE</string>
+
+    <!-- 首页设置 -->
+    <string name="settings_home_layout">首页布局</string>
+    <string name="settings_home_layout_card">大卡片展开</string>
+    <string name="settings_home_layout_flat">扁平列表</string>
+    <string name="settings_home_categories">项目分类</string>
+    <string name="settings_home_categories_desc">管理项目分类，将项目归类到不同分类中</string>
+    <string name="settings_home_show_recent">显示"继续上次项目"</string>
+    <string name="settings_home_show_recent_desc">在首页顶部显示上次打开的项目，方便快速继续</string>
+    <string name="continue_last_project">继续上次项目</string>
+    <string name="open_project">打开</string>
+    <string name="category_new">新建分类</string>
+    <string name="category_name">分类名称</string>
+    <string name="category_name_hint">输入分类名称</string>
+    <string name="category_color">分类颜色</string>
+    <string name="category_manage">管理分类</string>
+    <string name="category_add_project">添加项目到分类</string>
+    <string name="category_all">全部</string>
 </resources>

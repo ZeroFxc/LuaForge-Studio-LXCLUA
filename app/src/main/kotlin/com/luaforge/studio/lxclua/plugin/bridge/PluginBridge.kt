@@ -46,8 +46,8 @@ class PluginBridge(private val context: Context, private val pluginId: String) {
     /** 项目操作 API */
     val project = PluginProject()
     
-    /** UI 对话框 API */
-    val ui = PluginUI()
+    /** UI 对话框与UI扩展 API */
+    val ui = PluginUI(pluginId)
     
     /** 事件监听 API */
     val events = PluginEvents(pluginId)

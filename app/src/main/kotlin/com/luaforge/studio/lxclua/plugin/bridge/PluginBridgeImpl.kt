@@ -14,6 +14,7 @@ import com.luaforge.studio.lxclua.plugin.data.RegisteredResource
 import com.luaforge.studio.lxclua.plugin.data.ShortcutInfo
 import com.luaforge.studio.lxclua.plugin.state.EventManager
 import com.luaforge.studio.lxclua.plugin.state.NavigationState
+import com.luaforge.studio.lxclua.plugin.state.PluginEvents
 import com.luaforge.studio.lxclua.plugin.state.UIState
 import com.luaforge.studio.lxclua.ui.editor.QuickAction
 import kotlinx.coroutines.CoroutineScope
@@ -244,11 +245,157 @@ class PluginBridgeImpl(val pluginId: String) : IPluginBridge {
     // ==================== 事件系统 ====================
     
     override fun registerEventListener(eventName: String, listener: Any) {
-        EventManager.registerEventListener(eventName, listener)
+        EventManager.registerEventListener(pluginId, eventName, listener)
+    }
+    
+    override fun once(eventName: String, handler: (Array<out Any?>) -> Unit) {
+        val listener = object : IPluginEventListener {
+            override fun onEvent(vararg args: Any?) {
+                EventManager.unregisterEventListener(eventName, this)
+                handler(args)
+            }
+        }
+        EventManager.registerOnceListener(pluginId, eventName, listener)
+    }
+    
+    override fun intercept(eventName: String, priority: Int, handler: (Array<out Any?>) -> Boolean) {
+        EventManager.registerInterceptor(pluginId, eventName, priority) { _, args ->
+            handler(args)
+        }
     }
     
     override fun unregisterEventListener(eventName: String, listener: Any) {
         EventManager.unregisterEventListener(eventName, listener)
+    }
+    
+    // ==================== 首页 MainPage 扩展 ====================
+    
+    /**
+     * 在首页顶部工具栏末尾添加自定义动作按钮
+     * @param id 按钮唯一标识（插件内唯一）
+     * @param iconName Material图标名称
+     * @param tooltip 按钮提示文字
+     * @param onClick 点击回调
+     */
+    override fun addToolbarAction(id: String, iconName: String, tooltip: String, onClick: Runnable) {
+        handler.post {
+            UIState.addToolbarAction(pluginId, id, iconName, tooltip, onClick)
+        }
+    }
+    
+    /**
+     * 移除已注册的工具栏按钮
+     */
+    override fun removeToolbarAction(actionId: String) {
+        handler.post {
+            UIState.removeToolbarAction(pluginId, actionId)
+        }
+    }
+    
+    /**
+     * 在首页 FAB 区域添加自定义小浮动按钮
+     */
+    override fun addHomeFab(id: String, iconName: String, tooltip: String, onClick: Runnable) {
+        handler.post {
+            UIState.addHomeFab(pluginId, id, iconName, tooltip, onClick)
+        }
+    }
+    
+    /**
+     * 移除已注册的首页 FAB 按钮
+     */
+    override fun removeHomeFab(fabId: String) {
+        handler.post {
+            UIState.removeHomeFab(pluginId, fabId)
+        }
+    }
+    
+    /**
+     * 在首页分类栏末尾添加自定义分类项
+     */
+    override fun addCategoryBarItem(id: String, iconName: String, name: String, onClick: Runnable) {
+        handler.post {
+            UIState.addCategoryBarItem(pluginId, id, iconName, name, onClick)
+        }
+    }
+    
+    /**
+     * 移除已注册的分类栏项
+     */
+    override fun removeCategoryBarItem(itemId: String) {
+        handler.post {
+            UIState.removeCategoryBarItem(pluginId, itemId)
+        }
+    }
+    
+    /**
+     * 为指定项目设置自定义徽章
+     */
+    override fun setProjectBadge(projectId: String, text: String, color: Long) {
+        handler.post {
+            PluginManager.projectBadges[projectId] = PluginManager.BadgeInfo(text, color)
+        }
+    }
+    
+    /**
+     * 清除指定项目的自定义徽章
+     */
+    override fun clearProjectBadge(projectId: String) {
+        handler.post { PluginManager.projectBadges.remove(projectId) }
+    }
+    
+    /**
+     * 请求导航到指定项目（打开编辑器），会先经过 ON_PROJECT_OPEN 拦截检查
+     */
+    override fun navigateToProject(projectId: String) {
+        handler.post {
+            val project = PluginManager.currentProjectItems.find { it.id == projectId }
+            val projectName = project?.name ?: ""
+            val projectPath = project?.path ?: ""
+            // 仅检查拦截，事件通知由实际导航完成后（onNavigateToEditor）触发
+            val intercepted = EventManager.checkIntercepted(
+                PluginEvents.ON_PROJECT_OPEN,
+                projectId, projectName, projectPath
+            )
+            if (!intercepted) {
+                NavigationState.navigateToProject(projectId)
+            }
+        }
+    }
+    
+    /**
+     * 通知刷新项目列表
+     */
+    override fun refreshProjects() {
+        handler.post {
+            EventManager.fireEvent("onRefreshProjects")
+        }
+    }
+    
+    /**
+     * 显示 Toast 提示
+     */
+    override fun showToast(message: String) {
+        toast(message)
+    }
+    
+    /**
+     * 获取当前多选模式下选中的项目ID列表
+     */
+    override fun getSelectedProjectIds(): Array<String> {
+        return PluginManager.multiSelectedProjectIds.toTypedArray()
+    }
+    
+    /**
+     * 设置多选模式
+     */
+    override fun setMultiSelectMode(enabled: Boolean) {
+        handler.post {
+            PluginManager.isMultiSelectMode.value = enabled
+            if (!enabled) {
+                PluginManager.multiSelectedProjectIds.clear()
+            }
+        }
     }
     
     // ==================== 线程工具 ====================

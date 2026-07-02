@@ -38,6 +38,9 @@ object NavigationState {
     // 插件请求的导航目标（String，由 MainActivity 的 LaunchedEffect 观察并执行实际导航）
     val pendingNavTarget = mutableStateOf<String?>(null)
     
+    // 插件请求打开的项目ID（配合 navigateTo("editor") 使用）
+    val pendingOpenProjectId = mutableStateOf<String?>(null)
+    
     // 插件 WebUI 导航：请求打开的插件 ID
     val pendingWebUIPluginId = mutableStateOf<String?>(null)
     
@@ -183,6 +186,16 @@ object NavigationState {
      */
     fun clearNavTarget() {
         pendingNavTarget.value = null
+        pendingOpenProjectId.value = null
+    }
+    
+    /**
+     * 导航到指定项目（打开编辑器）
+     * @param projectId 要打开的项目ID
+     */
+    fun navigateToProject(projectId: String) {
+        pendingOpenProjectId.value = projectId
+        navigateTo("editor")
     }
     
     /**

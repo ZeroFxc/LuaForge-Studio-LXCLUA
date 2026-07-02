@@ -99,31 +99,36 @@ object NodeParser {
     }
 
     /**
-     * 解析单个子节点（可能是 ComposeNode 对象或 Lua 表）
+     * 解析单个子节点（可能是 ComposeNode 对象、Lua 表或 raw table）
+     * raw table 如 {type = "DropdownMenuItem", text = "选项", onClick = fn}
+     * 通过 toJavaObject 尝试获取 ComposeNode，失败则作为表解析
      */
     private fun parseChildNode(L: LuaState, idx: Int): ComposeNode? {
         val absIdx = if (idx > 0) idx else L.getTop() + idx + 1
-        return try {
+        // 先尝试 as ComposeNode（Kotlin 侧已创建的节点）
+        try {
             val obj = L.toJavaObject(absIdx)
-            (obj as? ComposeNode)?.also {
-                logV(TAG) { "[parseChild] 已解析的子节点: type=${it.type}" }
+            if (obj is ComposeNode) {
+                logV(TAG) { "[parseChild] 已解析的子节点: type=${obj.type}" }
+                return obj
             }
-        } catch (e: Exception) {
-            if (L.isTable(absIdx)) {
-                try {
-                    L.pushString("type"); L.getTable(absIdx)
-                    val typeName = if (L.isString(-1)) L.toString(-1) else "Unknown"
-                    L.pop(1)
-                    logD(TAG) { "[parseChild] 从表解析子节点: type=$typeName" }
-                    parseNodeTable(L, absIdx, typeName)
-                } catch (e2: Exception) {
-                    logW(TAG) { "[parseChild] 解析子节点失败: ${e2.message}" }
-                    null
-                }
-            } else {
-                logW(TAG) { "[parseChild] 非表非 ComposeNode，跳过" }
+        } catch (_: Exception) {
+            // toJavaObject 失败，继续尝试表解析
+        }
+        // toJavaObject 返回 null 或非 ComposeNode → 尝试作为表解析
+        if (L.isTable(absIdx)) {
+            return try {
+                L.pushString("type"); L.getTable(absIdx)
+                val typeName = if (L.isString(-1)) L.toString(-1) else "Unknown"
+                L.pop(1)
+                logD(TAG) { "[parseChild] 从表解析子节点: type=$typeName" }
+                parseNodeTable(L, absIdx, typeName)
+            } catch (e: Exception) {
+                logW(TAG) { "[parseChild] 解析子节点失败: ${e.message}" }
                 null
             }
         }
+        logW(TAG) { "[parseChild] 非表非 ComposeNode，跳过" }
+        return null
     }
 }

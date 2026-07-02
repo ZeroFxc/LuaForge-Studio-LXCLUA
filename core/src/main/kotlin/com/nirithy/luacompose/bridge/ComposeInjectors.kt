@@ -1,5 +1,6 @@
 package com.nirithy.luacompose.bridge
 
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.DurationBasedAnimationSpec
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -24,6 +25,7 @@ import android.util.Log
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay as coroutineDelay
+import kotlinx.coroutines.launch
 
 /**
  * ComposeBridge 的 Lua API 注入器
@@ -149,19 +151,62 @@ internal fun ComposeBridge.registerDerivedStateFactory(L: LuaState) {
     L.setField(-2, "derivedStateOf")
 }
 
+// ========== 动画规格工厂（spring / tween） ==========
+
+/** compose.spring(dampingRatio, stiffness) — 创建弹簧动画规格 */
+internal fun ComposeBridge.registerSpringFactory(L: LuaState) {
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val dampingRatio = if (top >= 2) L.toNumber(2).toFloat() else 0.55f
+            val stiffness = if (top >= 3) L.toNumber(3).toFloat() else 600f
+            L.newTable()
+            L.pushString("spring"); L.setField(-2, "type")
+            L.pushNumber(dampingRatio.toDouble()); L.setField(-2, "dampingRatio")
+            L.pushNumber(stiffness.toDouble()); L.setField(-2, "stiffness")
+            return 1
+        }
+    })
+    L.setField(-2, "spring")
+}
+
+/** compose.tween(durationMs, easing) — 创建 tween 动画规格 */
+internal fun ComposeBridge.registerTweenFactory(L: LuaState) {
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val durationMs = if (top >= 2) L.toNumber(2).toInt() else 300
+            val easing = if (top >= 3) L.toString(3) else "FastOutSlowIn"
+            L.newTable()
+            L.pushString("tween"); L.setField(-2, "type")
+            L.pushNumber(durationMs.toDouble()); L.setField(-2, "durationMs")
+            L.pushString(easing); L.setField(-2, "easing")
+            return 1
+        }
+    })
+    L.setField(-2, "tween")
+}
+
 // ========== 动画状态工厂 ==========
 
-/** compose.animateFloatAsState(target) — 动画浮点状态，target 变化时平滑过渡 */
+/** compose.animateFloatAsState(target) — 动画浮点状态，支持表参数 {targetValue=..., animationSpec=...} */
 internal fun ComposeBridge.registerAnimateFloatFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
-            val target: Float
+            var target: Float = 0f
+            var spec: AnimationSpec<Float>? = null
+            var useRecompose = false
             if (top >= 2 && L.isTable(2)) {
+                // 表参数: {targetValue=..., animationSpec=..., useRecompose=...}
                 L.getField(2, "targetValue")
                 target = if (L.isNumber(-1)) L.toNumber(-1).toFloat() else 0f
                 L.pop(1)
                 L.getField(2, "animationSpec")
+                if (L.isTable(-1)) spec = AnimatedFloat.parseSpec(L.getLuaObject(-1))
+                L.pop(1)
+                L.getField(2, "useRecompose")
+                useRecompose = if (L.isBoolean(-1)) L.toBoolean(-1) else false
                 L.pop(1)
             } else {
                 target = if (top >= 2) L.toNumber(2).toFloat() else 0f
@@ -170,7 +215,7 @@ internal fun ComposeBridge.registerAnimateFloatFactory(L: LuaState) {
             if (idx < animatedFloats.size) {
                 L.pushJavaObject(animatedFloats[idx]); return 1
             }
-            val anim = AnimatedFloat(target)
+            val anim = AnimatedFloat(target, useRecompose = useRecompose, spec = spec)
             animatedFloats.add(anim)
             L.pushJavaObject(anim); return 1
         }
@@ -245,13 +290,35 @@ internal fun ComposeBridge.registerAnimateColorFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
-            val targetColor = if (top >= 2) L.toNumber(2).toLong() else 0xFF000000L
-            val idx = animIndex++
-            if (idx < animatedFloats.size) {
-                L.pushJavaObject(animatedFloats[idx]); return 1
+            // 支持两种调用方式：
+            // 1. compose.animateColorAsState(0xFF000000) — 直接传颜色值
+            // 2. compose.animateColorAsState({targetValue = 0xFF000000, animationSpec = ...}) — 传 table
+            val targetColor: Long
+            var animSpec: AnimationSpec<Color>? = null
+            if (top >= 2 && L.isTable(2)) {
+                // table 模式：读取 targetValue 和 animationSpec
+                L.getField(2, "targetValue")
+                targetColor = if (L.isNumber(-1)) L.toNumber(-1).toLong() else 0xFF000000L
+                L.pop(1)
+                L.getField(2, "animationSpec")
+                val obj = L.toJavaObject(-1)
+                if (obj is AnimationSpec<*>) {
+                    @Suppress("UNCHECKED_CAST")
+                    animSpec = obj as AnimationSpec<Color>
+                }
+                L.pop(1)
+            } else {
+                targetColor = if (top >= 2) L.toNumber(2).toLong() else 0xFF000000L
             }
-            val anim = AnimatedFloat(targetColor.toFloat())
-            animatedFloats.add(anim)
+            val idx = animColorIndex++
+            if (idx < animatedColors.size) {
+                L.pushJavaObject(animatedColors[idx]); return 1
+            }
+            val anim = AnimatedColor(targetColor)
+            if (animSpec != null) {
+                anim.animationSpec = animSpec
+            }
+            animatedColors.add(anim)
             L.pushJavaObject(anim); return 1
         }
     })
@@ -264,12 +331,12 @@ internal fun ComposeBridge.registerAnimateDpFactory(L: LuaState) {
         override fun execute(): Int {
             val top = L.getTop()
             val targetDp = if (top >= 2) L.toNumber(2).toFloat() else 0f
-            val idx = animIndex++
-            if (idx < animatedFloats.size) {
-                L.pushJavaObject(animatedFloats[idx]); return 1
+            val idx = animDpIndex++
+            if (idx < animatedDps.size) {
+                L.pushJavaObject(animatedDps[idx]); return 1
             }
-            val anim = AnimatedFloat(targetDp)
-            animatedFloats.add(anim)
+            val anim = AnimatedDp(targetDp)
+            animatedDps.add(anim)
             L.pushJavaObject(anim); return 1
         }
     })
@@ -528,7 +595,7 @@ internal fun ComposeBridge.registerAnimationSpecs(L: LuaState) {
     L.setField(-2, "infiniteRepeatable")
 }
 
-/** 注册进出场动画工厂：fadeIn, fadeOut, slideIn, slideOut, scaleIn, scaleOut 等 14 种 */
+/** 注册进出场动画工厂：fadeIn, fadeOut, slideIn, slideOut, scaleIn, scaleOut 等 */
 internal fun ComposeBridge.registerAnimationTransitions(L: LuaState) {
     // 淡入淡出
     L.pushJavaFunction(object : JavaFunction(L) {
@@ -536,9 +603,17 @@ internal fun ComposeBridge.registerAnimationTransitions(L: LuaState) {
     })
     L.setField(-2, "fadeIn")
     L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int { L.pushJavaObject(AnimationSpecs.fadeInEnter()); return 1 }
+    })
+    L.setField(-2, "fadeInEnter")
+    L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int { L.pushJavaObject(AnimationSpecs.fadeOutExit()); return 1 }
     })
     L.setField(-2, "fadeOut")
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int { L.pushJavaObject(AnimationSpecs.fadeOutExit()); return 1 }
+    })
+    L.setField(-2, "fadeOutExit")
 
     // 水平滑入滑出
     L.pushJavaFunction(object : JavaFunction(L) {
@@ -546,9 +621,17 @@ internal fun ComposeBridge.registerAnimationTransitions(L: LuaState) {
     })
     L.setField(-2, "slideInHorizontally")
     L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int { L.pushJavaObject(AnimationSpecs.slideInHorizontallyEnter()); return 1 }
+    })
+    L.setField(-2, "slideInHorizontallyEnter")
+    L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int { L.pushJavaObject(AnimationSpecs.slideOutHorizontallyExit()); return 1 }
     })
     L.setField(-2, "slideOutHorizontally")
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int { L.pushJavaObject(AnimationSpecs.slideOutHorizontallyExit()); return 1 }
+    })
+    L.setField(-2, "slideOutHorizontallyExit")
 
     // 垂直滑入滑出
     L.pushJavaFunction(object : JavaFunction(L) {
@@ -566,9 +649,17 @@ internal fun ComposeBridge.registerAnimationTransitions(L: LuaState) {
     })
     L.setField(-2, "scaleIn")
     L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int { L.pushJavaObject(AnimationSpecs.scaleInEnter()); return 1 }
+    })
+    L.setField(-2, "scaleInEnter")
+    L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int { L.pushJavaObject(AnimationSpecs.scaleOutExit()); return 1 }
     })
     L.setField(-2, "scaleOut")
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int { L.pushJavaObject(AnimationSpecs.scaleOutExit()); return 1 }
+    })
+    L.setField(-2, "scaleOutExit")
 
     // 展开/收缩
     L.pushJavaFunction(object : JavaFunction(L) {
@@ -599,6 +690,22 @@ internal fun ComposeBridge.registerAnimationTransitions(L: LuaState) {
         override fun execute(): Int { L.pushJavaObject(AnimationSpecs.fadeOutShrinkExit()); return 1 }
     })
     L.setField(-2, "fadeOutShrink")
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int { L.pushJavaObject(AnimationSpecs.fadeInSlideEnter()); return 1 }
+    })
+    L.setField(-2, "fadeInSlide")
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int { L.pushJavaObject(AnimationSpecs.fadeOutSlideExit()); return 1 }
+    })
+    L.setField(-2, "fadeOutSlide")
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int { L.pushJavaObject(AnimationSpecs.fadeInScaleEnter()); return 1 }
+    })
+    L.setField(-2, "fadeInScale")
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int { L.pushJavaObject(AnimationSpecs.fadeOutScaleExit()); return 1 }
+    })
+    L.setField(-2, "fadeOutScale")
 }
 
 /** compose.Spring — Spring 动画常量表 */
@@ -724,14 +831,17 @@ internal fun ComposeBridge.registerReflectHelpers(L: LuaState) {
 
 // ========== 其他工厂 ==========
 
-/** compose.Path() — 创建 LuaPath 实例 */
+/** compose.Path() / compose.LuaPath() — 创建 LuaPath 实例 */
 internal fun ComposeBridge.registerPathFactory(L: LuaState) {
-    L.pushJavaFunction(object : JavaFunction(L) {
-        override fun execute(): Int {
-            L.pushJavaObject(LuaPath()); return 1
-        }
-    })
-    L.setField(-2, "Path")
+    // 注册两个名字：Path（推荐）和 LuaPath（兼容）
+    for (name in listOf("Path", "LuaPath")) {
+        L.pushJavaFunction(object : JavaFunction(L) {
+            override fun execute(): Int {
+                L.pushJavaObject(LuaPath()); return 1
+            }
+        })
+        L.setField(-2, name)
+    }
 }
 
 /** compose.rememberCoroutineScope() — 创建协程作用域 */
@@ -1050,27 +1160,55 @@ data class RememberKeyEntry(val keys: List<Any?>, val value: Any?) {
 // (LaunchedEffect 已作为组件存在，coroutineScope.launch 已在 LuaCoroutineScope 中实现)
 // 此处补充 compose.LaunchedEffect 作为可直接调用的 API（非组件形式）
 
-/** compose.LaunchedEffect(key, block) — 在 Composable 作用域中启动协程 */
+/**
+ * compose.LaunchedEffect(key, block) 或 compose.LaunchedEffect({ key=..., block=..., children={...} })
+ * 支持两种调用方式：
+ *   1. 直接调用: compose.LaunchedEffect(someKey, function() ... end)
+ *   2. Table 组件语法: compose.LaunchedEffect({ key = ..., block = function() ... end, children = { ... } })
+ */
 internal fun ComposeBridge.registerLaunchedEffectApi(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
-            val key = if (top >= 2) {
-                try { L.toJavaObject(2) } catch (e: Exception) { L.toString(2) }
-            } else null
-            val block = if (top >= 3 && L.isFunction(3)) L.getLuaObject(3)
-            else if (top >= 2 && L.isFunction(2)) L.getLuaObject(2)
-            else null
+            var key: Any? = Unit
+            var block: LuaObject? = null
+            val children = mutableListOf<com.nirithy.luacompose.node.ComposeNode>()
+
+            if (top >= 2 && L.isTable(2)) {
+                // Table 语法: compose.LaunchedEffect({ key=..., block=..., children={...} })
+                L.getField(2, "key")
+                if (!L.isNil(-1)) {
+                    key = try { L.toJavaObject(-1) } catch (e: Exception) { L.toString(-1) }
+                }
+                L.pop(1)
+
+                L.getField(2, "block")
+                if (L.isFunction(-1)) block = L.getLuaObject(-1)
+                L.pop(1)
+
+                L.getField(2, "children")
+                if (L.isTable(-1)) {
+                    children.addAll(NodeParser.parseChildrenArray(L, -1))
+                }
+                L.pop(1)
+            } else {
+                // 直接语法: compose.LaunchedEffect(key, block)
+                if (top >= 2) {
+                    key = try { L.toJavaObject(2) } catch (e: Exception) { L.toString(2) }
+                }
+                if (top >= 3 && L.isFunction(3)) block = L.getLuaObject(3)
+                else if (top >= 2 && L.isFunction(2)) block = L.getLuaObject(2)
+            }
 
             if (block == null) {
                 logW(TAG) { "[LaunchedEffect] 需要 block 函数" }
                 L.pushNil(); return 1
             }
 
-            // 返回一个特殊的 ComposeNode，在渲染时启动协程
             val node = com.nirithy.luacompose.node.ComposeNode(
                 type = "LaunchedEffect",
-                props = mapOf("key" to (key ?: Unit), "block" to (block as Any))
+                props = mapOf("key" to (key ?: Unit), "block" to (block as Any)),
+                children = children
             )
             L.pushJavaObject(node); return 1
         }
@@ -1081,17 +1219,45 @@ internal fun ComposeBridge.registerLaunchedEffectApi(L: LuaState) {
 // ========== 高优 9/10: DisposableEffect / key ==========
 // (已作为组件存在，通过 EffectPlugin 渲染，这里补充直接 API)
 
-/** compose.DisposableEffect(key, effectFn) — 直接创建 DisposableEffect 节点 */
+/**
+ * compose.DisposableEffect(key, effectFn) 或 compose.DisposableEffect({ key=..., effect=..., children={...} })
+ * 支持两种调用方式：
+ *   1. 直接调用: compose.DisposableEffect(someKey, function() return function() ... end end)
+ *   2. Table 组件语法: compose.DisposableEffect({ key = ..., effect = function() ... end, children = { ... } })
+ */
 internal fun ComposeBridge.registerDisposableEffectApi(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
-            val key = if (top >= 2) {
-                try { L.toJavaObject(2) } catch (e: Exception) { L.toString(2) }
-            } else null
-            val effectFn = if (top >= 3 && L.isFunction(3)) L.getLuaObject(3)
-            else if (top >= 2 && L.isFunction(2)) L.getLuaObject(2)
-            else null
+            var key: Any? = Unit
+            var effectFn: LuaObject? = null
+            val children = mutableListOf<com.nirithy.luacompose.node.ComposeNode>()
+
+            if (top >= 2 && L.isTable(2)) {
+                // Table 语法: compose.DisposableEffect({ key=..., effect=..., children={...} })
+                L.getField(2, "key")
+                if (!L.isNil(-1)) {
+                    key = try { L.toJavaObject(-1) } catch (e: Exception) { L.toString(-1) }
+                }
+                L.pop(1)
+
+                L.getField(2, "effect")
+                if (L.isFunction(-1)) effectFn = L.getLuaObject(-1)
+                L.pop(1)
+
+                L.getField(2, "children")
+                if (L.isTable(-1)) {
+                    children.addAll(NodeParser.parseChildrenArray(L, -1))
+                }
+                L.pop(1)
+            } else {
+                // 直接语法: compose.DisposableEffect(key, effectFn)
+                if (top >= 2) {
+                    key = try { L.toJavaObject(2) } catch (e: Exception) { L.toString(2) }
+                }
+                if (top >= 3 && L.isFunction(3)) effectFn = L.getLuaObject(3)
+                else if (top >= 2 && L.isFunction(2)) effectFn = L.getLuaObject(2)
+            }
 
             if (effectFn == null) {
                 logW(TAG) { "[DisposableEffect] 需要 effect 函数" }
@@ -1100,7 +1266,8 @@ internal fun ComposeBridge.registerDisposableEffectApi(L: LuaState) {
 
             val node = com.nirithy.luacompose.node.ComposeNode(
                 type = "DisposableEffect",
-                props = mapOf("key" to (key ?: Unit), "effect" to (effectFn as Any))
+                props = mapOf("key" to (key ?: Unit), "effect" to (effectFn as Any)),
+                children = children
             )
             L.pushJavaObject(node); return 1
         }
@@ -1108,21 +1275,48 @@ internal fun ComposeBridge.registerDisposableEffectApi(L: LuaState) {
     L.setField(-2, "DisposableEffect")
 }
 
-/** compose.key(key, childrenFunc) — 直接创建 key 节点 */
+/**
+ * compose.key(key, childrenFunc) 或 compose.key({ key=..., children={...} })
+ * 支持两种调用方式：
+ *   1. 直接调用: compose.key(someKey, function() return { ... } end)
+ *   2. Table 组件语法: compose.key({ key = ..., children = { ... } })
+ */
 internal fun ComposeBridge.registerKeyApi(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
-            val keyVal = if (top >= 2) {
-                try { L.toJavaObject(2) } catch (e: Exception) { L.toString(2) }
-            } else Unit
-            val childrenFunc = if (top >= 3 && L.isFunction(3)) L.getLuaObject(3)
-            else if (top >= 2 && L.isFunction(2)) L.getLuaObject(2)
-            else null
+            var keyVal: Any? = Unit
+            var childrenFunc: LuaObject? = null
+            val children = mutableListOf<com.nirithy.luacompose.node.ComposeNode>()
+
+            if (top >= 2 && L.isTable(2)) {
+                // Table 语法: compose.key({ key=..., children={...} })
+                L.getField(2, "key")
+                if (!L.isNil(-1)) {
+                    keyVal = try { L.toJavaObject(-1) } catch (e: Exception) { L.toString(-1) }
+                }
+                L.pop(1)
+
+                L.getField(2, "children")
+                if (L.isTable(-1)) {
+                    children.addAll(NodeParser.parseChildrenArray(L, -1))
+                } else if (L.isFunction(-1)) {
+                    childrenFunc = L.getLuaObject(-1)
+                }
+                L.pop(1)
+            } else {
+                // 直接语法: compose.key(key, childrenFunc)
+                if (top >= 2) {
+                    keyVal = try { L.toJavaObject(2) } catch (e: Exception) { L.toString(2) }
+                }
+                if (top >= 3 && L.isFunction(3)) childrenFunc = L.getLuaObject(3)
+                else if (top >= 2 && L.isFunction(2)) childrenFunc = L.getLuaObject(2)
+            }
 
             val node = com.nirithy.luacompose.node.ComposeNode(
                 type = "key",
                 props = mapOf("key" to (keyVal ?: Unit)),
+                children = children,
                 childrenFunc = childrenFunc
             )
             L.pushJavaObject(node); return 1
@@ -1225,6 +1419,50 @@ internal fun ComposeBridge.registerBrushRadialGradient(L: LuaState) {
         }
     })
     L.setField(-2, "radialGradient")
+
+    // verticalGradient({ colors, startY, endY })
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            if (top < 2 || !L.isTable(2)) { L.pushNil(); return 1 }
+            L.getField(2, "startY"); val sy = if (L.isNumber(-1)) L.toNumber(-1) else 0.0; L.pop(1)
+            L.getField(2, "endY"); val ey = if (L.isNumber(-1)) L.toNumber(-1) else 1.0; L.pop(1)
+            L.getField(2, "colors")
+            val colors = mutableListOf<Long>()
+            if (L.isTable(-1)) {
+                val len = L.rawLen(-1)
+                for (i in 1..len) { L.pushInteger(i.toLong()); L.getTable(-2); colors.add(L.toNumber(-1).toLong()); L.pop(1) }
+            }
+            L.pop(1)
+            L.pushJavaObject(com.nirithy.luacompose.graphics.LuaBrush(
+                type = "verticalGradient", startY = sy, endY = ey, colors = colors
+            )); return 1
+        }
+    })
+    L.setField(-2, "verticalGradient")
+
+    // linearGradient({ startX, startY, endX, endY, colors })
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            if (top < 2 || !L.isTable(2)) { L.pushNil(); return 1 }
+            L.getField(2, "startX"); val sx = if (L.isNumber(-1)) L.toNumber(-1) else 0.0; L.pop(1)
+            L.getField(2, "startY"); val sy = if (L.isNumber(-1)) L.toNumber(-1) else 0.0; L.pop(1)
+            L.getField(2, "endX"); val ex = if (L.isNumber(-1)) L.toNumber(-1) else 1.0; L.pop(1)
+            L.getField(2, "endY"); val ey = if (L.isNumber(-1)) L.toNumber(-1) else 1.0; L.pop(1)
+            L.getField(2, "colors")
+            val colors = mutableListOf<Long>()
+            if (L.isTable(-1)) {
+                val len = L.rawLen(-1)
+                for (i in 1..len) { L.pushInteger(i.toLong()); L.getTable(-2); colors.add(L.toNumber(-1).toLong()); L.pop(1) }
+            }
+            L.pop(1)
+            L.pushJavaObject(com.nirithy.luacompose.graphics.LuaBrush(
+                type = "linearGradient", startX = sx, startY = sy, endX = ex, endY = ey, colors = colors
+            )); return 1
+        }
+    })
+    L.setField(-2, "linearGradient")
 
     L.setField(-2, "Brush")
 }
@@ -1386,39 +1624,237 @@ internal fun ComposeBridge.registerDumpTool(L: LuaState) {
     L.setField(-2, "dump")
 }
 
-// ========== 中优 18: delay / withFrameNanos ==========
+// ========== delay / withFrameNanos ==========
 
-/** compose.delay(ms) — 协程非阻塞延迟（需要在协程中调用） */
+/** compose.delay(ms) — 非阻塞延迟提示（必须在协程中使用 scope.delay(ms)） */
 internal fun ComposeBridge.registerDelayTool(L: LuaState) {
-    // delay(ms) — 挂起函数，只能在协程中调用
+    // delay(ms) — 不能在JavaFunction中挂起，仅输出警告不阻塞
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
             val ms = if (top >= 2) L.toNumber(2).toLong() else 0L
-            // 注意：JavaFunction 中无法直接调用 suspend 函数
-            // delay 通过 LuaCoroutineScope.delay() 在协程中使用
-            // 这里提供一个同步的空实现，提示用户使用协程
-            Log.w(TAG, "[delay] delay($ms) 应在协程中使用 scope:delay($ms)")
-            try { Thread.sleep(ms) } catch (_: Exception) { }
+            Log.e(TAG, "[delay] compose.delay($ms) 是挂起函数，必须在协程中使用 scope:delay($ms)，直接调用不会生效且已废弃")
+            // 不再使用Thread.sleep阻塞主线程
             return 0
         }
     })
     L.setField(-2, "delay")
 
-    // withFrameNanos(callback) — 帧回调，在 ComposeHost 中处理
+    // withFrameNanos(callback) — 使用Choreographer真正等待下一帧
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
             if (top >= 2 && L.isFunction(2)) {
                 val fn = L.getLuaObject(2)
                 try {
-                    fn.call(System.nanoTime().toDouble())
+                    android.view.Choreographer.getInstance().postFrameCallback { frameTimeNanos ->
+                        synchronized(ComposeBridge.luaLock) {
+                            try {
+                                fn.call(frameTimeNanos.toDouble())
+                            } catch (e: Exception) {
+                                logW(TAG) { "[withFrameNanos] 回调失败: ${e.message}" }
+                            }
+                        }
+                    }
                 } catch (e: Exception) {
-                    logW(TAG) { "[withFrameNanos] 回调失败: ${e.message}" }
+                    logW(TAG) { "[withFrameNanos] 投递帧回调失败: ${e.message}" }
                 }
             }
             return 0
         }
     })
     L.setField(-2, "withFrameNanos")
+
+    // ========== 高精度定时器 ==========
+
+    /**
+     * compose.startTimer(intervalMs, callback)
+     * 在 Kotlin coroutineScope 中启动高精度定时器，使用协程 delay 挂起
+     * 返回 stop() 函数用于停止定时器
+     *
+     * Lua 用法：
+     *   local timer = compose.startTimer(100, function()
+     *       timerValue.value = timerValue.value + 0.1
+     *   end)
+     *   -- 停止: timer.stop()
+     */
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val intervalMs = if (top >= 2) L.toNumber(2).toLong() else 100L
+            val callback = if (top >= 3 && L.isFunction(3)) L.getLuaObject(3)
+            else if (top >= 2 && L.isFunction(2)) L.getLuaObject(2)
+            else null
+
+            if (callback == null) {
+                logW(TAG) { "[startTimer] 需要 callback 函数" }
+                L.pushNil(); return 1
+            }
+
+            val scope = ComposeBridge.mainScope
+            var running = true
+            logI(TAG) { "[startTimer] 启动定时器, intervalMs=$intervalMs, scope=${scope.hashCode()}" }
+            val job = scope.launch {
+                logI(TAG) { "[startTimer] 协程启动, 开始循环" }
+                while (running) {
+                    try {
+                        callback.call()
+                    } catch (e: Exception) {
+                        logW(TAG) { "[startTimer] 回调异常: ${e.message}" }
+                    }
+                    coroutineDelay(intervalMs)
+                }
+                logI(TAG) { "[startTimer] 协程退出" }
+            }
+            // 追踪定时器任务，resetState 时统一清理
+            ComposeBridge.timerJobs.add(job)
+
+            // 返回 stop 函数
+            L.newTable()
+            L.pushJavaFunction(object : JavaFunction(L) {
+                override fun execute(): Int {
+                    running = false
+                    job.cancel()
+                    ComposeBridge.timerJobs.remove(job)
+                    return 0
+                }
+            })
+            L.setField(-2, "stop")
+            return 1
+        }
+    })
+    L.setField(-2, "startTimer")
+
+    /**
+     * compose.delayMs(ms, callback)
+     * 非阻塞延迟回调，使用 Handler.postDelayed 实现
+     * 可在任意上下文中调用（回调、协程、事件处理等）
+     *
+     * Lua 用法：
+     *   compose.delayMs(1500, function()
+     *       isRefreshing.value = false
+     *   end)
+     */
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val ms = if (top >= 2) L.toNumber(2).toLong() else 0L
+            val callback = if (top >= 3 && L.isFunction(3)) L.getLuaObject(3)
+            else if (top >= 2 && L.isFunction(2)) L.getLuaObject(2)
+            else null
+
+            if (callback == null) {
+                logW(TAG) { "[delayMs] 需要 callback 函数" }
+                return 0
+            }
+
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                synchronized(ComposeBridge.luaLock) {
+                    try {
+                        callback.call()
+                    } catch (e: Exception) {
+                        logW(TAG) { "[delayMs] 回调异常: ${e.message}" }
+                    }
+                }
+            }, ms)
+            return 0
+        }
+    })
+    L.setField(-2, "delayMs")
+
+    // compose.delay(ms) — 在 Lua 协程中延迟（用于 LaunchedEffect 等 Kotlin 协程上下文）
+    // 注意：由于 Lua 无法直接调用 Kotlin 挂起函数，此处使用 Thread.sleep 实现
+    // 在 LaunchedEffect 的 block 中，Kotlin 协程已提供异步上下文，Thread.sleep 不会阻塞 UI
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val ms = if (top >= 2) L.toNumber(2).toLong() else 0L
+            if (ms > 0) {
+                try {
+                    Thread.sleep(ms)
+                } catch (_: InterruptedException) {}
+            }
+            return 0
+        }
+    })
+    L.setField(-2, "delay")
+
+    // lerp 线性插值
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val start = if (top >= 2) L.toNumber(2) else 0.0
+            val end = if (top >= 3) L.toNumber(3) else 1.0
+            val fraction = if (top >= 4) L.toNumber(4) else 0.5
+            L.pushNumber(start + (end - start) * fraction); return 1
+        }
+    })
+    L.setField(-2, "lerp")
+}
+
+/** compose.SnackbarHostState() — 创建 Snackbar 宿主状态 */
+internal fun ComposeBridge.registerSnackbarHostState(L: LuaState) {
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            L.pushJavaObject(androidx.compose.material3.SnackbarHostState())
+            return 1
+        }
+    })
+    L.setField(-2, "SnackbarHostState")
+}
+
+/**
+ * compose.showSnackbar(state, message, actionLabel, duration, onResult)
+ * 在协程中调用 SnackbarHostState.showSnackbar()
+ * @param 1 state: SnackbarHostState
+ * @param 2 message: String
+ * @param 3 actionLabel: String (可选)
+ * @param 4 duration: String "Short"|"Long"|"Indefinite" (可选，默认 "Short")
+ * @param 5 onResult: function(result) (可选) — result 为 "ActionPerformed" 或 "Dismissed"
+ */
+internal fun ComposeBridge.registerShowSnackbar(L: LuaState) {
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val state = if (top >= 2) L.toJavaObject(2) as? androidx.compose.material3.SnackbarHostState
+            else null
+            val message = if (top >= 3 && L.isString(3)) L.toString(3) else ""
+            val actionLabel = if (top >= 4 && L.isString(4)) L.toString(4) else null
+            val durationStr = if (top >= 5 && L.isString(5)) L.toString(5) else "Short"
+            val onResult = if (top >= 6 && L.isFunction(6)) L.getLuaObject(6)
+            else if (top >= 5 && L.isFunction(5)) L.getLuaObject(5)
+            else null
+
+            if (state == null || message.isEmpty()) {
+                logW("ComposeInjectors") { "[showSnackbar] state 或 message 无效" }
+                return 0
+            }
+
+            val duration = when (durationStr) {
+                "Long" -> androidx.compose.material3.SnackbarDuration.Long
+                "Indefinite" -> androidx.compose.material3.SnackbarDuration.Indefinite
+                else -> androidx.compose.material3.SnackbarDuration.Short
+            }
+
+            val scope = ComposeBridge.mainScope
+            scope?.launch {
+                try {
+                    val result = state.showSnackbar(message, actionLabel, false, duration)
+                    if (onResult != null) {
+                        synchronized(ComposeBridge.luaLock) {
+                            try {
+                                onResult.call(result.name) // "ActionPerformed" 或 "Dismissed"
+                            } catch (e: Exception) {
+                                logW("ComposeInjectors") { "[showSnackbar] onResult 回调异常: ${e.message}" }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    logW("ComposeInjectors") { "[showSnackbar] 异常: ${e.message}" }
+                }
+            }
+            return 0
+        }
+    })
+    L.setField(-2, "showSnackbar")
 }

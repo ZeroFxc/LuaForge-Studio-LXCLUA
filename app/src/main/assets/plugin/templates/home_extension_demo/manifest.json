@@ -1,0 +1,12 @@
+{
+  "id": "com.example.home_extension_demo",
+  "name": "首页扩展示范",
+  "version": "1.0.0",
+  "description": "演示首页工具栏按钮、FAB、分类栏扩展",
+  "author": "Nirithy",
+  "type": "lua",
+  "pluginType": "normal",
+  "main": "main.lua",
+  "apiVersion": 1,
+  "category": "demo"
+}

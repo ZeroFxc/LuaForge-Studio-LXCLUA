@@ -52,23 +52,23 @@ object SharedTransitionComponents {
         SharedTransitionLayout(modifier = modifier) {
             // this = SharedTransitionScope
             ComposeBridge.pushActiveSharedTransitionScope(this)
-
+            var renderError: Exception? = null
+            var resultNode: ComposeNode? = null
             if (contentFn != null) {
-                var error: Exception? = null
-                var resultNode: ComposeNode? = null
                 try {
-                    val result = contentFn.call(this)
+                    val result = synchronized(ComposeBridge.luaLock) { contentFn.call(this) }
                     resultNode = result as? ComposeNode
                 } catch (e: Exception) {
-                    error = e
+                    renderError = e
                 }
-                if (error != null) {
-                    logE(TAG) { "SharedTransitionLayout content 回调失败: ${error.message}" }
-                }
-                if (resultNode != null) {
-                    ComposeRenderer.RenderNode(resultNode)
-                }
-            } else {
+            }
+            if (renderError != null) {
+                logE(TAG) { "SharedTransitionLayout content 回调失败: ${renderError.message}" }
+            }
+            // 渲染在try/finally外执行，确保pop执行（RenderChildren/RendorNode是Composable不能try-catch）
+            if (resultNode != null) {
+                ComposeRenderer.RenderNode(resultNode!!)
+            } else if (contentFn == null) {
                 ComposeRenderer.RenderChildren(node)
             }
             ComposeBridge.popActiveSharedTransitionScope()

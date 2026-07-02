@@ -1,0 +1,628 @@
+现在就是那个动画的示例的问题 
+the up motion event handled by client, just return
+preExecute mColorMode=0
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:0
+[LuaActivity] onCreate 开始, class=LuaActivity
+ NoSuchMethodException 
+ NoSuchMethodException 
+ NoSuchMethodException 
+should not HookOnBackInvokedCallbackEnabled for application com.nirithy.lxclua.LuaActivity@3363393 hasOnBackInvokedCallBackEnabled
+initPredictiveBackConfig for com.nirithy.lxclua.LuaActivity@3363393 initPredictiveBackConfig mShouldInterceptKeyEvent false
+should not HookOnBackInvokedCallbackEnabled for application com.nirithy.lxclua.LuaActivity@3363393 hasOnBackInvokedCallBackEnabled
+[LuaActivity] super.onCreate 完成
+[LuaActivity] luaPath=/storage/emulated/0/XCLUA/project/检测Magisk/main.lua
+[LuaActivity] pageName=main, luaDir=/storage/emulated/0/XCLUA/project/检测Magisk
+[LuaActivity] initLua 开始
+[LuaActivity] ComposeBridge.inject 开始
+[setAndroidContext] density=3.5, orientation=1
+inject 开始, LuaState=128132995
+========== 开始注入 Compose API ==========
+[inject] 注册插件...
+注册插件 [layout] LayoutComponents, 组件: [Column, Row, Box, LazyColumn, LazyRow]
+注册插件 [display] DisplayComponents, 组件: [Text]
+注册插件 [input] InputComponents, 组件: [Button, TextButton, OutlinedButton, IconButton, TextField, OutlinedTextField, Checkbox, Switch, Slider]
+注册插件 [container] ContainerComponents, 组件: [Card, Surface, Scaffold, Spacer, Divider, VerticalDivider]
+注册插件 [layout] BoxWithConstraintsComponent, 组件: [BoxWithConstraints]
+注册插件 [display] IconComponent, 组件: [Icon]
+注册插件 [animation] AnimationPlugin, 组件: [AnimatedVisibility, AnimatedContent, Crossfade, InfiniteTransition, SharedTransitionLayout]
+注册插件 [draw] CanvasPlugin, 组件: [Canvas]
+注册插件 [effect] EffectPlugin, 组件: [LaunchedEffect, key, DisposableEffect]
+注册插件 [navigation3] Navigation3Plugin, 组件: [NavDisplay]
+注册插件 [viewinterop] AndroidViewComponent, 组件: [AndroidView]
+注册插件 [complement] ComplementComponents, 组件: [FloatingActionButton, SmallFloatingActionButton, LargeFloatingActionButton, ExtendedFloatingActionButton, AssistChip, FilterChip, InputChip, SuggestionChip, TabRow, Tab, ScrollableTabRow, ModalNavigationDrawer, DismissibleNavigationDrawer, ModalDrawerSheet, PermanentNavigationDrawer, SearchBar, DockedSearchBar, DatePicker, DatePickerDialog, TimePicker, LinearProgressIndicator, CircularProgressIndicator, Badge, BadgedBox]
+注册插件 [display] BackHandlerComponent, 组件: [BackHandler]
+开始注入 13 个插件的组件...
+  layout: 5 个组件
+  display: 1 个组件
+  input: 9 个组件
+  container: 6 个组件
+  layout: 1 个组件
+  display: 1 个组件
+  animation: 5 个组件
+  draw: 1 个组件
+  effect: 3 个组件
+  navigation3: 1 个组件
+  viewinterop: 1 个组件
+  complement: 24 个组件
+  display: 1 个组件
+插件注入完成，ComponentRegistry 共 59 个组件
+[inject] 组件渲染器注册完成，共 59 个
+[inject] KSP 生成的组件不存在（首次编译可能未生成），回退到 DynamicRenderer
+[create] prefix=androidx.compose, 初始栈顶=2
+[create] 创建命名空间表, idx=3, 栈顶=3
+[create] 创建元表, idx=4, 栈顶=4
+[create] pushLuaIndexWrapper 后, 栈顶=5
+[create] setField __index 后, 栈顶=4
+[create] 元表 __index 存在=true, type=function
+[create] setMetaTable(idx=3) 返回=1, 栈顶 4 → 3
+[create] getMetaTable(idx=3) 返回=1, type=table
+[create] 完成, 最终栈顶=3
+[inject] 注入 Lua API...
+[inject] 开始注入导航 API
+[inject] 导航 API 注入完成
+[inject] compose metatable __index 存在=true
+[__index] prefix=androidx.compose, key=material3, fullPath=androidx.compose.material3
+[__index] 创建子命名空间: androidx.compose.material3
+[createSub] androidx.compose.material3 开始, 栈顶=3
+[createSub] getMetaTable(idx=4) 返回=1
+[createSub] androidx.compose.material3 完成, 缓存到父表, 最终栈顶=4
+[inject] Lua验证: compose metatable 正常
+========== Compose API 注入完成 ==========
+[LuaActivity] ComposeBridge.inject 完成
+[LuaActivity] initLua 完成
+[LuaActivity] doFile 开始: /storage/emulated/0/XCLUA/project/检测Magisk/main.lua
+[state] 创建响应式状态 #0, 初始值: true (Boolean)
+[state] 创建响应式状态 #1, 初始值: false (Boolean)
+[LuaActivity] doFile 完成
+[LuaActivity] refreshAfterLoad 调用
+[refreshAfterLoad] 准备触发首次渲染
+[__index] prefix=androidx.compose, key=Column, fullPath=androidx.compose.Column
+[resolve] androidx.compose.Column → 未找到
+[resolve] androidx.compose.LocalContext.Column → 未找到
+[resolve] androidx.compose.Theme.Column → 未找到
+[resolve] androidx.compose.LocalConfiguration.Column → 未找到
+[resolve] androidx.compose.material3.Column → 未找到
+[resolve] androidx.compose.LocalDensity.Column → 未找到
+[__index] Column → ComposeFunction(空classPath)，由 ComponentRegistry 渲染
+[Modifier] 创建 ModifierChain 实例: 164340106
+[__index] prefix=androidx.compose, key=Text, fullPath=androidx.compose.Text
+[resolve] androidx.compose.Text → 未找到
+[resolve] androidx.compose.LocalContext.Text → 未找到
+[resolve] androidx.compose.Theme.Text → 未找到
+[resolve] androidx.compose.LocalConfiguration.Text → 未找到
+[resolve] androidx.compose.material3.Text → androidx.compose.material3.TextKt ✓
+[__index] Text → 跨包搜索命中 androidx.compose.material3.Text，缓存到父表
+[ComposeFunction] Text 被调用, classPath=androidx.compose.material3.Text
+[parseNode:Text] 属性: fontSize = 22
+[parseNode:Text] 属性: color = 4284960932
+[parseNode:Text] 属性: text = "动画示例"
+[parseNode:Text] 属性: fontWeight = 700
+[__index] prefix=androidx.compose, key=Spacer, fullPath=androidx.compose.Spacer
+[resolve] androidx.compose.Spacer → 未找到
+[resolve] androidx.compose.LocalContext.Spacer → 未找到
+[resolve] androidx.compose.Theme.Spacer → 未找到
+[resolve] androidx.compose.LocalConfiguration.Spacer → 未找到
+[resolve] androidx.compose.material3.Spacer → 未找到
+[resolve] androidx.compose.LocalDensity.Spacer → 未找到
+[__index] Spacer → ComposeFunction(空classPath)，由 ComponentRegistry 渲染
+[Modifier] 创建 ModifierChain 实例: 27788283
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=27788283)
+[ComposeFunction] Text 被调用, classPath=androidx.compose.material3.Text
+[parseNode:Text] 属性: fontSize = 16
+[parseNode:Text] 属性: text = "1. AnimatedVisibility 显示/隐藏:"
+[parseNode:Text] 属性: fontWeight = 600
+[Modifier] 创建 ModifierChain 实例: 81943576
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=81943576)
+[__index] prefix=androidx.compose, key=AnimatedVisibility, fullPath=androidx.compose.AnimatedVisibility
+[resolve] androidx.compose.AnimatedVisibility → 未找到
+[resolve] androidx.compose.LocalContext.AnimatedVisibility → 未找到
+[resolve] androidx.compose.Theme.AnimatedVisibility → 未找到
+[resolve] androidx.compose.LocalConfiguration.AnimatedVisibility → 未找到
+[resolve] androidx.compose.material3.AnimatedVisibility → 未找到
+[resolve] androidx.compose.LocalDensity.AnimatedVisibility → 未找到
+[__index] AnimatedVisibility → ComposeFunction(空classPath)，由 ComponentRegistry 渲染
+[__index] prefix=androidx.compose, key=Card, fullPath=androidx.compose.Card
+[resolve] androidx.compose.Card → 未找到
+[resolve] androidx.compose.LocalContext.Card → 未找到
+[resolve] androidx.compose.Theme.Card → 未找到
+[resolve] androidx.compose.LocalConfiguration.Card → 未找到
+[resolve] androidx.compose.material3.Card → androidx.compose.material3.CardKt ✓
+[__index] Card → 跨包搜索命中 androidx.compose.material3.Card，缓存到父表
+[Modifier] 创建 ModifierChain 实例: 251704945
+[Modifier] 创建 ModifierChain 实例: 122309718
+[ComposeFunction] Text 被调用, classPath=androidx.compose.material3.Text
+[parseNode:Text] 属性: fontSize = 14
+[parseNode:Text] 属性: text = "这是一个可以动画显示/隐藏的卡片！
+点击下方按钮切换可见性。"
+[parseNode:Text] 属性: modifier = ModifierChain(hash=122309718)
+[ComposeFunction] Card 被调用, classPath=androidx.compose.material3.Card
+[parseNode:Card] 属性: color = 4293451512
+[parseNode:Card] 属性: modifier = ModifierChain(hash=251704945)
+[parseChildren] 数组模式, 长度=1, absIdx=4
+[parseChild] 已解析的子节点: type=Text
+[parseNode:Card] children 解析: 1 个子节点
+[ComposeFunction] AnimatedVisibility 被调用, classPath=
+[parseNode:AnimatedVisibility] 属性: visible = true
+[parseChildren] 数组模式, 长度=1, absIdx=4
+[parseChild] 已解析的子节点: type=Card
+[parseNode:AnimatedVisibility] children 解析: 1 个子节点
+[Modifier] 创建 ModifierChain 实例: 241755351
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=241755351)
+[__index] prefix=androidx.compose, key=Button, fullPath=androidx.compose.Button
+[resolve] androidx.compose.Button → 未找到
+[resolve] androidx.compose.LocalContext.Button → 未找到
+[resolve] androidx.compose.Theme.Button → 未找到
+[resolve] androidx.compose.LocalConfiguration.Button → 未找到
+[resolve] androidx.compose.material3.Button → androidx.compose.material3.ButtonKt ✓
+[__index] Button → 跨包搜索命中 androidx.compose.material3.Button，缓存到父表
+[Modifier] 创建 ModifierChain 实例: 229450180
+[ComposeFunction] Button 被调用, classPath=androidx.compose.material3.Button
+[parseNode:Button] 回调: onClick = LuaFunction
+[parseNode:Button] 属性: text = "隐藏"
+[parseNode:Button] 属性: modifier = ModifierChain(hash=229450180)
+[Modifier] 创建 ModifierChain 实例: 77154477
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=77154477)
+[ComposeFunction] Text 被调用, classPath=androidx.compose.material3.Text
+[parseNode:Text] 属性: fontSize = 16
+[parseNode:Text] 属性: text = "2. animateFloatAsState 数值动画:"
+[parseNode:Text] 属性: fontWeight = 600
+[Modifier] 创建 ModifierChain 实例: 204920802
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=204920802)
+[ComposeFunction] Text 被调用, classPath=androidx.compose.material3.Text
+[parseNode:Text] 属性: fontSize = 14
+[parseNode:Text] 属性: text = "目标值: 0"
+[parseNode:Text] 属性: color = 4284900966
+[ComposeFunction] Text 被调用, classPath=androidx.compose.material3.Text
+[parseNode:Text] 回调: textLambda = LuaFunction
+[parseNode:Text] 属性: color = 4284960932
+[parseNode:Text] 属性: fontWeight = 700
+[parseNode:Text] 属性: fontSize = 20
+[Modifier] 创建 ModifierChain 实例: 65861491
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=65861491)
+[__index] prefix=androidx.compose, key=Canvas, fullPath=androidx.compose.Canvas
+[resolve] androidx.compose.Canvas → 未找到
+[resolve] androidx.compose.LocalContext.Canvas → 未找到
+[resolve] androidx.compose.Theme.Canvas → 未找到
+[resolve] androidx.compose.LocalConfiguration.Canvas → 未找到
+[resolve] androidx.compose.material3.Canvas → 未找到
+[resolve] androidx.compose.LocalDensity.Canvas → 未找到
+[__index] Canvas → ComposeFunction(空classPath)，由 ComponentRegistry 渲染
+[Modifier] 创建 ModifierChain 实例: 87856688
+[ComposeFunction] Canvas 被调用, classPath=
+[parseNode:Canvas] 属性: continuousRedraw = true
+[parseNode:Canvas] 回调: onDraw = LuaFunction
+[parseNode:Canvas] 属性: modifier = ModifierChain(hash=87856688)
+[Modifier] 创建 ModifierChain 实例: 162448041
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=162448041)
+[__index] prefix=androidx.compose, key=Row, fullPath=androidx.compose.Row
+[resolve] androidx.compose.Row → 未找到
+[resolve] androidx.compose.LocalContext.Row → 未找到
+[resolve] androidx.compose.Theme.Row → 未找到
+[resolve] androidx.compose.LocalConfiguration.Row → 未找到
+[resolve] androidx.compose.material3.Row → 未找到
+[resolve] androidx.compose.LocalDensity.Row → 未找到
+[__index] Row → ComposeFunction(空classPath)，由 ComponentRegistry 渲染
+[Modifier] 创建 ModifierChain 实例: 107909166
+[Modifier] 创建 ModifierChain 实例: 244684751
+[ComposeFunction] Button 被调用, classPath=androidx.compose.material3.Button
+[parseNode:Button] 回调: onClick = LuaFunction
+[parseNode:Button] 属性: text = "0"
+[parseNode:Button] 属性: modifier = ModifierChain(hash=244684751)
+[Modifier] 创建 ModifierChain 实例: 51176796
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=51176796)
+[Modifier] 创建 ModifierChain 实例: 193454181
+[ComposeFunction] Button 被调用, classPath=androidx.compose.material3.Button
+[parseNode:Button] 回调: onClick = LuaFunction
+[parseNode:Button] 属性: text = "50"
+[parseNode:Button] 属性: modifier = ModifierChain(hash=193454181)
+[Modifier] 创建 ModifierChain 实例: 39289146
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=39289146)
+[Modifier] 创建 ModifierChain 实例: 92135915
+[ComposeFunction] Button 被调用, classPath=androidx.compose.material3.Button
+[parseNode:Button] 回调: onClick = LuaFunction
+[parseNode:Button] 属性: text = "100"
+[parseNode:Button] 属性: modifier = ModifierChain(hash=92135915)
+[ComposeFunction] Row 被调用, classPath=
+[parseNode:Row] 属性: modifier = ModifierChain(hash=107909166)
+[parseChildren] 数组模式, 长度=5, absIdx=4
+[parseChild] 已解析的子节点: type=Button
+[parseChild] 已解析的子节点: type=Spacer
+[parseChild] 已解析的子节点: type=Button
+[parseChild] 已解析的子节点: type=Spacer
+[parseChild] 已解析的子节点: type=Button
+[parseNode:Row] children 解析: 5 个子节点
+[Modifier] 创建 ModifierChain 实例: 137427784
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=137427784)
+[ComposeFunction] Text 被调用, classPath=androidx.compose.material3.Text
+[parseNode:Text] 属性: fontSize = 16
+[parseNode:Text] 属性: text = "3. Crossfade 交叉淡入淡出:"
+[parseNode:Text] 属性: fontWeight = 600
+[Modifier] 创建 ModifierChain 实例: 186326497
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=186326497)
+[__index] prefix=androidx.compose, key=Crossfade, fullPath=androidx.compose.Crossfade
+[resolve] androidx.compose.Crossfade → 未找到
+[resolve] androidx.compose.LocalContext.Crossfade → 未找到
+[resolve] androidx.compose.Theme.Crossfade → 未找到
+[resolve] androidx.compose.LocalConfiguration.Crossfade → 未找到
+[resolve] androidx.compose.material3.Crossfade → 未找到
+[resolve] androidx.compose.LocalDensity.Crossfade → 未找到
+[__index] Crossfade → ComposeFunction(空classPath)，由 ComponentRegistry 渲染
+[Modifier] 创建 ModifierChain 实例: 179074822
+[__index] prefix=androidx.compose, key=Box, fullPath=androidx.compose.Box
+[resolve] androidx.compose.Box → 未找到
+[resolve] androidx.compose.LocalContext.Box → 未找到
+[resolve] androidx.compose.Theme.Box → 未找到
+[resolve] androidx.compose.LocalConfiguration.Box → 未找到
+[resolve] androidx.compose.material3.Box → 未找到
+[resolve] androidx.compose.LocalDensity.Box → 未找到
+[__index] Box → ComposeFunction(空classPath)，由 ComponentRegistry 渲染
+[Modifier] 创建 ModifierChain 实例: 207008199
+[ComposeFunction] Text 被调用, classPath=androidx.compose.material3.Text
+[parseNode:Text] 属性: fontSize = 18
+[parseNode:Text] 属性: color = 4294967295
+[parseNode:Text] 属性: text = "状态 A (蓝色)"
+[parseNode:Text] 属性: fontWeight = 700
+[ComposeFunction] Box 被调用, classPath=
+[parseNode:Box] 属性: modifier = ModifierChain(hash=207008199)
+[parseChildren] 数组模式, 长度=1, absIdx=4
+[parseChild] 已解析的子节点: type=Text
+[parseNode:Box] children 解析: 1 个子节点
+[ComposeFunction] Card 被调用, classPath=androidx.compose.material3.Card
+[parseNode:Card] 属性: color = 4280391411
+[parseNode:Card] 属性: modifier = ModifierChain(hash=179074822)
+[parseChildren] 数组模式, 长度=1, absIdx=4
+[parseChild] 已解析的子节点: type=Box
+[parseNode:Card] children 解析: 1 个子节点
+[ComposeFunction] Crossfade 被调用, classPath=
+[parseChildren] 数组模式, 长度=1, absIdx=4
+[parseChild] 已解析的子节点: type=Card
+[parseNode:Crossfade] children 解析: 1 个子节点
+[parseNode:Crossfade] 属性: targetState = false
+[Modifier] 创建 ModifierChain 实例: 33457140
+[ComposeFunction] Spacer 被调用, classPath=
+[parseNode:Spacer] 属性: modifier = ModifierChain(hash=33457140)
+[Modifier] 创建 ModifierChain 实例: 139114269
+[ComposeFunction] Button 被调用, classPath=androidx.compose.material3.Button
+[parseNode:Button] 回调: onClick = LuaFunction
+[parseNode:Button] 属性: text = "切换状态"
+==LOGS OVER PROC QUOTA(300), rows(480) bytes(30447) com.luaforge.studio.lxclua u(0) l(0) t(0) c(0) DROPPED==
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+dispatchAppVisibility visible:false mUpcomingWindowFocus:false
+visibilityChanged oldVisibility=true newVisibility=false
+[resolveModifier] node=Canvas, 使用 ModifierChain
+onWindowVisibilityChanged: viewRoot-android.view.ViewRootImpl@46bd8c5 visibility changes to 8
+RenderProxy::destroy: this=0xb4000074f77fd400, mContext=0xb4000074d63a0a80
+SkiaVulkanPipeline::setSurface: this=0xb4000074f7077380, surface=NULL
+[VRI[MainActivity]#27(BLAST Consumer)27](id:56800000001b,api:1,p:22144,c:22144) disconnect: api 1
+wrapConfigInfoIntoFlags rotation=0, smallestScreenWidthDp=361, residentWS=false, scenario=0, bounds=Rect(0, 0 - 1264, 2780), isFirstDraw=false, relayoutAsync=false, flags=0, newFlags=1457532192, title=com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity
+relayoutWindow result, sizeChanged:false, surfaceControlChanged:true, transformHintChanged:false, mSurfaceSize:Point(1264, 2780), mLastSurfaceSize:Point(1264, 2780), mWidth:1264, mHeight:2780, requestedWidth:1264, requestedHeight:2780, transformHint:0, installOrientation:0, displayRotation:0, isSurfaceValid:false, attr.flag:-2122252032, tmpFrames:ClientWindowFrames{frame=[0,0][1264,2780] display=[0,0][1264,2780] parentFrame=[0,0][0,0]}, relayoutResult:2, relayoutAsync:false, mSyncSeqId:0
+[VRI[MainActivity]#27](f:0,a:1) destructor()
+[VRI[MainActivity]#27(BLAST Consumer)27](id:56800000001b,api:0,p:-1,c:22144) disconnect
+sendCancelIfRunning: isInProgress=false callback=androidx.navigationevent.OnBackInvokedInput$createOnBackAnimationCallback$1@9d56c02
+setWindowStopped stopped:true
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity,This com.android.internal.policy.DecorView{14430e I.E...... R.....ID 0,0-1264,2780 aid=1 alpha=1.0 viewInfo = }[MainActivity] change focus to false
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+com.luaforge.studio.lxclua/com.nirithy.lxclua.LuaActivity,This com.android.internal.policy.DecorView{99b29af V.E...... R......D 0,0-1264,2780 aid=8 alpha=1.0 viewInfo = }[LuaActivity] change focus to true
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+
+刚打开就一直绘制什么东西
+点击那些动画值按钮动画值也没有改变
+
+[resolveModifier] node=Canvas, 使用 ModifierChain
+[resolveModifier] node=Canvas, 使用 ModifierChain
+the up motion event handled by client, just return
+重组触发: rootNode=type=Column, error=null, bgColor=0
+[ComposeHost] recomposition 触发, rootNode=type=Column, error=null
+渲染节点: type=Column, 子节点=23
+[ComposeHost] 开始渲染根节点: type=Column
+[resolveModifier] node=Canvas, 使用 ModifierChain
+
+高级控件里的
+点击搜索组件
+还是崩溃
+Crash Time:
+2026-07-02 15:07:29
+
+App Version
+• Name: 1.2.3
+• Code: 20260702
+
+Device Info
+• Model: PKR110
+• Android: 16 (SDK 36)
+
+Crash Details
+
+[Exception Type]
+java.lang.IllegalArgumentException
+
+[Thread Info]
+main (ID:2)
+
+[Crash Context]
+Application: com.luaforge.studio.lxclua
+Time: 2026-07-02 15:07:28
+
+[Stack Trace]
+java.lang.IllegalArgumentException: Can't represent a width of 1096 and height of 375957537 in Constraints
+	at androidx.compose.ui.unit.ConstraintsKt.throwInvalidConstraintException(Constraints.kt:401)
+	at androidx.compose.ui.unit.ConstraintsKt.createConstraints(Constraints.kt:425)
+	at androidx.compose.ui.unit.Constraints$Companion.fixed-JhjzzOo(Constraints.kt:225)
+	at androidx.compose.material3.SearchBarKt$SearchBarLayout$2$1.measure-3p2s80s(SearchBar.kt:2256)
+	at androidx.compose.ui.node.InnerNodeCoordinator.measure-BRTryo0(InnerNodeCoordinator.kt:130)
+	at androidx.compose.ui.ZIndexNode.measure-3p2s80s(ZIndexModifier.kt:60)
+	at androidx.compose.ui.node.LayoutModifierNodeCoordinator.measure-BRTryo0(LayoutModifierNodeCoordinator.kt:190)
+	at androidx.compose.foundation.layout.FillNode.measure-3p2s80s(Size.kt:721)
+	at androidx.compose.ui.node.LayoutModifierNodeCoordinator.measure-BRTryo0(LayoutModifierNodeCoordinator.kt:190)
+	at androidx.compose.ui.node.MeasurePassDelegate$performMeasureBlock$1.invoke(MeasurePassDelegate.kt:173)
+	at androidx.compose.ui.node.MeasurePassDelegate$performMeasureBlock$1.invoke(MeasurePassDelegate.kt:172)
+	at androidx.compose.runtime.snapshots.SnapshotStateObserver.observeReads(SnapshotStateObserver.kt:758)
+	at androidx.compose.ui.node.MeasurePassDelegate.remeasure-BRTryo0(MeasurePassDelegate.kt:1077)
+	at androidx.compose.ui.node.LayoutNode.remeasure-_Sx5XlM$ui(LayoutNode.kt:1290)
+	at androidx.compose.ui.node.LayoutNode.remeasure-_Sx5XlM$ui$default(LayoutNode.kt:1283)
+	at androidx.compose.ui.node.MeasureAndLayoutDelegate.doRemeasure-sdFAvZA(MeasureAndLayoutDelegate.kt:383)
+	at androidx.compose.ui.node.MeasureAndLayoutDelegate.remeasureIfNeeded(MeasureAndLayoutDelegate.kt:672)
+	at androidx.compose.ui.node.MeasureAndLayoutDelegate.access$remeasureIfNeeded(MeasureAndLayoutDelegate.kt:46)
+	at androidx.compose.ui.node.MeasureAndLayoutDelegate.measureAndLayout(MeasureAndLayoutDelegate.kt:409)
+	at androidx.compose.ui.platform.AndroidComposeView.measureAndLayout(AndroidComposeView.android.kt:1860)
+	at androidx.compose.ui.node.Owner.measureAndLayout$default(Owner.kt:259)
+	at androidx.compose.ui.platform.AndroidComposeView.dispatchDraw(AndroidComposeView.android.kt:2195)
+	at android.view.View.draw(View.java:25756)
+	at android.view.View.updateDisplayListIfDirty(View.java:24522)
+	at android.view.ViewGroup.recreateChildDisplayList(ViewGroup.java:4681)
+	at android.view.ViewGroup.dispatchGetDisplayList(ViewGroup.java:4654)
+	at android.view.View.updateDisplayListIfDirty(View.java:24447)
+	at android.view.ViewGroup.recreateChildDisplayList(ViewGroup.java:4681)
+	at android.view.ViewGroup.dispatchGetDisplayList(ViewGroup.java:4654)
+	at android.view.View.updateDisplayListIfDirty(View.java:24447)
+	at android.view.ViewGroup.recreateChildDisplayList(ViewGroup.java:4681)
+	at android.view.ViewGroup.dispatchGetDisplayList(ViewGroup.java:4654)
+	at android.view.View.updateDisplayListIfDirty(View.java:24447)
+	at android.view.ViewGroup.recreateChildDisplayList(ViewGroup.java:4681)
+	at android.view.ViewGroup.dispatchGetDisplayList(ViewGroup.java:4654)
+	at android.view.View.updateDisplayListIfDirty(View.java:24447)
+	at android.view.ViewGroup.recreateChildDisplayList(ViewGroup.java:4681)
+	at android.view.ViewGroup.dispatchGetDisplayList(ViewGroup.java:4654)
+	at android.view.View.updateDisplayListIfDirty(View.java:24447)
+	at android.view.View.draw(View.java:25461)
+	at android.view.ViewGroup.drawChild(ViewGroup.java:4701)
+	at android.view.ViewGroup.dispatchDraw(ViewGroup.java:4442)
+	at android.view.View.draw(View.java:25756)
+	at com.android.internal.policy.DecorView.draw(DecorView.java:912)
+	at android.view.View.updateDisplayListIfDirty(View.java:24522)
+	at android.view.ThreadedRenderer.updateViewTreeDisplayList(ThreadedRenderer.java:726)
+	at android.view.ThreadedRenderer.updateRootDisplayList(ThreadedRenderer.java:732)
+	at android.view.ThreadedRenderer.draw(ThreadedRenderer.java:861)
+	at android.view.ViewRootImpl.draw(ViewRootImpl.java:6767)
+	at android.view.ViewRootImpl.performDraw(ViewRootImpl.java:6377)
+	at android.view.ViewRootImpl.performTraversals(ViewRootImpl.java:5206)
+	at android.view.ViewRootImpl.doTraversal(ViewRootImpl.java:3604)
+	at android.view.ViewRootImpl$TraversalRunnable.run(ViewRootImpl.java:12067)
+	at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1877)
+	at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1886)
+	at android.view.Choreographer.doCallbacks(Choreographer.java:1398)
+	at android.view.Choreographer.doFrame(Choreographer.java:1251)
+	at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:1860)
+	at android.os.Handler.handleCallback(Handler.java:1001)
+	at android.os.Handler.dispatchMessage(Handler.java:109)
+	at android.os.Looper.loopOnce(Looper.java:306)
+	at android.os.Looper.loop(Looper.java:416)
+	at android.app.ActivityThread.main(ActivityThread.java:9999)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:613)
+	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1074)
+
+
+
+然后就是那个一个进度条一个加载圈默认就一直在转圈
+点击开始加载按钮也没有反应 重置按钮也停不下来
+chip标签还是不能切换 
+tabrow这些都没有事件
+
+最后一个effect里面的按钮都没有事件 

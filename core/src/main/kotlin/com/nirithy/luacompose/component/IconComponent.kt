@@ -75,6 +75,9 @@ object IconComponent : ComposePlugin {
         "Place" to Icons.Filled.Place,
         "FilterList" to Icons.Filled.FilterList,
         "Sort" to Icons.AutoMirrored.Filled.Sort,
+        "ArrowDropDown" to Icons.Filled.ArrowDropDown,
+        "KeyboardArrowDown" to Icons.Filled.KeyboardArrowDown,
+        "KeyboardArrowUp" to Icons.Filled.KeyboardArrowUp,
     )
 
     /** 获取 Icon 名称列表（供 Lua 端查询） */

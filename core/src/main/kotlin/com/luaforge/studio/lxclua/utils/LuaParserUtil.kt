@@ -46,13 +46,13 @@ object LuaParserUtil {
             }
 
             if (!isParserAvailable()) {
-                return createErrorJson("原生库未加载或函数未找到")
+                return createUnavailableJson("原生库未加载或函数未找到")
             }
 
             parseLuaSyntax(luaCode)
 
         } catch (e: UnsatisfiedLinkError) {
-            createErrorJson("解析失败: Lua代码中的原生模块未加载")
+            createUnavailableJson("解析失败: Lua代码中的原生模块未加载")
         } catch (e: org.json.JSONException) {
             createErrorJson("JSON解析失败")
         } catch (e: Exception) {
@@ -93,6 +93,20 @@ object LuaParserUtil {
             put("status", false)
             put("line", 1)
             put("message", errorMessage)
+            // 标记解析器是否可用：原生模块未加载时 available=false，避免误报波浪线
+            put("available", true)
+        }.toString()
+    }
+
+    /**
+     * 创建解析器不可用的错误 JSON（不显示为语法错误波浪线）
+     */
+    private fun createUnavailableJson(errorMessage: String): String {
+        return JSONObject().apply {
+            put("status", false)
+            put("line", 1)
+            put("message", errorMessage)
+            put("available", false)
         }.toString()
     }
 
@@ -104,6 +118,7 @@ object LuaParserUtil {
             put("status", false)
             put("line", 1)
             put("message", errorMessage)
+            put("available", true)
         }
     }
 

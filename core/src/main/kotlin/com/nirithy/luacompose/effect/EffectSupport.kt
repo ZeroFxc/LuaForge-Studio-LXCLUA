@@ -52,6 +52,9 @@ fun LaunchedEffectRenderer(node: ComposeNode) {
             // 协程中的异常不向上传播
         }
     }
+
+    // 渲染 children（如果有的话，用于显示状态文本等）
+    ComposeRenderer.RenderChildren(node)
 }
 
 /** key 渲染器：按 key 分组复用 */
@@ -67,21 +70,23 @@ fun KeyRenderer(node: ComposeNode) {
 @Composable
 fun DisposableEffectRenderer(node: ComposeNode) {
     val key = node.props["key"]
-    val effectFn = node.props["effect"] as? LuaObject
+    val effect = node.props["effect"] as? LuaObject
 
     DisposableEffect(key) {
-        var onDispose: LuaObject? = null
-        try {
-            val result = effectFn?.call()
-            if (result is LuaObject) {
-                onDispose = result
-            }
-        } catch (_: Exception) { }
+        val onDisposeFn: Any? = if (effect != null) {
+            try { effect.call() } catch (_: Exception) { null }
+        } else null
 
         onDispose {
             try {
-                onDispose?.call()
+                val fn = onDisposeFn
+                if (fn is LuaObject && fn.isFunction()) {
+                    fn.call()
+                }
             } catch (_: Exception) { }
         }
     }
+
+    // 渲染 children（如果有的话，用于显示状态文本等）
+    ComposeRenderer.RenderChildren(node)
 }

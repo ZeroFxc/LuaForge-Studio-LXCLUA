@@ -27,6 +27,10 @@ import coil.request.ImageRequest
 import com.luaforge.studio.lxclua.R
 import com.luaforge.studio.lxclua.utils.IconManager
 
+/**
+ * 应用图标选择网格
+ * 提供默认图标和经典图标两种选择
+ */
 @Composable
 fun AppIconGrid(
     selectedIcon: IconManager.AppIcon,
@@ -34,14 +38,37 @@ fun AppIconGrid(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Start, // 从左开始排列
+        horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 第一个图标：默认
+        // 第一个图标：默认（自适应图标，带roundIcon）
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally, // 图标和文字居中对齐
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(end = 32.dp) // 添加右侧间距
+            modifier = Modifier.padding(end = 32.dp)
+        ) {
+            AppIconOption(
+                modifier = Modifier.size(60.dp),
+                iconResId = R.mipmap.ic_launcher,
+                isSelected = selectedIcon == IconManager.AppIcon.DEFAULT || selectedIcon == IconManager.AppIcon.ADAPTIVE,
+                onClick = { onIconSelected(IconManager.AppIcon.DEFAULT) }
+            )
+            Text(
+                text = stringResource(R.string.settings_icon_default),
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selectedIcon == IconManager.AppIcon.DEFAULT || selectedIcon == IconManager.AppIcon.ADAPTIVE)
+                    MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (selectedIcon == IconManager.AppIcon.DEFAULT || selectedIcon == IconManager.AppIcon.ADAPTIVE)
+                    FontWeight.Bold else FontWeight.Normal,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        // 第二个图标：经典图标（Play Store风格，无roundIcon）
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             AppIconOption(
                 modifier = Modifier.size(60.dp),
@@ -50,37 +77,14 @@ fun AppIconGrid(
                 onClick = { onIconSelected(IconManager.AppIcon.PLAY_STORE) }
             )
             Text(
-                text = stringResource(R.string.settings_icon_default),
+                text = stringResource(R.string.settings_icon_adaptive),
                 style = MaterialTheme.typography.labelMedium,
                 color = if (selectedIcon == IconManager.AppIcon.PLAY_STORE)
                     MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = if (selectedIcon == IconManager.AppIcon.PLAY_STORE)
                     FontWeight.Bold else FontWeight.Normal,
-                textAlign = TextAlign.Center // 文字居中对齐
-            )
-        }
-
-        // 第二个图标：adaptive
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally, // 图标和文字居中对齐
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            AppIconOption(
-                modifier = Modifier.size(60.dp),
-                iconResId = R.mipmap.ic_launcher,
-                isSelected = selectedIcon == IconManager.AppIcon.ADAPTIVE,
-                onClick = { onIconSelected(IconManager.AppIcon.ADAPTIVE) }
-            )
-            Text(
-                text = stringResource(R.string.settings_icon_adaptive),
-                style = MaterialTheme.typography.labelMedium,
-                color = if (selectedIcon == IconManager.AppIcon.ADAPTIVE)
-                    MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = if (selectedIcon == IconManager.AppIcon.ADAPTIVE)
-                    FontWeight.Bold else FontWeight.Normal,
-                textAlign = TextAlign.Center // 文字居中对齐
+                textAlign = TextAlign.Center
             )
         }
     }

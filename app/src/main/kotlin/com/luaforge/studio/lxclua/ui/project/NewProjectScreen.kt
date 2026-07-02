@@ -28,9 +28,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -64,6 +63,9 @@ import coil.request.ImageRequest
 import com.luaforge.studio.lxclua.R
 import com.luaforge.studio.lxclua.ui.components.MarkdownDialog
 import com.luaforge.studio.lxclua.ui.components.SwitchBar
+import com.luaforge.studio.lxclua.ui.settings.SettingsManager
+import com.luaforge.studio.lxclua.plugin.state.EventManager
+import com.luaforge.studio.lxclua.plugin.state.PluginEvents
 import com.luaforge.studio.lxclua.utils.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -91,7 +93,10 @@ data class TemplateItem(
     val name: String,
     val zipFileName: String,
     val previewPath: String? = null,
-    val previewUri: Uri? = null
+    val previewUri: Uri? = null,
+    val isUserTemplate: Boolean = false,
+    val filePath: String? = null,  // 用户模板的本地文件路径
+    val description: String = ""    // 模板描述
 )
 
 data class NewProjectData(
@@ -137,6 +142,37 @@ fun NewProjectScreen(
             uri?.let {
                 projectIconUri = it
                 LogCatcher.i("NewProjectScreen", "选择了项目图标: ${it}")
+            }
+        }
+    )
+
+    // 导入模板文件选择器
+    val importTemplateLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            uri?.let {
+                // 授予持久化URI权限
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        it, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (_: Exception) {}
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) {
+                        ProjectUtil.importTemplateFromUri(context, it)
+                    }
+                    if (result != null) {
+                        toast.showToast("模板导入成功")
+                        // 重新加载模板列表
+                        isLoadingTemplates = true
+                        ProjectUtil.loadTemplates(context) { templateList ->
+                            templates = templateList
+                            isLoadingTemplates = false
+                        }
+                    } else {
+                        toast.showToast("模板导入失败，请确保选择了有效的zip文件")
+                    }
+                }
             }
         }
     )
@@ -215,6 +251,17 @@ fun NewProjectScreen(
 
                 withContext(Dispatchers.Main) {
                     showToast(context.getString(R.string.new_project_create_success))
+                    // 触发新建项目事件
+                    val templateId = selectedTemplate?.zipFileName ?: selectedTemplate?.name ?: ""
+                    EventManager.fireEvent(
+                        PluginEvents.ON_NEW_PROJECT,
+                        projectName, projectDir.absolutePath, templateId
+                    )
+                    // 触发项目创建事件
+                    EventManager.fireEvent(
+                        PluginEvents.ON_PROJECT_CREATE,
+                        projectName, projectName, projectDir.absolutePath
+                    )
                     onCreateProject(
                         NewProjectData(
                             projectName = projectName,
@@ -234,6 +281,40 @@ fun NewProjectScreen(
                 }
             } finally {
                 isCreating = false
+            }
+        }
+    }
+
+    /**
+     * 重新加载模板列表
+     */
+    fun reloadTemplates() {
+        isLoadingTemplates = true
+        scope.launch {
+            ProjectUtil.loadTemplates(context) { templateList ->
+                templates = templateList
+                isLoadingTemplates = false
+            }
+        }
+    }
+
+    /**
+     * 删除用户模板
+     */
+    fun deleteUserTemplateItem(template: TemplateItem) {
+        scope.launch {
+            val success = withContext(Dispatchers.IO) {
+                ProjectUtil.deleteUserTemplate(context, template)
+            }
+            if (success) {
+                showToast("模板已删除")
+                // 如果删除的是当前选中的模板，清除选择
+                if (selectedTemplate == template) {
+                    selectedTemplate = null
+                }
+                reloadTemplates()
+            } else {
+                showToast("删除模板失败")
             }
         }
     }
@@ -321,7 +402,10 @@ fun NewProjectScreen(
         packageName = ProjectUtil.generatePackageName(defaultName)
     }
 
-    LaunchedEffect(Unit) {
+    // 监听SettingsManager中用户模板列表变化，每次进入页面或模板列表变化时重新加载
+    val userTemplatesCount = SettingsManager.currentSettings.userTemplates.size
+    LaunchedEffect(userTemplatesCount) {
+        isLoadingTemplates = true
         ProjectUtil.loadTemplates(context) { templateList ->
             templates = templateList
             isLoadingTemplates = false
@@ -433,7 +517,12 @@ fun NewProjectScreen(
                                 selectedTemplate = template
                                 currentPage = NewProjectPage.PROJECT_INFO
                             },
-                            toast = toast
+                            onImportTemplate = {
+                                importTemplateLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "*/*"))
+                            },
+                            onDeleteTemplate = { template ->
+                                deleteUserTemplateItem(template)
+                            }
                         )
                     }
 
@@ -463,15 +552,45 @@ fun NewProjectScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TemplateSelectionPage(
     templates: List<TemplateItem>,
     isLoadingTemplates: Boolean,
     selectedTemplate: TemplateItem?,
     onTemplateSelected: (TemplateItem) -> Unit,
-    toast: NonBlockingToastState
+    onImportTemplate: () -> Unit,
+    onDeleteTemplate: (TemplateItem) -> Unit
 ) {
-    val context = LocalContext.current
+    var templateToDelete by remember { mutableStateOf<TemplateItem?>(null) }
+
+    // 删除确认对话框
+    if (templateToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { templateToDelete = null },
+            icon = {
+                Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            },
+            title = { Text("删除模板") },
+            text = { Text("确定要删除模板「${templateToDelete?.name}」吗？此操作无法撤销。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        templateToDelete?.let { onDeleteTemplate(it) }
+                        templateToDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { templateToDelete = null }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 
     if (isLoadingTemplates) {
         Box(
@@ -492,67 +611,172 @@ fun TemplateSelectionPage(
                 )
             }
         }
-    } else if (templates.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    Icons.Filled.Dashboard,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                    modifier = Modifier.size(64.dp)
-                )
-                Text(
-                    text = stringResource(R.string.new_project_no_templates),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = stringResource(R.string.new_project_no_templates_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-        }
     } else {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
         ) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                items(templates) { template ->
-                    TemplateCard(
-                        template = template,
-                        isSelected = selectedTemplate == template,
-                        onClick = { onTemplateSelected(template) },
-                        context = context
-                    )
+            // 预设模板区域
+            val presetTemplates = templates.filter { !it.isUserTemplate }
+            if (presetTemplates.isNotEmpty()) {
+                TemplateSectionHeader(
+                    title = "预设模板",
+                    subtitle = "内置模板，快速开始"
+                )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(presetTemplates, key = { it.zipFileName }) { template ->
+                        TemplateCard(
+                            template = template,
+                            isSelected = selectedTemplate == template,
+                            onClick = { onTemplateSelected(template) },
+                            onLongClick = null,
+                            modifier = Modifier.width(180.dp)
+                        )
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 用户模板区域标题栏
+            val userTemplates = templates.filter { it.isUserTemplate }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "我的模板",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "导入自定义模板，快速复用项目结构",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                // 导入模板按钮
+                FilledTonalButton(
+                    onClick = onImportTemplate,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.FileUpload,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("导入模板")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (userTemplates.isEmpty()) {
+                // 空状态提示
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .height(160.dp)
+                        .clip(MaterialTheme.shapes.large)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.CreateNewFolder,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Text(
+                            text = "暂无自定义模板",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "点击「导入模板」选择zip文件",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+            } else {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(userTemplates, key = { it.zipFileName }) { template ->
+                        TemplateCard(
+                            template = template,
+                            isSelected = selectedTemplate == template,
+                            onClick = { onTemplateSelected(template) },
+                            onLongClick = { templateToDelete = template },
+                            modifier = Modifier.width(180.dp),
+                            showDeleteHint = true
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
 
+/**
+ * 模板区域标题
+ */
+@Composable
+private fun TemplateSectionHeader(
+    title: String,
+    subtitle: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TemplateCard(
     template: TemplateItem,
     isSelected: Boolean,
     onClick: () -> Unit,
-    context: android.content.Context
+    onLongClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    showDeleteHint: Boolean = false
 ) {
     var previewImage by remember { mutableStateOf<Any?>(null) }
+    val context = LocalContext.current
 
     LaunchedEffect(template) {
         withContext(Dispatchers.IO) {
@@ -566,8 +790,7 @@ fun TemplateCard(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .aspectRatio(0.65f)
             .clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
@@ -579,18 +802,28 @@ fun TemplateCard(
                     MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
                 shape = MaterialTheme.shapes.large
             )
-            .clickable(onClick = onClick)
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick
+                    )
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                }
+            )
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // 预览区域
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(start = 18.dp, top = 18.dp, end = 18.dp, bottom = 8.dp)
-                    .clip(MaterialTheme.shapes.large)
+                    .padding(start = 14.dp, top = 14.dp, end = 14.dp, bottom = 6.dp)
+                    .clip(MaterialTheme.shapes.medium)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -611,18 +844,18 @@ fun TemplateCard(
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(16.dp)
+                            modifier = Modifier.padding(12.dp)
                         ) {
                             Icon(
-                                Icons.Filled.Dashboard,
+                                if (template.isUserTemplate) Icons.Filled.FolderSpecial else Icons.Filled.Dashboard,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(40.dp)
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = template.name,
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Medium,
                                 textAlign = TextAlign.Center,
@@ -632,22 +865,59 @@ fun TemplateCard(
                         }
                     }
                 }
+
+                // 用户模板标识
+                if (template.isUserTemplate) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "自定义",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
 
+            // 名称和描述
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = template.name,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (template.description.isNotBlank()) {
+                    Text(
+                        text = template.description,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (showDeleteHint) {
+                    Text(
+                        text = "长按删除",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }

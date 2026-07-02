@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import com.luajava.LuaObject
+import com.nirithy.luacompose.bridge.ComposeBridge
 
 private const val TAG = "GestureSupport"
 
@@ -47,19 +48,19 @@ fun Modifier.applyGestures(config: GestureConfig?): Modifier {
             detectDragGestures(
                 onDragStart = { offset ->
                     config.onDragStart?.let { fn ->
-                        try { fn.call(offset.x.toDouble(), offset.y.toDouble()) }
+                        try { synchronized(ComposeBridge.luaLock) { fn.call(offset.x.toDouble(), offset.y.toDouble()) } }
                         catch (e: Exception) { logE(TAG) { "onDragStart 回调失败: ${e.message}" } }
                     }
                 },
                 onDragEnd = {
                     config.onDragEnd?.let { fn ->
-                        try { fn.call() }
+                        try { synchronized(ComposeBridge.luaLock) { fn.call() } }
                         catch (e: Exception) { logE(TAG) { "onDragEnd 回调失败: ${e.message}" } }
                     }
                 },
                 onDragCancel = {
                     config.onDragCancel?.let { fn ->
-                        try { fn.call() }
+                        try { synchronized(ComposeBridge.luaLock) { fn.call() } }
                         catch (e: Exception) { logE(TAG) { "onDragCancel 回调失败: ${e.message}" } }
                     }
                 },
@@ -67,7 +68,7 @@ fun Modifier.applyGestures(config: GestureConfig?): Modifier {
                     config.onDrag?.let { fn ->
                         try {
                             change.consume()
-                            fn.call(dragAmount.x.toDouble(), dragAmount.y.toDouble())
+                            synchronized(ComposeBridge.luaLock) { fn.call(dragAmount.x.toDouble(), dragAmount.y.toDouble()) }
                         } catch (e: Exception) {
                             logE(TAG) { "onDrag 回调失败: ${e.message}" }
                         }
@@ -81,19 +82,19 @@ fun Modifier.applyGestures(config: GestureConfig?): Modifier {
             detectTapGestures(
                 onTap = config.onTap?.let { fn ->
                     { offset ->
-                        try { fn.call(offset.x.toDouble(), offset.y.toDouble()) }
+                        try { synchronized(ComposeBridge.luaLock) { fn.call(offset.x.toDouble(), offset.y.toDouble()) } }
                         catch (e: Exception) { logE(TAG) { "onTap 回调失败: ${e.message}" } }
                     }
                 },
                 onDoubleTap = config.onDoubleTap?.let { fn ->
                     { offset ->
-                        try { fn.call(offset.x.toDouble(), offset.y.toDouble()) }
+                        try { synchronized(ComposeBridge.luaLock) { fn.call(offset.x.toDouble(), offset.y.toDouble()) } }
                         catch (e: Exception) { logE(TAG) { "onDoubleTap 回调失败: ${e.message}" } }
                     }
                 },
                 onLongPress = config.onLongPress?.let { fn ->
                     { offset ->
-                        try { fn.call(offset.x.toDouble(), offset.y.toDouble()) }
+                        try { synchronized(ComposeBridge.luaLock) { fn.call(offset.x.toDouble(), offset.y.toDouble()) } }
                         catch (e: Exception) { logE(TAG) { "onLongPress 回调失败: ${e.message}" } }
                     }
                 }

@@ -4,6 +4,8 @@ import android.graphics.Paint
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.getValue
@@ -31,6 +33,7 @@ import com.luaforge.studio.lxclua.utils.LogCatcher
 import com.luaforge.studio.lxclua.plugin.bridge.PluginSyntax
 import com.luaforge.studio.lxclua.plugin.bridge.PluginDecoration
 import com.luaforge.studio.lxclua.plugin.data.SyntaxLanguageRules
+import com.luaforge.studio.lxclua.plugin.state.PluginEvents
 import com.luaforge.studio.lxclua.utils.NonBlockingToastState
 import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.event.ClickEvent
@@ -102,6 +105,8 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
     var activeFileIndex by mutableIntStateOf(-1); private set
     var isCompletionDataLoading by mutableStateOf(false); private set
     var completionDataProgress by mutableStateOf(0f)    // 新增进度状态
+    /** 文本变化版本号，每次文本变更时递增，用于Compose侧防抖监听 */
+    var textChangeVersion by mutableIntStateOf(0); private set
     private var _isInitialized by mutableStateOf(false)
     val isInitialized: Boolean get() = _isInitialized
     val activeFileState: CodeEditorState?
@@ -776,6 +781,23 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                 }
             }
             text.addContentListener(object : io.github.rosemoe.sora.text.ContentListener {
+                // 诊断刷新防抖：500ms 内多次变更只触发一次 updateLuaDiagnostics
+                private val diagHandler = Handler(Looper.getMainLooper())
+                private val diagRunnable = Runnable {
+                    val lang = this@apply.editorLanguage
+                    if (lang is LuaLanguage) {
+                        val analyzer = lang.analyzeManager
+                        if (analyzer is LuaIncrementalAnalyzeManager) {
+                            analyzer.refreshDiagnostics()
+                        }
+                    }
+                }
+
+                private fun scheduleDiagRefresh() {
+                    diagHandler.removeCallbacks(diagRunnable)
+                    diagHandler.postDelayed(diagRunnable, 500)
+                }
+
                 override fun beforeReplace(content: io.github.rosemoe.sora.text.Content) {}
                 override fun afterInsert(
                     content: io.github.rosemoe.sora.text.Content,
@@ -786,11 +808,8 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                     inserted: CharSequence
                 ) {
                     state.onContentChanged(content.toString())
-                    com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent(
-                        "onTextChanged",
-                        state.file.absolutePath,
-                        content.toString()
-                    )
+                    // 递增文本变化版本号，由 Compose 侧 LaunchedEffect 防抖后触发 ON_TEXT_CHANGED 事件
+                    textChangeVersion++
                     // 防抖：同一帧内多次文本变更只触发一次重应用
                     if (PluginDecoration.tryScheduleReapply()) {
                         val fp = state.file.absolutePath
@@ -800,6 +819,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                             PluginDecoration.applyToEditor(this@apply, fp)
                         }
                     }
+                    scheduleDiagRefresh()
                 }
 
                 override fun afterDelete(
@@ -811,11 +831,8 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                     deleted: CharSequence
                 ) {
                     state.onContentChanged(content.toString())
-                    com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent(
-                        "onTextChanged",
-                        state.file.absolutePath,
-                        content.toString()
-                    )
+                    // 递增文本变化版本号，由 Compose 侧 LaunchedEffect 防抖后触发 ON_TEXT_CHANGED 事件
+                    textChangeVersion++
                     // 防抖：同一帧内多次文本变更只触发一次重应用
                     if (PluginDecoration.tryScheduleReapply()) {
                         val fp = state.file.absolutePath
@@ -825,6 +842,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                             PluginDecoration.applyToEditor(this@apply, fp)
                         }
                     }
+                    scheduleDiagRefresh()
                 }
             })
         }
@@ -909,7 +927,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                     state.file.outputStream().bufferedWriter(Charsets.UTF_8)
                         .use { it.write(state.content) }
                     state.onContentSaved()
-                    com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent("onFileSave", state.file.absolutePath)
+                    com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent(PluginEvents.ON_FILE_SAVE, state.file.absolutePath)
                     updateFileSavedState(state.file.absolutePath, true)
                     successCount++
                 } catch (e: Exception) {
@@ -942,7 +960,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                     state.file.outputStream().bufferedWriter(Charsets.UTF_8)
                         .use { it.write(state.content) }
                     state.onContentSaved()
-                    com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent("onFileSave", state.file.absolutePath)
+                    com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent(PluginEvents.ON_FILE_SAVE, state.file.absolutePath)
                     updateFileSavedState(state.file.absolutePath, true)
                     successCount++
                 } catch (e: Exception) {
@@ -960,7 +978,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                 state.file.outputStream().bufferedWriter(Charsets.UTF_8)
                     .use { it.write(state.content) }
                 state.onContentSaved()
-                com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent("onFileSave", state.file.absolutePath)
+                com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent(PluginEvents.ON_FILE_SAVE, state.file.absolutePath)
                 updateFileSavedState(state.file.absolutePath, true)
                 true
             } catch (e: Exception) {
@@ -1022,7 +1040,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                     cursorColumn = cursorColumn
                 )
             }
-            com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent("onFileOpen", file.absolutePath)
+            com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent(PluginEvents.ON_FILE_OPEN, file.absolutePath)
             true
         } catch (e: Exception) {
             LogCatcher.e("EditorViewModel", "打开文件内部失败: ${file.name}", e)
@@ -1213,7 +1231,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
     fun closeFile(indexToClose: Int) {
         if (indexToClose !in openFiles.indices) return
         val filePath = openFiles[indexToClose].file.absolutePath
-        com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent("onFileClose", filePath)
+        com.luaforge.studio.lxclua.plugin.PluginManager.notifyEvent(PluginEvents.ON_FILE_CLOSE, filePath)
         viewModelScope.launch(KotlinDispatchers.IO) {
             stateManager.removeFileFromCurrentProject(
                 filePath

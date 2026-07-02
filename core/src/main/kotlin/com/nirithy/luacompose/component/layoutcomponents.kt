@@ -3,17 +3,30 @@ package com.nirithy.luacompose.component
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowColumn
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.logE
 import com.nirithy.luacompose.node.ComposeNode
 import com.nirithy.luacompose.plugin.ComposePlugin
 import com.nirithy.luacompose.render.ComposeRenderer
 import com.nirithy.luacompose.render.RenderChildWithAlign
 import com.nirithy.luacompose.render.RenderChildWithWeight
+import com.luajava.LuaObject
 
 /**
  * 布局组件插件：Column、Row、Box、LazyColumn、LazyRow
@@ -25,8 +38,12 @@ object LayoutComponents : ComposePlugin {
         "Column" to { node -> ColumnLayout(node) },
         "Row" to { node -> RowLayout(node) },
         "Box" to { node -> BoxLayout(node) },
+        "FlowRow" to { node -> FlowRowLayout(node) },
+        "FlowColumn" to { node -> FlowColumnLayout(node) },
         "LazyColumn" to { node -> LazyColumnLayout(node) },
         "LazyRow" to { node -> LazyRowLayout(node) },
+        "LazyVerticalGrid" to { node -> LazyVerticalGridLayout(node) },
+        "LazyHorizontalGrid" to { node -> LazyHorizontalGridLayout(node) },
     )
 
     @Composable
@@ -79,6 +96,42 @@ object LayoutComponents : ComposePlugin {
         }
     }
 
+    @OptIn(ExperimentalLayoutApi::class)
+    @Composable
+    private fun FlowRowLayout(node: ComposeNode) {
+        FlowRow(
+            modifier = ComposeRenderer.resolveModifier(node),
+            horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
+            verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
+        ) {
+            if (node.childrenFunc != null) {
+                ComposeRenderer.RenderChildren(node)
+            } else {
+                for (child in node.children) {
+                    ComposeRenderer.RenderNode(child)
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalLayoutApi::class)
+    @Composable
+    private fun FlowColumnLayout(node: ComposeNode) {
+        FlowColumn(
+            modifier = ComposeRenderer.resolveModifier(node),
+            verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
+            horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
+        ) {
+            if (node.childrenFunc != null) {
+                ComposeRenderer.RenderChildren(node)
+            } else {
+                for (child in node.children) {
+                    ComposeRenderer.RenderNode(child)
+                }
+            }
+        }
+    }
+
     @Composable
     private fun LazyColumnLayout(node: ComposeNode) {
         LazyColumn(
@@ -86,11 +139,7 @@ object LayoutComponents : ComposePlugin {
             verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
             horizontalAlignment = resolveHorizontalAlignment(node.stringProp("horizontalAlignment"))
         ) {
-            if (node.childrenFunc != null) {
-                item { ComposeRenderer.RenderChildren(node) }
-            } else {
-                itemsIndexed(node.children) { _, child -> ComposeRenderer.RenderNode(child) }
-            }
+            renderLazyItems(node)
         }
     }
 
@@ -101,11 +150,115 @@ object LayoutComponents : ComposePlugin {
             horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
             verticalAlignment = resolveVerticalAlignment(node.stringProp("verticalAlignment"))
         ) {
-            if (node.childrenFunc != null) {
-                item { ComposeRenderer.RenderChildren(node) }
-            } else {
-                itemsIndexed(node.children) { _, child -> ComposeRenderer.RenderNode(child) }
+            renderLazyItems(node)
+        }
+    }
+
+    @Composable
+    private fun LazyVerticalGridLayout(node: ComposeNode) {
+        val columns = resolveGridCells(node)
+        LazyVerticalGrid(
+            columns = columns,
+            modifier = ComposeRenderer.resolveModifier(node),
+            verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
+            horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
+        ) {
+            renderLazyGridItems(node)
+        }
+    }
+
+    @Composable
+    private fun LazyHorizontalGridLayout(node: ComposeNode) {
+        val rows = resolveGridCells(node)
+        LazyHorizontalGrid(
+            rows = rows,
+            modifier = ComposeRenderer.resolveModifier(node),
+            verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
+            horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
+        ) {
+            renderLazyGridItems(node)
+        }
+    }
+
+    /** 解析 GridCells：columns 或 rows 属性，支持 "Fixed(n)" 格式 */
+    private fun resolveGridCells(node: ComposeNode): GridCells {
+        val count = node.floatProp("columns", 0f).toInt()
+        if (count > 0) return GridCells.Fixed(count)
+        val fixedStr = node.stringProp("columns") ?: node.stringProp("rows")
+        if (fixedStr != null) {
+            val match = Regex("Fixed\\((\\d+)\\)").find(fixedStr)
+            if (match != null) return GridCells.Fixed(match.groupValues[1].toInt())
+        }
+        return GridCells.Fixed(2) // 默认2列
+    }
+
+    /**
+     * 渲染LazyGrid的子项，与 renderLazyItems 逻辑一致
+     */
+    private fun androidx.compose.foundation.lazy.grid.LazyGridScope.renderLazyGridItems(node: ComposeNode) {
+        val childrenFunc = node.childrenFunc
+        if (childrenFunc != null) {
+            synchronized(ComposeBridge.luaLock) {
+                try {
+                    val result = childrenFunc.call()
+                    when (result) {
+                        is ComposeNode -> {
+                            item { ComposeRenderer.RenderNode(result) }
+                        }
+                        is List<*> -> {
+                            gridItems(result.filterIsInstance<ComposeNode>()) { child ->
+                                ComposeRenderer.RenderNode(child)
+                            }
+                        }
+                        else -> {
+                            item { ComposeRenderer.RenderChildren(node) }
+                        }
+                    }
+                } catch (e: Exception) {
+                    logE("LayoutComponents") { "[LazyGrid] childrenFunc调用失败: ${e.message}" }
+                }
             }
+        } else {
+            gridItemsIndexed(node.children) { _, child -> ComposeRenderer.RenderNode(child) }
+        }
+    }
+
+    /**
+     * 渲染LazyList的子项：
+     * - 静态children列表：使用itemsIndexed逐个懒加载
+     * - childrenFunc动态函数：传递 LazyListScopeWrapper 让 Lua 侧直接调用 item()/items()
+     *   - 返回 nil：Lua 侧通过 scope:item()/scope:items() 直接添加（推荐）
+     *   - 返回 ComposeNode：fallback 为单个 item
+     *   - 返回 List：fallback 为 items 批量
+     */
+    private fun androidx.compose.foundation.lazy.LazyListScope.renderLazyItems(node: ComposeNode) {
+        val childrenFunc = node.childrenFunc
+        if (childrenFunc != null) {
+            val wrapper = LazyListScopeWrapper(this)
+            synchronized(ComposeBridge.luaLock) {
+                try {
+                    val result = childrenFunc.call(wrapper)
+                    // 如果 Lua 侧通过 scope:item()/scope:items() 添加了子项，result 为 nil
+                    // 否则 fallback 到旧逻辑
+                    when (result) {
+                        is ComposeNode -> {
+                            item { ComposeRenderer.RenderNode(result) }
+                        }
+                        is List<*> -> {
+                            items(result.filterIsInstance<ComposeNode>()) { child ->
+                                ComposeRenderer.RenderNode(child)
+                            }
+                        }
+                        else -> {
+                            // 返回 nil 或其他非节点类型：Lua 侧已通过 wrapper 添加
+                        }
+                    }
+                } catch (e: Exception) {
+                    logE("LayoutComponents") { "[LazyList] childrenFunc调用失败: ${e.message}" }
+                }
+            }
+        } else {
+            itemsIndexed(node.children) { _, child -> ComposeRenderer.RenderNode(child) }
         }
     }
 

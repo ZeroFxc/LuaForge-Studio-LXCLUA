@@ -138,6 +138,13 @@ class LuaIncrementalAnalyzeManager :
             val json = JSONObject(result)
 
             if (!json.optBoolean("status", true)) {
+                // 解析器不可用时跳过诊断（原生模块未加载等），避免误报波浪线
+                val available = json.optBoolean("available", true)
+                if (!available) {
+                    getReceiver()?.setDiagnostics(this, diagnosticsContainer)
+                    return
+                }
+
                 val errorLine = json.optInt("line", 1)
                 val errorMessage = json.optString("message", "Syntax error")
 
@@ -166,6 +173,14 @@ class LuaIncrementalAnalyzeManager :
             diagnosticsContainer.reset()
             getReceiver()?.setDiagnostics(this, null)
         }
+    }
+
+    /**
+     * 公开的诊断更新入口，供 EditorViewModel 在文本变更时调用
+     * 避免在 onReset 之外无法触发波浪线更新
+     */
+    fun refreshDiagnostics() {
+        updateLuaDiagnostics()
     }
 
     override fun computeBlocks(

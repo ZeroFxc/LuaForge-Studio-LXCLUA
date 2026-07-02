@@ -54,6 +54,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -130,6 +132,13 @@ data class PickerFileItem(
     val isHidden: Boolean = false
 )
 
+// 快捷目录数据类
+data class QuickDir(
+    val label: String,
+    val path: String,
+    val icon: ImageVector
+)
+
 /**
  * 文件选择器对话框 - 简化版本
  */
@@ -188,6 +197,27 @@ fun FilePickerDialog(
     // 计算是否可以返回上一级
     val canGoBack = currentPath != "/" &&
             currentPath != Environment.getExternalStorageDirectory().absolutePath
+
+    // 快捷目录列表
+    val quickDirectories = remember {
+        val externalRoot = Environment.getExternalStorageDirectory()
+        listOfNotNull(
+            // 内部存储根目录
+            QuickDir("主存储", externalRoot.absolutePath, Icons.Filled.FolderOpen),
+            // Download目录
+            QuickDir("下载", File(externalRoot, "Download").absolutePath, Icons.Filled.Description),
+            // 项目目录
+            QuickDir("项目", File(externalRoot, "LXC-LUA/project").absolutePath, Icons.Filled.Code),
+            // 备份目录
+            QuickDir("备份", File(externalRoot, "LXC-LUA/backups").absolutePath, Icons.Filled.FolderZip),
+            // DCIM（图片选择时常用）
+            if (File(externalRoot, "DCIM").exists())
+                QuickDir("相册", File(externalRoot, "DCIM").absolutePath, Icons.Filled.Image) else null,
+            // Pictures
+            if (File(externalRoot, "Pictures").exists())
+                QuickDir("图片", File(externalRoot, "Pictures").absolutePath, Icons.Filled.Image) else null
+        )
+    }
 
     // 对话框
     Dialog(
@@ -286,6 +316,51 @@ fun FilePickerDialog(
                             },
                             scrollState = breadcrumbScrollState
                         )
+                    }
+                }
+
+                // 快捷目录栏
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 4.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    quickDirectories.forEach { qDir ->
+                        val isCurrent = currentPath == qDir.path
+                        Surface(
+                            modifier = Modifier.clickable {
+                                currentPath = qDir.path
+                                selectedItem = null
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isCurrent)
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                            else
+                                MaterialTheme.colorScheme.surfaceContainerLow,
+                            contentColor = if (isCurrent)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    qDir.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = qDir.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
 

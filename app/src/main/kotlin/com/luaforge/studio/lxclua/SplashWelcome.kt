@@ -129,6 +129,21 @@ class SplashWelcome : ComponentActivity() {
                 EditorStateUtil.cleanupExpiredStateFiles(this@SplashWelcome)
                 EditorStateUtil.cleanupAllNonExistentFiles(this@SplashWelcome)
             }
+            // 启动时清理过期回收站项目（默认7天，不阻塞其他初始化）
+            launch(Dispatchers.IO) {
+                try {
+                    com.luaforge.studio.lxclua.utils.RecycleBinManager.loadIndex(this@SplashWelcome)
+                    // 读取设置中的保留天数，默认7天
+                    val retentionDays = com.luaforge.studio.lxclua.ui.settings.SettingsManager.currentSettings.trashRetentionDays
+                        .coerceIn(3, 30)
+                    val cleared = com.luaforge.studio.lxclua.utils.RecycleBinManager.clearExpired(retentionDays, this@SplashWelcome)
+                    if (cleared.isNotEmpty()) {
+                        android.util.Log.i("RecycleBin", "启动时清理了${cleared.size}个过期回收站项目")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("RecycleBin", "启动清理回收站失败", e)
+                }
+            }
         }
 
         setupSplashUI(shouldUpdate)

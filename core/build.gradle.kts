@@ -97,6 +97,7 @@ dependencies {
 
     // AndroidX Misc
     api(libs.activity)
+    api(libs.activity.compose)
     api(libs.appcompat)
     api(libs.annotation)
     api(libs.collection)

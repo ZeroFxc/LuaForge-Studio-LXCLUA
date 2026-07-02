@@ -13,6 +13,7 @@ interface IPluginBridge :
     IPluginBridgeClipboard,
     IPluginBridgeConfig,
     IPluginBridgeEvents,
+    IPluginBridgeMainPage,
     IPluginBridgeThreads,
     IPluginBridgeNetwork,
     IPluginBridgeReflection,

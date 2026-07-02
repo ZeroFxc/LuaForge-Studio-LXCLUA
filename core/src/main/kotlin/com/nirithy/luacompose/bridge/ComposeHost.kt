@@ -3,6 +3,8 @@ package com.nirithy.luacompose.bridge
 import android.content.Context
 import com.nirithy.luacompose.*
 import com.nirithy.lxclua.DebugLogger
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.fillMaxSize
@@ -309,6 +311,7 @@ private fun syncDensity() {
  */
 @Composable
 private fun animateValues() {
+    // Float 动画
     for (anim in ComposeBridge.animatedFloats) {
         val spec = anim.spec ?: spring()
         val animated by animateFloatAsState(
@@ -320,19 +323,45 @@ private fun animateValues() {
             anim.animatedValue.value = animated
         }
     }
+    // Dp 动画（AnimatedDp 直接存储 Float 值）
+    for (anim in ComposeBridge.animatedDps) {
+        val spec = anim.spec ?: spring()
+        val animated by animateDpAsState(
+            targetValue = anim.targetValue.value,
+            animationSpec = spec,
+            label = "AnimatedDp"
+        )
+        if (anim.animatedValue.value != animated.value) {
+            anim.animatedValue.value = animated.value
+        }
+    }
+    // Color 动画
+    for (anim in ComposeBridge.animatedColors) {
+        val animatedColor by animateColorAsState(
+            targetValue = anim.targetValue.value,
+            animationSpec = anim.animationSpec,
+            label = "AnimatedColor"
+        )
+        if (anim.animatedValue.value != animatedColor) {
+            anim.animatedValue.value = animatedColor
+        }
+    }
 
     // 观察 animatedValue 变化，根据模式选择更新方式
     LaunchedEffect(Unit) {
         snapshotFlow {
-            ComposeBridge.animatedFloats.map { it.animatedValue.value }
+            ComposeBridge.animatedFloats.map { it.animatedValue.value } +
+            ComposeBridge.animatedDps.map { it.animatedValue.value } +
+            ComposeBridge.animatedColors.map { it.animatedValue.value.value.toLong() }
         }.collect {
             // 检查是否有 useRecompose 模式的动画需要更新
             val hasRecompose = ComposeBridge.animatedFloats.any { it.useRecompose }
-            if (hasRecompose) {
+            if (hasRecompose || ComposeBridge.animatedColors.isNotEmpty()) {
                 ComposeBridge.recomposeTrigger.value++
             }
             // 检查是否有普通模式的动画需要更新
-            val hasNormal = ComposeBridge.animatedFloats.any { !it.useRecompose }
+            val hasNormal = (ComposeBridge.animatedFloats.any { !it.useRecompose } ||
+                                 ComposeBridge.animatedDps.isNotEmpty())
             if (hasNormal) {
                 ComposeBridge.scheduleRefresh()
             }

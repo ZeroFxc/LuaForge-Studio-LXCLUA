@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import com.nirithy.luacompose.animation.SharedTransitionComponents
+import com.nirithy.luacompose.bridge.ComposeBridge
 import com.nirithy.luacompose.draw.DrawScopeWrapper
 import com.nirithy.luacompose.gesture.applyGestures
 import com.nirithy.luacompose.modifier.ModifierChain
@@ -103,7 +104,7 @@ object ComposeRenderer {
             logV(TAG) { "[RenderChildren] node=${node.type}, 使用 childrenFunc 动态渲染" }
             // try-catch 不能包裹 @Composable 调用，所以只包裹非 Composable 部分
             val result: Any? = try {
-                childrenFunc.call()
+                synchronized(ComposeBridge.luaLock) { childrenFunc.call() }
             } catch (e: Exception) {
                 logE(TAG) { "[RenderChildren] childrenFunc 调用失败: ${e.message}" }
                 null
