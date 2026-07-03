@@ -41,8 +41,7 @@ public class RegionIterator {
 
     /**
      * Creates a new {@link RegionIterator} with the given params
-     *
-     * @param max       The length of full region, that's [0,max-1]
+     * @param max The length of full region, that's [0,max-1]
      * @param providers Providers of dividing points
      */
     public RegionIterator(int max, @NonNull RegionProvider... providers) {
@@ -87,7 +86,6 @@ public class RegionIterator {
 
     /**
      * Get current index of dividing points in provider with given index {@code i}
-     *
      * @param i Index of provider
      * @return Current index of regions in that provider
      */
@@ -98,7 +96,6 @@ public class RegionIterator {
     /**
      * Get the source index of dividing points in provider with given index {@code i}.
      * Source index is the index of dividing point that leads to current region.
-     *
      * @param i Index of provider
      */
     public int getRegionSourcePointer(int i) {
@@ -154,7 +151,6 @@ public class RegionIterator {
 
         /**
          * Get get dividing point at given index
-         *
          * @param index Index of point
          * @return Dividing index in region
          */

@@ -175,6 +175,17 @@ public class EditorColorScheme {
     public static final int TEXT_ACTION_WINDOW_BACKGROUND = 65;
     public static final int TEXT_ACTION_WINDOW_ICON_COLOR = 66;
 
+    public static final int MINIMAP_BACKGROUND = 81;
+    public static final int MINIMAP_VIEWPORT = 82;
+    public static final int MINIMAP_VIEWPORT_BORDER = 83;
+
+    //-------------Extended colors for LXCLua---------------------
+    public static final int CLASS_NAME = 84;
+    public static final int LOCAL_VARIABLE = 85;
+    public static final int TEXT_ACTION_WINDOW_STROKE_COLOR = 86;
+    public static final int COMPLETION_WND_DIVIDER_COLOR = 87;
+    public static final int COMPLETION_WND_ICON_BACKGROUND = 88;
+
     /**
      * Min pre-defined color id
      */
@@ -183,15 +194,7 @@ public class EditorColorScheme {
     /**
      * Max pre-defined color id
      */
-    protected static final int END_COLOR_ID = 80;
-
-    public static final int TEXT_ACTION_WINDOW_STROKE_COLOR = 81;
-    public static final int CLASS_NAME = 82;
-    public static final int LOCAL_VARIABLE = 83;
-    public static final int HEX_COLOR_WHITE = 84;
-    public static final int HEX_COLOR_BLACK = 85;
-    public static final int COMPLETION_WND_DIVIDER_COLOR = 86;
-    public static final int COMPLETION_WND_ICON_BACKGROUND = 87;
+    protected static final int END_COLOR_ID = 88;
 
 
     /**
@@ -303,6 +306,15 @@ public class EditorColorScheme {
             case COMPLETION_WND_CORNER:
                 color = isDark() ? BACKGROUND_COLOR_DARK : 0xffffffff;
                 break;
+            case MINIMAP_BACKGROUND:
+                color = ((isDark() ? BACKGROUND_COLOR_DARK : 0xffffffff) & 0x00ffffff) | 0xa0000000;
+                break;
+            case MINIMAP_VIEWPORT:
+                color = isDark() ? 0x30ffffff : 0x30333333;
+                break;
+            case MINIMAP_VIEWPORT_BORDER:
+                color = isDark() ? 0xb0ffffff : 0xb0333333;
+                break;
             case LINE_NUMBER_PANEL_TEXT:
                 color = 0xffffffff;
                 break;
@@ -401,9 +413,11 @@ public class EditorColorScheme {
                 color = 0xff3f51b5;
                 break;
             case COMPLETION_WND_TEXT_PRIMARY:
-            case COMPLETION_WND_TEXT_SECONDARY:
             case TEXT_INLAY_HINT_FOREGROUND:
                 color = isDark() ? 0xffffffff : 0xff000000;
+                break;
+            case COMPLETION_WND_TEXT_SECONDARY:
+                color = isDark() ? 0xffaaaaaa : 0xff545454;
                 break;
             case COMPLETION_WND_ITEM_CURRENT:
                 color = 0xffeeeeee;
@@ -455,20 +469,10 @@ public class EditorColorScheme {
             case TEXT_HIGHLIGHT_STRONG_BACKGROUND:
                 color = isDark() ? 0xB8004972 : 0x400e639c;
                 break;
-            case TEXT_ACTION_WINDOW_STROKE_COLOR:
-                color = isDark() ? 0xffeeeeee : Color.GRAY;
-                break;
             case TEXT_HIGHLIGHT_BACKGROUND:
                 color = isDark() ? 0xB8575757 : 0x40575757;
         }
         setColor(type, color);
-        setColor(CLASS_NAME, 0xFF3649F0);
-        setColor(LOCAL_VARIABLE, 0xFFFF0000);
-        setColor(HEX_COLOR_WHITE, 0xFFFFFFFF);
-        setColor(HEX_COLOR_BLACK, 0xFF000000);
-        setColor(COMPLETION_WND_DIVIDER_COLOR, 0xeeeeeeee);
-        setColor(COMPLETION_WND_ICON_BACKGROUND, 0xFFA9B7BE);
-
     }
 
     /**

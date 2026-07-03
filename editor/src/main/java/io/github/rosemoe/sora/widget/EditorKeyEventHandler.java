@@ -40,6 +40,7 @@ import io.github.rosemoe.sora.lang.smartEnter.NewlineHandler;
 import io.github.rosemoe.sora.text.Content;
 import io.github.rosemoe.sora.text.Cursor;
 import io.github.rosemoe.sora.text.method.KeyMetaStates;
+import io.github.rosemoe.sora.widget.component.EditorAutoCompletion;
 
 /**
  * Handles {@link KeyEvent}s in editor.
@@ -91,7 +92,8 @@ public class EditorKeyEventHandler {
                 || keyCode == KeyEvent.KEYCODE_DPAD_LEFT
                 || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
                 || keyCode == KeyEvent.KEYCODE_MOVE_HOME
-                || keyCode == KeyEvent.KEYCODE_MOVE_END;
+                || keyCode == KeyEvent.KEYCODE_MOVE_END
+                || keyCode == KeyEvent.KEYCODE_SPACE;
     }
 
     /**
@@ -371,7 +373,10 @@ public class EditorKeyEventHandler {
                 editor.copyText();
                 return editorKeyEvent.result(true);
             case KeyEvent.KEYCODE_SPACE:
-                if (editor.isEditable()) {
+                if (isCtrlPressed && !isAltPressed) {
+                    // Ctrl + Space
+                    editor.getComponent(EditorAutoCompletion.class).requireCompletion();
+                } else if (editor.isEditable()) {
                     editor.commitText(" ");
                     editor.notifyIMEExternalCursorChange();
                 }
@@ -559,8 +564,8 @@ public class EditorKeyEventHandler {
                         if (handler.matchesRequirement(editorText, editorCursor.left(), editor.getStyles())) {
                             try {
                                 var result = handler.handleNewline(editorText, editorCursor.left(), editor.getStyles(), editor.getTabWidth());
-                                editor.commitText(result.text(), false);
-                                int delta = result.shiftLeft();
+                                editor.commitText(result.text, false);
+                                int delta = result.shiftLeft;
                                 if (delta != 0) {
                                     int newSel = Math.max(editorCursor.getLeft() - delta, 0);
                                     var charPosition = editorCursor.getIndexer().getCharPosition(newSel);

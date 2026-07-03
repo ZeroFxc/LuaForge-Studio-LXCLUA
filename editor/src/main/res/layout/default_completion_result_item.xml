@@ -1,10 +1,11 @@
-<?xml version="1.0" encoding="utf-8"?><!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<?xml version="1.0" encoding="utf-8"?>
+<!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ~    sora-editor - the awesome code editor for Android
   ~    https://github.com/Rosemoe/sora-editor
   ~    Copyright (C) 2020-2024  Rosemoe
   ~
   ~     This library is free software; you can redistribute it and/or
-  ~     modify它 under the terms of the GNU Lesser General Public
+  ~     modify it under the terms of the GNU Lesser General Public
   ~     License as published by the Free Software Foundation; either
   ~     version 2.1 of the License, or (at your option) any later version.
   ~
@@ -23,50 +24,58 @@
   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~-->
 
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
+    android:layout_width="fill_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingTop="2dp"
-    android:paddingBottom="2dp"
-    android:paddingStart="12dp"
-    android:paddingEnd="12dp">
+    android:orientation="horizontal"
+    android:paddingStart="8dp"
+    android:paddingTop="4dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="4dp">
 
     <ImageView
-        android:layout_height="24dp"
-        android:layout_width="24dp"
-        android:src="@android:drawable/ic_delete"
-        android:id="@+id/result_item_image" />
+        android:id="@+id/result_item_image"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginRight="8dp"
+        android:src="@android:drawable/ic_delete" />
 
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:layout_marginStart="12dp"
-        android:gravity="center_vertical|start">
+        android:layout_marginRight="8dp">
 
         <TextView
             android:id="@+id/result_item_label"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:ellipsize="marquee"
+            android:singleLine="true"
             android:text="Medium Text"
             android:textColor="#FF000000"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:layout_marginBottom="2dp" />
+            android:textSize="15sp" />
 
         <TextView
-            android:id="@+id/result_item_desc"
-            android:layout_width="match_parent"
+            android:id="@+id/result_item_detail"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Small Text"
-            android:textColor="#80000000"
-            android:textSize="12sp"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:lineSpacingExtra="2dp" />
+            android:ellipsize="marquee"
+            android:singleLine="true"
+            android:text="Medium Text"
+            android:textSize="15sp" />
 
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/result_item_desc"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="marquee"
+        android:gravity="end"
+        android:singleLine="true"
+        android:text="Medium Text"
+        android:textSize="15sp" />
+
 </LinearLayout>
+

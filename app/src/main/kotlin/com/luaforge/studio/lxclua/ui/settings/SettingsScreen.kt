@@ -1433,6 +1433,32 @@ SettingsListItem(
     }
 )
 
+// 诊断提示框开关
+SettingsListItem(
+    title = stringResource(R.string.settings_diagnostic_tooltip),
+    subtitle = stringResource(R.string.settings_diagnostic_tooltip_desc),
+    leadingIcon = {
+        Icon(
+            Icons.Filled.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary
+        )
+    },
+    trailingContent = {
+        Switch(
+            checked = currentSettingsState.diagnosticTooltipEnabled,
+            onCheckedChange = {
+                updateSettingsWithSave(
+                    currentSettingsState.copy(diagnosticTooltipEnabled = it)
+                )
+            }
+        )
+    },
+    onClick = {
+        updateSettingsWithSave(currentSettingsState.copy(diagnosticTooltipEnabled = !currentSettingsState.diagnosticTooltipEnabled))
+    }
+)
+
                 }
             }
 
@@ -1953,7 +1979,7 @@ SettingsListItem(
                 SettingsCardGroup(
                     title = "回收站",
                     icon = Icons.Filled.Delete,
-                    initiallyExpanded = true,
+                    initiallyExpanded = false,
                     onExpandedChange = {}
                 ) {
                     Column(

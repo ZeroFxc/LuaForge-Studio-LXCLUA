@@ -151,6 +151,12 @@ object PluginEvents {
     const val ON_CUSTOM_EVENT = "onCustomEvent"
     /** 插件消息（插件间点对点通信），参数: (fromPluginId: String, toPluginId: String, action: String, dataJson: String) */
     const val ON_PLUGIN_MESSAGE = "onPluginMessage"
+
+    // ========== 文本操作窗口事件 ==========
+    /** 文本操作窗口显示，参数: (selectedText: String) */
+    const val ON_TEXT_ACTION_WINDOW_SHOWN = "onTextActionWindowShown"
+    /** 文本操作窗口自定义按钮点击，参数: (buttonId: String, selectedText: String) */
+    const val ON_TEXT_ACTION_WINDOW_BUTTON_CLICK = "onTextActionWindowButtonClick"
 }
 
 /**

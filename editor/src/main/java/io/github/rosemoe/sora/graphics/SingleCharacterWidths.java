@@ -95,7 +95,6 @@ public class SingleCharacterWidths {
 
     /**
      * Measure a single character
-     *
      * @param cp Code Point
      */
     public float measureCodePoint(int cp, @NonNull Paint p) {
@@ -145,9 +144,9 @@ public class SingleCharacterWidths {
                 }
                 width += (long) Math.ceil(p.measureText(buffer, 0, len) * PRECISION);
                 i += len - 1;
-            } else if (isHandleFunctionCharacters() && FunctionCharacters.isEditorFunctionChar(ch)) {
+            } else if(isHandleFunctionCharacters() && FunctionCharacters.isEditorFunctionChar(ch)) {
                 var name = FunctionCharacters.getNameForFunctionCharacter(ch);
-                for (int j = 0; j < name.length(); j++) {
+                for (int j = 0;j < name.length();j++) {
                     width += (long) Math.ceil(measureChar(name.charAt(j), p) * PRECISION);
                 }
             } else {

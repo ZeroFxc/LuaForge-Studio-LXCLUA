@@ -32,6 +32,7 @@ import com.luaforge.studio.lxclua.ui.settings.SettingsManager
 import com.luaforge.studio.lxclua.utils.LogCatcher
 import com.luaforge.studio.lxclua.plugin.bridge.PluginSyntax
 import com.luaforge.studio.lxclua.plugin.bridge.PluginDecoration
+import com.luaforge.studio.lxclua.ui.editor.bridge.LuaTextActionWindow
 import com.luaforge.studio.lxclua.plugin.data.SyntaxLanguageRules
 import com.luaforge.studio.lxclua.plugin.state.PluginEvents
 import com.luaforge.studio.lxclua.utils.NonBlockingToastState
@@ -44,6 +45,9 @@ import io.github.rosemoe.sora.event.SubscriptionReceipt
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.EditorSearcher
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion
+import io.github.rosemoe.sora.widget.component.EditorDiagnosticTooltipWindow
+import io.github.rosemoe.sora.widget.component.EditorTextActionWindow
+import io.github.rosemoe.sora.widget.getComponent
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -122,6 +126,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
     private var currentEditorFontType = SettingsManager.currentSettings.editorFontType
     private var currentCustomFontPath = SettingsManager.currentSettings.customFontPath
     private var currentIndentGuideEnabled by mutableStateOf(SettingsManager.currentSettings.indentGuideEnabled)
+    private var currentDiagnosticTooltipEnabled = SettingsManager.currentSettings.diagnosticTooltipEnabled
     private var currentSyntaxColors by mutableStateOf(
         mapOf(
             "className" to SettingsManager.currentSettings.classNameColor,
@@ -385,6 +390,13 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                 currentSyntaxColors = newSyntaxColors
                 updateEditorSyntaxColors(newSettings, activeEditor)
             }
+            // 诊断提示框开关变化
+            if (newSettings.diagnosticTooltipEnabled != currentDiagnosticTooltipEnabled) {
+                currentDiagnosticTooltipEnabled = newSettings.diagnosticTooltipEnabled
+                editorInstances.values.forEach { ed ->
+                    ed.getComponent<EditorDiagnosticTooltipWindow>().setEnabled(newSettings.diagnosticTooltipEnabled)
+                }
+            }
             activeEditor?.let { editor ->
                 (editor.editorLanguage as? LuaLanguage)?.setCompletionCaseSensitive(newSettings.completionCaseSensitive)
                     ?.setHighlightHexColorsEnabled(SettingsManager.currentSettings.hexColorHighlightEnabled)
@@ -611,6 +623,8 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                 EditorColorScheme.SELECTED_TEXT_BACKGROUND,
                 settings.selectedLineColor.toArgb()
             )
+            // 同步诊断提示框开关
+            ed.getComponent<EditorDiagnosticTooltipWindow>().setEnabled(settings.diagnosticTooltipEnabled)
             ed.postInvalidate()
         }
     }
@@ -771,6 +785,12 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
             }
             isFocusable = true
             isFocusableInTouchMode = true
+
+            // 应用诊断提示框开关设置
+            getComponent<EditorDiagnosticTooltipWindow>().setEnabled(settings.diagnosticTooltipEnabled)
+
+            // 替换默认文本操作窗口为自定义版本（支持插件动态按钮）
+            replaceComponent(EditorTextActionWindow::class.java, LuaTextActionWindow(this))
             if (isActiveEditor) {
                 post {
                     try {

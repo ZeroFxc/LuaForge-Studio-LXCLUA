@@ -24,12 +24,10 @@
 package io.github.rosemoe.sora.lang;
 
 import android.os.Bundle;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 import androidx.annotation.WorkerThread;
-
 import io.github.rosemoe.sora.lang.analysis.AnalyzeManager;
 import io.github.rosemoe.sora.lang.completion.CompletionCancelledException;
 import io.github.rosemoe.sora.lang.completion.CompletionHelper;
@@ -44,13 +42,12 @@ import io.github.rosemoe.sora.widget.SymbolPairMatch;
 /**
  * Language for editor
  * <p>
- * A Language helps editor to highlight text and provide auto-completion.
+ * A Language instance helps editor to highlight text and provide auto-completion.
  * Implement this interface when you want to add new language support for editor.
  * <p>
  * <strong>NOTE:</strong> A language must not be single instance.
  * One language instance should always serve for only one editor.
- * It means that you should not give one language object to other editor instances
- * after it has been applied to one editor.
+ * It means that you should not pass a language object to multiple editor instances.
  *
  * @author Rosemoe
  */
@@ -82,7 +79,7 @@ public interface Language {
 
     /**
      * Get {@link AnalyzeManager} of the language.
-     * This is called from time to time by the editor. Cache your instance please.
+     * The result instance is expected to be the same in language lifecycle.
      */
     @NonNull
     AnalyzeManager getAnalyzeManager();
@@ -98,6 +95,7 @@ public interface Language {
 
     /**
      * Request to auto-complete the code at the given {@code position}.
+     * Note that if you did not correctly set the spans for the text, the auto-completion will not be triggered.
      * This is called in a worker thread other than UI thread.
      *
      * @param content        Read-only reference of content
@@ -143,11 +141,11 @@ public interface Language {
      */
     @UiThread
     default int getIndentAdvance(
-            @NonNull ContentReference content,
-            int line,
-            int column,
-            int spaceCountOnLine,
-            int tabCountOnLine
+      @NonNull ContentReference content,
+      int line,
+      int column,
+      int spaceCountOnLine,
+      int tabCountOnLine
     ) {
         return getIndentAdvance(content, line, column);
     }

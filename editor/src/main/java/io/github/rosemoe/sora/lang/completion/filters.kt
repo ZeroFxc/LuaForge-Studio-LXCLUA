@@ -80,7 +80,7 @@ private val scratchLocal =
         override fun initialValue(): Scratch {
             return Scratch()
         }
-    }
+    };
 
 private inline fun <T> withScratch(block: Scratch.() -> T): T {
     val scratch = scratchLocal.get()

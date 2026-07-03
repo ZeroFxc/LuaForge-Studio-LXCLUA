@@ -96,6 +96,9 @@ private object PreferencesKeys {
     // 【新增】滑动手势开关
     val ENABLE_SWIPE_GESTURE = booleanPreferencesKey("enable_swipe_gesture")
 
+    // 【新增】诊断提示框开关（点击波浪线弹出建议）
+    val DIAGNOSTIC_TOOLTIP_ENABLED = booleanPreferencesKey("diagnostic_tooltip_enabled")
+
     // 【新增】AI 流式输出开关
     val AI_STREAM_ENABLED = booleanPreferencesKey("ai_stream_enabled")
 
@@ -285,10 +288,15 @@ object SettingsManager {
 
     /**
      * 从磁盘重新加载设置（用于返回主页时自愈恢复）
-     * 仅在 settingsLoaded 为 true 时执行，避免覆盖未加载完成的设置
+     * 如果 settingsLoaded 为 false（进程被杀后恢复），则从 DataStore 完整加载设置
      */
     suspend fun reloadSettingsFromDisk(context: Context) {
-        if (!settingsLoaded) return
+        if (!settingsLoaded) {
+            // 进程被杀后恢复场景：settingsLoaded 为 false，需要完整加载
+            loadSavedSettings(context)
+            android.util.Log.d("SettingsManager", "进程恢复：设置已从 DataStore 重新加载")
+            return
+        }
         // 优先从 SD 卡加载（最新备份），回退到 DataStore
         val sdSettings = loadSettingsFromSdCard(context)
         if (sdSettings != null) {
@@ -347,6 +355,7 @@ object SettingsManager {
                     preferences[PreferencesKeys.LANGUAGE_TAG] = sdSettings.languageTag
                     preferences[PreferencesKeys.HEX_COLOR_HIGHLIGHT_ENABLED] = sdSettings.hexColorHighlightEnabled
                     preferences[PreferencesKeys.ENABLE_SWIPE_GESTURE] = sdSettings.enableSwipeGesture
+                    preferences[PreferencesKeys.DIAGNOSTIC_TOOLTIP_ENABLED] = sdSettings.diagnosticTooltipEnabled
                     preferences[PreferencesKeys.AI_STREAM_ENABLED] = sdSettings.aiStreamEnabled
                 }
             } catch (_: Exception) { }
@@ -441,6 +450,9 @@ object SettingsManager {
 
         // 【新增】加载滑动手势开关
         val enableSwipeGesture = preferences[PreferencesKeys.ENABLE_SWIPE_GESTURE] ?: false
+
+        // 【新增】加载诊断提示框开关
+        val diagnosticTooltipEnabled = preferences[PreferencesKeys.DIAGNOSTIC_TOOLTIP_ENABLED] ?: true
 
         // 【新增】加载 AI 流式输出开关
         val aiStreamEnabled = preferences[PreferencesKeys.AI_STREAM_ENABLED] ?: false
@@ -588,6 +600,7 @@ object SettingsManager {
                 languageTag = languageTag,
                 hexColorHighlightEnabled = hexColorHighlightEnabled,
                 enableSwipeGesture = enableSwipeGesture,  // 【新增】
+                diagnosticTooltipEnabled = diagnosticTooltipEnabled,  // 【新增】
                 aiStreamEnabled = aiStreamEnabled,         // 【新增】
                 homeLayoutMode = homeLayoutMode,          // 【新增】
                 homeCategories = homeCategories,          // 【新增】
@@ -677,6 +690,9 @@ object SettingsManager {
 
             // 【新增】保存滑动手势开关
             preferences[PreferencesKeys.ENABLE_SWIPE_GESTURE] = currentSettings.enableSwipeGesture
+
+            // 【新增】保存诊断提示框开关
+            preferences[PreferencesKeys.DIAGNOSTIC_TOOLTIP_ENABLED] = currentSettings.diagnosticTooltipEnabled
 
             // 【新增】保存 AI 流式输出开关
             preferences[PreferencesKeys.AI_STREAM_ENABLED] = currentSettings.aiStreamEnabled
@@ -1049,6 +1065,7 @@ object SettingsManager {
                 languageTag = settings.languageTag ?: "zh",
                 hexColorHighlightEnabled = settings.hexColorHighlightEnabled,
                 enableSwipeGesture = settings.enableSwipeGesture,
+                diagnosticTooltipEnabled = settings.diagnosticTooltipEnabled,
                 aiStreamEnabled = settings.aiStreamEnabled,
                 homeLayoutMode = settings.homeLayoutMode ?: HomeLayoutMode.CARD,
                 // 迁移分类数据：确保icon字段不为非空null，修复旧数据Gson反序列化问题
@@ -1124,6 +1141,7 @@ data class SettingsData(
     val languageTag: String = "zh",
     val hexColorHighlightEnabled: Boolean = false,  // 【新增】十六进制颜色高亮开关
     val enableSwipeGesture: Boolean = false,         // 【新增】滑动手势开关
+    val diagnosticTooltipEnabled: Boolean = true,    // 【新增】诊断提示框开关（点击波浪线弹出建议）
     val aiStreamEnabled: Boolean = false,             // 【新增】AI 流式输出开关
     val homeLayoutMode: HomeLayoutMode = HomeLayoutMode.CARD,  // 【新增】首页布局模式
     val homeCategories: List<ProjectCategory> = emptyList(),   // 【新增】项目分类

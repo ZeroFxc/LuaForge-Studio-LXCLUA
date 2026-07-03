@@ -58,7 +58,6 @@ public class LongArrayList {
 
     /**
      * Set element at given index to {@code value}
-     *
      * @throws ArrayIndexOutOfBoundsException if index is invalid
      */
     public void set(int index, long value) {
@@ -116,7 +115,6 @@ public class LongArrayList {
 
     /**
      * Get element at given index
-     *
      * @throws ArrayIndexOutOfBoundsException if index is invalid
      */
     public long get(int index) {

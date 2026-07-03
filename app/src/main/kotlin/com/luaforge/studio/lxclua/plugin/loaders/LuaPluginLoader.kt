@@ -3,6 +3,8 @@ package com.luaforge.studio.lxclua.plugin.loaders
 import android.content.Context
 import com.luaforge.studio.lxclua.plugin.LoadedPlugin
 import com.luaforge.studio.lxclua.plugin.bridge.PluginBridge
+import com.luaforge.studio.lxclua.plugin.bridge.LuaPrintRedirect
+import com.luaforge.studio.lxclua.plugin.PluginManager
 import com.luaforge.studio.lxclua.plugin.state.EventManager
 import com.luaforge.studio.lxclua.plugin.state.PluginEvents
 import com.luajava.LuaState
@@ -34,6 +36,12 @@ object LuaPluginLoader {
         // 1. 初始化 LuaState 并加载基础库
         val L = LuaStateFactory.newLuaState()
         L.openLibs()
+        
+        // 1.1 重定向 print() 到插件日志
+        val pluginsDir = PluginManager.getPluginsDir(context)
+        val printRedirect = LuaPrintRedirect(plugin.manifest.id, pluginsDir)
+        L.pushJavaObject(printRedirect)
+        L.setGlobal("print")
         
         // 2. 注入全局工具对象
         val bridge = PluginBridge(context, plugin.manifest.id)

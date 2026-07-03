@@ -161,7 +161,8 @@ public final class UndoManager implements ContentListener, Parcelable {
 
     void onExitBatchEdit() {
         forceNewMultiAction = true;
-        if (!actionStack.isEmpty() && actionStack.get(actionStack.size() - 1) instanceof MultiAction action) {
+        if (!actionStack.isEmpty() && actionStack.get(actionStack.size() - 1) instanceof MultiAction) {
+            var action = ((MultiAction) actionStack.get(actionStack.size() - 1));
             if (action._actions.size() == 1) {
                 actionStack.set(actionStack.size() - 1, action._actions.get(0));
             }
@@ -272,7 +273,8 @@ public final class UndoManager implements ContentListener, Parcelable {
                 stackPointer++;
             } else {
                 ContentAction a = actionStack.get(actionStack.size() - 1);
-                if (a instanceof MultiAction ac && !forceNewMultiAction) {
+                if (a instanceof MultiAction && !forceNewMultiAction) {
+                    MultiAction ac = (MultiAction) a;
                     ac.addAction(action);
                 } else {
                     MultiAction ac = new MultiAction();
@@ -451,7 +453,8 @@ public final class UndoManager implements ContentListener, Parcelable {
 
         @Override
         public boolean canMerge(ContentAction action) {
-            if (action instanceof InsertAction ac) {
+            if (action instanceof InsertAction) {
+                InsertAction ac = (InsertAction) action;
                 return (ac.startColumn == endColumn && ac.startLine == endLine
                         && ac.text.length() + text.length() < 10000
                         && Math.abs(ac.createTime - createTime) < sMergeTimeLimit);
@@ -622,7 +625,8 @@ public final class UndoManager implements ContentListener, Parcelable {
 
         @Override
         public boolean canMerge(ContentAction action) {
-            if (action instanceof DeleteAction ac) {
+            if (action instanceof DeleteAction) {
+                DeleteAction ac = (DeleteAction) action;
                 return (ac.endColumn == startColumn && ac.endLine == startLine
                         && ac.text.length() + text.length() < 10000
                         && Math.abs(ac.createTime - createTime) < sMergeTimeLimit);

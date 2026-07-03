@@ -36,15 +36,11 @@ open class Quickfix(
 
     private var resourceId: Int = 0
 
-    constructor(titleRes: Int, documentVersion: Long = 0, fixAction: Runnable) : this(
-        null,
-        documentVersion,
-        fixAction
-    ) {
+    constructor(titleRes: Int, documentVersion: Long = 0, fixAction: Runnable) : this(null, documentVersion, fixAction) {
         resourceId = titleRes
     }
 
-    open fun resolveTitle(context: Context): CharSequence {
+    open fun resolveTitle(context: Context) : CharSequence {
         return title ?: context.getString(resourceId)
     }
 

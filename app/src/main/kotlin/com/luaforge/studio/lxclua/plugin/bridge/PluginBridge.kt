@@ -41,7 +41,7 @@ class PluginBridge(private val context: Context, private val pluginId: String) {
     val sys = PluginSys(context, pluginId)
     
     /** 编辑器操作 API */
-    val editor = PluginEditor()
+    val editor = PluginEditor(pluginId)
     
     /** 项目操作 API */
     val project = PluginProject()

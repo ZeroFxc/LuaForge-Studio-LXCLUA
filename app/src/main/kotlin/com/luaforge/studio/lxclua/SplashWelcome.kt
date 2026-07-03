@@ -87,6 +87,8 @@ class SplashWelcome : ComponentActivity() {
 
     private val isExtracting = AtomicBoolean(false)
     private val _loadingState = MutableStateFlow(LoadingState())
+    /** null = 后台逻辑尚未确定是否需要更新，SplashScreen 显示不定进度条等待 */
+    private val _shouldUpdate = MutableStateFlow<Boolean?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,13 +101,33 @@ class SplashWelcome : ComponentActivity() {
         luaMdDir = app.mdDir!!
         localDir = app.localDir!!
 
+        // 立即显示启动画面 UI，避免旧手机在异步初始化期间长时间黑屏
+        enableEdgeToEdge()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        setContent {
+            AppThemeWithObserver {
+                SplashScreen(
+                    shouldUpdate = _shouldUpdate,
+                    loadingState = _loadingState,
+                    onCheckComplete = { shouldUpdateInner ->
+                        if (shouldUpdateInner) {
+                            startLoadingWithProgress()
+                        } else {
+                            startMainActivity()
+                        }
+                    }
+                )
+            }
+        }
+
         lifecycleScope.launch {
             handleSplashLogic()
         }
     }
 
     /**
-     * Handles splash screen logic including settings loading and resource extraction
+     * 后台处理启动逻辑：加载设置、语言检查、IO 初始化。
+     * 完成后设置 _shouldUpdate 触发 SplashScreen 的下一步。
      */
     private suspend fun handleSplashLogic() {
         SettingsManager.loadSavedSettings(this@SplashWelcome)
@@ -114,6 +136,7 @@ class SplashWelcome : ComponentActivity() {
         val currentLanguageTag = getCurrentAppLanguageTag()
         if (savedLanguageTag != currentLanguageTag) {
             SettingsManager.setAppLanguage(this@SplashWelcome, savedLanguageTag)
+            // Activity 将重建，_shouldUpdate 保持 null，重建后重新走流程
             return
         }
 
@@ -146,7 +169,8 @@ class SplashWelcome : ComponentActivity() {
             }
         }
 
-        setupSplashUI(shouldUpdate)
+        // 后台逻辑完成，通知 SplashScreen 进入下一步
+        _shouldUpdate.value = shouldUpdate
     }
 
     /**
@@ -218,26 +242,6 @@ class SplashWelcome : ComponentActivity() {
 
         val mainFile = File(app.resolveLuaPath("main.lua") ?: return true)
         return !(mainFile.exists() && mainFile.isFile)
-    }
-
-    private fun setupSplashUI(shouldUpdate: Boolean) {
-        enableEdgeToEdge()
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        setContent {
-            AppThemeWithObserver {
-                SplashScreen(
-                    shouldUpdate = shouldUpdate,
-                    loadingState = _loadingState,
-                    onCheckComplete = { shouldUpdateInner ->
-                        if (shouldUpdateInner) {
-                            startLoadingWithProgress()
-                        } else {
-                            startMainActivity()
-                        }
-                    }
-                )
-            }
-        }
     }
 
     /**
@@ -439,13 +443,16 @@ class SplashWelcome : ComponentActivity() {
 
 @Composable
 fun SplashScreen(
-    shouldUpdate: Boolean,
+    shouldUpdate: StateFlow<Boolean?>,
     loadingState: StateFlow<LoadingState>,
     onCheckComplete: (Boolean) -> Unit
 ) {
     val state by loadingState.collectAsState()
+    val shouldUpdateValue by shouldUpdate.collectAsState()
 
-    val showIndeterminate = !shouldUpdate || state.phase == LoadingPhase.IDLE
+    // shouldUpdate 为 null 表示后台逻辑尚未完成，显示不定进度条等待
+    // shouldUpdate 为 false 表示无需更新，也显示不定进度条
+    val showIndeterminate = shouldUpdateValue != true || state.phase == LoadingPhase.IDLE
 
     val indeterminateProgress by rememberInfiniteTransition().animateFloat(
         initialValue = 0f,
@@ -459,8 +466,11 @@ fun SplashScreen(
         )
     )
 
-    LaunchedEffect(Unit) {
-        onCheckComplete(shouldUpdate)
+    // 仅当后台逻辑确定 shouldUpdate 后才触发下一步
+    LaunchedEffect(shouldUpdateValue) {
+        shouldUpdateValue?.let { su ->
+            onCheckComplete(su)
+        }
     }
 
     Box(

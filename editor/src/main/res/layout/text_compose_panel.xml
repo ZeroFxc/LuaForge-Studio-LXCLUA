@@ -1,4 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?><!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<?xml version="1.0" encoding="utf-8"?>
+<!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ~    sora-editor - the awesome code editor for Android
   ~    https://github.com/Rosemoe/sora-editor
   ~    Copyright (C) 2020-2024  Rosemoe
@@ -19,23 +20,71 @@
   ~     USA
   ~
   ~     Please contact Rosemoe by email 2073412493@qq.com if you need
-  ~     additional信息或有问题
- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~-->
+  ~     additional information or have any questions
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~-->
 
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:id="@+id/panel_root"
-    android:padding="2dp">
+<LinearLayout
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="wrap_content"
+	android:layout_height="match_parent"
+	android:orientation="horizontal"
+	android:gravity="center_vertical"
+	android:id="@+id/panel_root">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/panel_recycler_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_gravity="center_vertical"
-        android:paddingVertical="4dp"
-        android:paddingHorizontal="0dp" />  <!-- 设置为0dp，间距由ItemDecoration控制 -->
+	<HorizontalScrollView
+		android:layout_height="match_parent"
+		android:layout_width="wrap_content"
+		android:id="@+id/panel_hv">
+
+		<LinearLayout
+			android:layout_height="match_parent"
+			android:layout_width="wrap_content"
+			android:orientation="horizontal"
+			android:gravity="center_vertical">
+
+			<ImageButton
+				android:id="@+id/panel_btn_select_all"
+				android:layout_width="45dp"
+				android:layout_height="45dp"
+				android:contentDescription="@android:string/selectAll"
+				android:src="@drawable/round_select_all_20"
+				android:background="?android:attr/selectableItemBackground" />
+
+			<ImageButton
+				android:id="@+id/panel_btn_copy"
+				android:layout_width="45dp"
+				android:layout_height="45dp"
+				android:contentDescription="@android:string/copy"
+				android:src="@drawable/round_content_copy_20"
+				android:background="?android:attr/selectableItemBackground" />
+
+			<ImageButton
+				android:id="@+id/panel_btn_paste"
+				android:layout_width="45dp"
+				android:layout_height="45dp"
+				android:contentDescription="@android:string/paste"
+				android:src="@drawable/round_content_paste_20"
+				android:background="?android:attr/selectableItemBackground" />
+
+			<ImageButton
+				android:id="@+id/panel_btn_long_select"
+				android:layout_width="45dp"
+				android:layout_height="45dp"
+				android:contentDescription="@string/sora_editor_long_select"
+				android:src="@drawable/editor_text_select_start"
+				android:background="?android:attr/selectableItemBackground" />
+
+			<ImageButton
+				android:id="@+id/panel_btn_cut"
+				android:layout_width="45dp"
+				android:layout_height="45dp"
+				android:contentDescription="@android:string/cut"
+				android:src="@drawable/round_content_cut_20"
+				android:background="?android:attr/selectableItemBackground" />
+
+		</LinearLayout>
+
+	</HorizontalScrollView>
 
 </LinearLayout>
+

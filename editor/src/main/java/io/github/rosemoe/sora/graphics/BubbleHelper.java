@@ -40,8 +40,7 @@ public class BubbleHelper {
 
     /**
      * Build a bubble into the given Path object. Old content in given Path is cleared.
-     *
-     * @param path   target Path object
+     * @param path target Path object
      * @param bounds The bounds for the bubble
      */
     public static void buildBubblePath(@NonNull Path path, @NonNull RectF bounds) {

@@ -212,7 +212,7 @@ public class BlockIntList {
             throw new ArrayIndexOutOfBoundsException("index = " + index + ", length = " + size());
         }
         findBlock1(index);
-        return foundBlock.get(foundIndex);
+        return (int) foundBlock.get(foundIndex);
     }
 
     public void removeRange(int fromIndex, int toIndex) {

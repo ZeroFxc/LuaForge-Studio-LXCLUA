@@ -24,6 +24,7 @@
 package io.github.rosemoe.sora.widget.layout;
 
 import androidx.annotation.NonNull;
+import androidx.collection.ObjectFloatMap;
 
 import java.util.Collections;
 import java.util.List;
@@ -34,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import io.github.rosemoe.sora.lang.styling.Span;
 import io.github.rosemoe.sora.lang.styling.inlayHint.InlayHint;
 import io.github.rosemoe.sora.text.Content;
+import io.github.rosemoe.sora.text.ContentLine;
 import io.github.rosemoe.sora.widget.CodeEditor;
 
 /**
@@ -118,7 +120,7 @@ public abstract class AbstractLayout implements Layout {
         }
 
         public synchronized void reportCancelled() {
-            cancelledCount++;
+            cancelledCount ++;
             reportCompleted(null);
         }
 

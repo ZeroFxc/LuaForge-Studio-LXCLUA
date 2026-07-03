@@ -197,6 +197,8 @@
     <string name="settings_smart_sorting_desc">根据使用频率自动排序快捷功能和符号栏</string>
     <string name="settings_hex_color_highlight">十六进制颜色高亮</string>
     <string name="settings_hex_color_highlight_desc">显示十六进制颜色</string>
+    <string name="settings_diagnostic_tooltip">诊断提示框</string>
+    <string name="settings_diagnostic_tooltip_desc">点击波浪线错误时弹出建议提示框，关闭后仅保留下方诊断面板</string>
 
     <!-- 通知提示 -->
     <string name="settings_toast_position">弹出位置</string>

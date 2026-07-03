@@ -32,7 +32,8 @@ interface IPluginBridge :
     IPluginBridgeAI,
     IPluginBridgeMCP,
     IPluginBridgeFloating,
-    IPluginBridgeSystem {
+    IPluginBridgeSystem,
+    IPluginBridgeTextAction {
     
     // ==================== 基础功能 ====================
     

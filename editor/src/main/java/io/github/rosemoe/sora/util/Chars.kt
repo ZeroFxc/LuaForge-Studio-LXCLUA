@@ -26,6 +26,7 @@ package io.github.rosemoe.sora.util
 
 import io.github.rosemoe.sora.text.CharPosition
 import io.github.rosemoe.sora.text.Content
+import io.github.rosemoe.sora.text.ICUUtils
 import io.github.rosemoe.sora.text.TextRange
 
 /**
@@ -90,71 +91,37 @@ object Chars {
      * @param useIcu Whether to use the ICU library to get word edges.
      * @return The word range.
      */
-    /**
     @JvmStatic
     fun getWordRange(text: Content, line: Int, column: Int, useIcu: Boolean): TextRange {
-    // Find word edges
-    var startLine = line
-    var endLine = line
-    val lineObj = text.getLine(line)
-    val edges = ICUUtils.getWordRange(lineObj, column, useIcu)
-    val startOffset = IntPair.getFirst(edges)
-    val endOffset = IntPair.getSecond(edges)
-    var startColumn = startOffset
-    var endColumn = endOffset
-    if (startColumn == endColumn) {
-    if (endColumn < lineObj.length) {
-    endColumn++
-    } else if (startColumn > 0) {
-    startColumn--
-    } else {
-    if (line > 0) {
-    val lastColumn = text.getColumnCount(line - 1)
-    startLine = line - 1
-    startColumn = lastColumn
-    } else if (line < text.lineCount - 1) {
-    endLine = line + 1
-    endColumn = 0
-    }
-    }
-    }
-    return TextRange(
-    CharPosition(startLine, startColumn, startOffset),
-    CharPosition(endLine, endColumn, endOffset)
-    )
-    }*/
-    @JvmStatic
-    fun getWordRange(text: Content, line: Int, column: Int, useIcu: Boolean): TextRange {
+        // Find word edges
+        var startLine = line
+        var endLine = line
         val lineObj = text.getLine(line)
-        val chars = lineObj.backingCharArray
-        val len = lineObj.length
-
-        var start = column
-        var end = column
-
-        // 向左找边界：遇到 . 或非字母数字下划线就停
-        while (start > 0 && isWordPart(chars[start - 1])) {
-            start--
+        val edges = ICUUtils.getWordRange(lineObj, column, useIcu)
+        val startOffset = IntPair.getFirst(edges)
+        val endOffset = IntPair.getSecond(edges)
+        var startColumn = startOffset
+        var endColumn = endOffset
+        if (startColumn == endColumn) {
+            if (endColumn < lineObj.length) {
+                endColumn++
+            } else if (startColumn > 0) {
+                startColumn--
+            } else {
+                if (line > 0) {
+                    val lastColumn = text.getColumnCount(line - 1)
+                    startLine = line - 1
+                    startColumn = lastColumn
+                } else if (line < text.lineCount - 1) {
+                    endLine = line + 1
+                    endColumn = 0
+                }
+            }
         }
-
-        // 向右找边界：遇到 . 或非字母数字下划线就停
-        while (end < len && isWordPart(chars[end])) {
-            end++
-        }
-
-        // 如果起始和结束相同，说明光标在 . 或空白处，返回空范围
-        if (start == end) {
-            val pos = CharPosition(line, column)
-            return TextRange(pos, pos)
-        }
-
-        val startPos = CharPosition(line, start)
-        val endPos = CharPosition(line, end)
-        return TextRange(startPos, endPos)
-    }
-
-    private fun isWordPart(c: Char): Boolean {
-        return Character.isLetterOrDigit(c) || c == '_'
+        return TextRange(
+            CharPosition(startLine, startColumn, startOffset),
+            CharPosition(endLine, endColumn, endOffset)
+        )
     }
 
     /**

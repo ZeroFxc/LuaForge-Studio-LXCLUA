@@ -23,8 +23,17 @@
  */
 package io.github.rosemoe.sora.util.regex;
 
-public record RegexBackrefGrammar(char backrefStartChar, char escapeChar) {
+public class RegexBackrefGrammar {
 
     public final static RegexBackrefGrammar DEFAULT = new RegexBackrefGrammar('$', '\\');
+
+    public final char backrefStartChar;
+
+    public final char escapeChar;
+
+    public RegexBackrefGrammar(char backrefStartChar, char escapeChar) {
+        this.backrefStartChar = backrefStartChar;
+        this.escapeChar = escapeChar;
+    }
 
 }

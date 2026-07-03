@@ -24,23 +24,20 @@
 package io.github.rosemoe.sora.widget.component;
 
 import android.annotation.SuppressLint;
-import android.graphics.Rect;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.LinearLayout;
+import android.widget.ImageButton;
 
 import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-
-import java.util.ArrayList;
-import java.util.List;
 
 import io.github.rosemoe.sora.R;
 import io.github.rosemoe.sora.event.ColorSchemeUpdateEvent;
+import io.github.rosemoe.sora.event.DragSelectStopEvent;
 import io.github.rosemoe.sora.event.EditorFocusChangeEvent;
 import io.github.rosemoe.sora.event.EditorReleaseEvent;
 import io.github.rosemoe.sora.event.EventManager;
@@ -59,27 +56,22 @@ import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
  *
  * @author Rosemoe
  */
-public class EditorTextActionWindow extends EditorPopupWindow implements TextActionAdapter.OnButtonClickListener, EditorBuiltinComponent {
+public class EditorTextActionWindow extends EditorPopupWindow implements View.OnClickListener, EditorBuiltinComponent {
     private final static long DELAY = 200;
     private final static long CHECK_FOR_DISMISS_INTERVAL = 100;
     private final CodeEditor editor;
-    private final RecyclerView recyclerView;
-    private final TextActionAdapter adapter;
-    private final List<TextActionButton> buttons;
-    private final LinearLayout rootCardView;
+    private final ImageButton selectAllBtn;
+    private final ImageButton pasteBtn;
+    private final ImageButton copyBtn;
+    private final ImageButton cutBtn;
+    private final ImageButton longSelectBtn;
+    private final View rootView;
     private final EditorTouchEventHandler handler;
     private final EventManager eventManager;
     private long lastScroll;
     private int lastPosition;
     private int lastCause;
     private boolean enabled = true;
-
-    // Button IDs
-    private static final int BTN_SELECT_ALL = 1;
-    private static final int BTN_COPY = 2;
-    private static final int BTN_PASTE = 3;
-    private static final int BTN_LONG_SELECT = 4;
-    private static final int BTN_CUT = 5;
 
     /**
      * Create a panel for the given editor
@@ -92,92 +84,48 @@ public class EditorTextActionWindow extends EditorPopupWindow implements TextAct
         handler = editor.getEventHandler();
         eventManager = editor.createSubEventManager();
 
-        // Initialize buttons list
-        buttons = new ArrayList<>();
-        buttons.add(new TextActionButton(BTN_SELECT_ALL, R.drawable.round_select_all_20, android.R.string.selectAll));
-        buttons.add(new TextActionButton(BTN_COPY, R.drawable.round_content_copy_20, android.R.string.copy));
-        buttons.add(new TextActionButton(BTN_PASTE, R.drawable.round_content_paste_20, android.R.string.paste));
-        buttons.add(new TextActionButton(BTN_LONG_SELECT, R.drawable.editor_text_select_start, R.string.sora_editor_long_select));
-        buttons.add(new TextActionButton(BTN_CUT, R.drawable.round_content_cut_20, android.R.string.cut));
-
-        // Inflate layout
+        // Since popup window does provide decor view, we have to pass null to this method
         @SuppressLint("InflateParams")
-        View rootView = LayoutInflater.from(editor.getContext()).inflate(R.layout.text_compose_panel, null);
-        rootCardView = rootView.findViewById(R.id.panel_root);
-        recyclerView = rootView.findViewById(R.id.panel_recycler_view);
+        View root = this.rootView = LayoutInflater.from(editor.getContext()).inflate(R.layout.text_compose_panel, null);
+        selectAllBtn = root.findViewById(R.id.panel_btn_select_all);
+        cutBtn = root.findViewById(R.id.panel_btn_cut);
+        copyBtn = root.findViewById(R.id.panel_btn_copy);
+        longSelectBtn = root.findViewById(R.id.panel_btn_long_select);
+        pasteBtn = root.findViewById(R.id.panel_btn_paste);
 
-        // Setup RecyclerView
-        LinearLayoutManager layoutManager = new LinearLayoutManager(editor.getContext(),
-                LinearLayoutManager.HORIZONTAL, false);
-        recyclerView.setLayoutManager(layoutManager);
-        adapter = new TextActionAdapter(buttons, this);
-        recyclerView.setAdapter(adapter);
+        selectAllBtn.setOnClickListener(this);
+        cutBtn.setOnClickListener(this);
+        copyBtn.setOnClickListener(this);
+        pasteBtn.setOnClickListener(this);
+        longSelectBtn.setOnClickListener(this);
 
-        // 添加 ItemDecoration 来控制间距，确保第一个按钮的左边距与最后一个按钮的右边距相等
-        recyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
-            @Override
-            public void getItemOffsets(@NonNull Rect outRect, @NonNull View view,
-                                       @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
-                int position = parent.getChildAdapterPosition(view);
-                int itemCount = parent.getAdapter().getItemCount();
-
-                // 设置统一的边距值
-                int sideMargin = (int) (8 * editor.getDpUnit()); // 第一个按钮左边距和最后一个按钮右边距
-                int middleMargin = (int) (4 * editor.getDpUnit()); // 中间按钮之间的间距
-
-                if (position == 0) {
-                    // 第一个按钮：左边距为sideMargin，右边距为middleMargin/2
-                    outRect.left = sideMargin;
-                    outRect.right = middleMargin / 2;
-                } else if (position == itemCount - 1) {
-                    // 最后一个按钮：左边距为middleMargin/2，右边距为sideMargin（与第一个按钮左边距对齐）
-                    outRect.left = middleMargin / 2;
-                    outRect.right = sideMargin; // 确保与第一个按钮的左边距相等
-                } else {
-                    // 中间按钮：左右边距各为middleMargin/2
-                    outRect.left = middleMargin / 2;
-                    outRect.right = middleMargin / 2;
-                }
-                
-                /* 上下边距
-                int verticalSpacing = (int) (0 * editor.getDpUnit());
-                outRect.top = verticalSpacing;
-                outRect.bottom = verticalSpacing;*/
-            }
-        });
-
-        // Apply color scheme for initial setup
         applyColorScheme();
-
-        setContentView(rootView);
-        setSize(0, (int) (editor.getDpUnit() * 50));
-        //setSize(0, ViewGroup.LayoutParams.WRAP_CONTENT);
-
+        setContentView(root);
+        setSize(0, (int) (this.editor.getDpUnit() * 48));
         getPopup().setAnimationStyle(R.style.text_action_popup_animation);
 
         subscribeEvents();
     }
 
-    /**
-     * Apply color scheme to the panel
-     */
+    protected void applyColorFilter(ImageButton btn, int color) {
+        var drawable = btn.getDrawable();
+        if (drawable == null) {
+            return;
+        }
+        btn.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP));
+    }
+
     protected void applyColorScheme() {
-        // Update card view background with border
         GradientDrawable gd = new GradientDrawable();
-        gd.setShape(GradientDrawable.RECTANGLE);
-        gd.setCornerRadius(16 * editor.getDpUnit());
+        gd.setCornerRadius(5 * editor.getDpUnit());
         gd.setColor(editor.getColorScheme().getColor(EditorColorScheme.TEXT_ACTION_WINDOW_BACKGROUND));
-
-        // Add border
-        int strokeWidth = (int) (1 * editor.getDpUnit());
-        int strokeColor = editor.getColorScheme().getColor(EditorColorScheme.TEXT_ACTION_WINDOW_STROKE_COLOR);
-        gd.setStroke(strokeWidth, strokeColor);
-
-        rootCardView.setBackground(gd);
-
-        // Update icon color
-        int iconColor = editor.getColorScheme().getColor(EditorColorScheme.TEXT_ACTION_WINDOW_ICON_COLOR);
-        adapter.setIconColor(iconColor);
+        rootView.setBackground(gd);
+        int color = editor.getColorScheme().getColor(EditorColorScheme.TEXT_ACTION_WINDOW_ICON_COLOR);
+        applyColorFilter(selectAllBtn, color);
+        applyColorFilter(cutBtn, color);
+        applyColorFilter(copyBtn, color);
+        applyColorFilter(pasteBtn, color);
+        applyColorFilter(longSelectBtn, color);
     }
 
     protected void subscribeEvents() {
@@ -187,10 +135,11 @@ public class EditorTextActionWindow extends EditorPopupWindow implements TextAct
         eventManager.subscribeAlways(LongPressEvent.class, this::onEditorLongPress);
         eventManager.subscribeAlways(EditorFocusChangeEvent.class, this::onEditorFocusChange);
         eventManager.subscribeAlways(EditorReleaseEvent.class, this::onEditorRelease);
-        eventManager.subscribeAlways(ColorSchemeUpdateEvent.class, this::onColorSchemeUpdate);
+        eventManager.subscribeAlways(ColorSchemeUpdateEvent.class, this::onEditorColorChange);
+        eventManager.subscribeAlways(DragSelectStopEvent.class, this::onDragSelectingStop);
     }
 
-    protected void onColorSchemeUpdate(@NonNull ColorSchemeUpdateEvent event) {
+    protected void onEditorColorChange(@NonNull ColorSchemeUpdateEvent event) {
         applyColorScheme();
     }
 
@@ -198,6 +147,10 @@ public class EditorTextActionWindow extends EditorPopupWindow implements TextAct
         if (!event.isGainFocus()) {
             dismiss();
         }
+    }
+
+    protected void onDragSelectingStop(@NonNull DragSelectStopEvent event) {
+        displayWindow();
     }
 
     protected void onEditorRelease(@NonNull EditorReleaseEvent event) {
@@ -247,11 +200,15 @@ public class EditorTextActionWindow extends EditorPopupWindow implements TextAct
     }
 
     protected void onSelectionChange(@NonNull SelectionChangeEvent event) {
-        if (handler.hasAnyHeldHandle()) {
+        if (handler.hasAnyHeldHandle() || event.getCause() == SelectionChangeEvent.CAUSE_DEAD_KEYS) {
+            return;
+        }
+        if (handler.isDragSelecting()) {
+            dismiss();
             return;
         }
         lastCause = event.getCause();
-        if (event.isSelected()) {
+        if (event.isSelected() || event.getCause() == SelectionChangeEvent.CAUSE_LONG_PRESS && editor.getText().length() == 0) {
             // Always post show. See #193
             if (event.getCause() != SelectionChangeEvent.CAUSE_SEARCH) {
                 editor.postInLifecycle(this::displayWindow);
@@ -291,8 +248,16 @@ public class EditorTextActionWindow extends EditorPopupWindow implements TextAct
 
     /**
      * Get the view root of the panel.
+     * <p>
+     * Root view is {@link android.widget.LinearLayout}
+     * Inside is a {@link android.widget.HorizontalScrollView}
      *
      * @see R.id#panel_root
+     * @see R.id#panel_hv
+     * @see R.id#panel_btn_select_all
+     * @see R.id#panel_btn_copy
+     * @see R.id#panel_btn_cut
+     * @see R.id#panel_btn_paste
      */
     public ViewGroup getView() {
         return (ViewGroup) getPopup().getContentView();
@@ -344,71 +309,22 @@ public class EditorTextActionWindow extends EditorPopupWindow implements TextAct
         top = Math.max(0, Math.min(top, editor.getHeight() - getHeight() - 5));
         float handleLeftX = editor.getOffset(editor.getCursor().getLeftLine(), editor.getCursor().getLeftColumn());
         float handleRightX = editor.getOffset(editor.getCursor().getRightLine(), editor.getCursor().getRightColumn());
-        int panelX = (int) ((handleLeftX + handleRightX) / 2f - rootCardView.getMeasuredWidth() / 2f);
+        int panelX = (int) ((handleLeftX + handleRightX) / 2f - rootView.getMeasuredWidth() / 2f);
         setLocationAbsolutely(panelX, top);
         show();
     }
 
     /**
-     * Update the state of buttons
+     * Update the state of paste button
      */
     private void updateBtnState() {
-        boolean hasSelection = editor.getCursor().isSelected();
-        boolean isEditable = editor.isEditable();
-
-        for (TextActionButton button : buttons) {
-            int buttonId = button.getId();
-            if (buttonId == BTN_COPY) {
-                button.setVisible(hasSelection);
-                button.setEnabled(true);
-            } else if (buttonId == BTN_PASTE) {
-                button.setVisible(isEditable);
-                button.setEnabled(editor.hasClip());
-            } else if (buttonId == BTN_CUT) {
-                button.setVisible(hasSelection && isEditable);
-                button.setEnabled(true);
-            } else if (buttonId == BTN_LONG_SELECT) {
-                button.setVisible(!hasSelection && isEditable);
-                button.setEnabled(true);
-            } else if (buttonId == BTN_SELECT_ALL) {
-                button.setVisible(true);
-                button.setEnabled(true);
-            }
-        }
-
-        adapter.updateButtons(buttons);
-
-        // 测量并更新大小
-        rootCardView.measure(
-                View.MeasureSpec.makeMeasureSpec(1000000, View.MeasureSpec.AT_MOST),
-                View.MeasureSpec.makeMeasureSpec(100000, View.MeasureSpec.AT_MOST)
-        );
-
-        // 计算合适的宽度，确保第一个按钮的左边距与最后一个按钮的右边距对齐
-        int buttonWidth = (int) (45 * editor.getDpUnit()); // 每个按钮宽度
-        int sideMargin = (int) (8 * editor.getDpUnit()); // 第一个按钮左边距和最后一个按钮右边距
-        int middleMargin = (int) (4 * editor.getDpUnit()); // 中间按钮之间的间距
-
-        int visibleButtonCount = 0;
-        for (TextActionButton button : buttons) {
-            if (button.isVisible()) visibleButtonCount++;
-        }
-
-        if (visibleButtonCount > 0) {
-            // 计算总宽度：按钮宽度 + 中间间距 + 左右边距
-            // 注意：sideMargin已经包含了ItemDecoration中的边距
-            // 总宽度 = (按钮宽度 × 按钮数量) + (中间间距 × (按钮数量 - 1)) + (侧边距 × 2)
-            int calculatedWidth = visibleButtonCount * buttonWidth
-                    + (visibleButtonCount - 1) * middleMargin
-                    + sideMargin * 2;
-
-            // 限制最大宽度
-            int maxWidth = (int) (editor.getDpUnit() * 250);
-
-            setSize(Math.min(calculatedWidth, maxWidth), getHeight());
-        } else {
-            setSize(0, getHeight());
-        }
+        pasteBtn.setEnabled(editor.hasClip());
+        copyBtn.setVisibility(editor.getCursor().isSelected() ? View.VISIBLE : View.GONE);
+        pasteBtn.setVisibility(editor.isEditable() ? View.VISIBLE : View.GONE);
+        cutBtn.setVisibility((editor.getCursor().isSelected() && editor.isEditable()) ? View.VISIBLE : View.GONE);
+        longSelectBtn.setVisibility((!editor.getCursor().isSelected() && editor.isEditable()) ? View.VISIBLE : View.GONE);
+        rootView.measure(View.MeasureSpec.makeMeasureSpec(1000000, View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(100000, View.MeasureSpec.AT_MOST));
+        setSize(Math.min(rootView.getMeasuredWidth(), (int) (editor.getDpUnit() * 230)), getHeight());
     }
 
     @Override
@@ -416,30 +332,30 @@ public class EditorTextActionWindow extends EditorPopupWindow implements TextAct
         if (!enabled || editor.getSnippetController().isInSnippet() || !editor.hasFocus() || editor.isInMouseMode()) {
             return;
         }
-
-        // 确保窗口大小正确
-        updateBtnState();
         super.show();
     }
 
     @Override
-    public void onButtonClick(int buttonId) {
-        if (buttonId == BTN_SELECT_ALL) {
+    public void onClick(View view) {
+        int id = view.getId();
+        if (id == R.id.panel_btn_select_all) {
             editor.selectAll();
-        } else if (buttonId == BTN_CUT) {
+            return;
+        } else if (id == R.id.panel_btn_cut) {
             if (editor.getCursor().isSelected()) {
                 editor.cutText();
             }
-        } else if (buttonId == BTN_PASTE) {
+        } else if (id == R.id.panel_btn_paste) {
             editor.pasteText();
             editor.setSelection(editor.getCursor().getRightLine(), editor.getCursor().getRightColumn());
-        } else if (buttonId == BTN_COPY) {
+        } else if (id == R.id.panel_btn_copy) {
             editor.copyText();
             editor.setSelection(editor.getCursor().getRightLine(), editor.getCursor().getRightColumn());
-        } else if (buttonId == BTN_LONG_SELECT) {
+        } else if (id == R.id.panel_btn_long_select) {
             editor.beginLongSelect();
         }
         dismiss();
     }
 
 }
+

@@ -1,0 +1,11 @@
+{
+  "id": "text_action_demo",
+  "name": "文本操作工具栏扩展",
+  "version": "1.0.0",
+  "author": "LXC-LUA",
+  "description": "演示如何向长按浮动工具栏动态注册自定义按钮，监听按钮点击事件",
+  "type": "lua",
+  "main": "main.lua",
+  "permissions": ["editor", "events"],
+  "minAppVersion": "1.1.3"
+}

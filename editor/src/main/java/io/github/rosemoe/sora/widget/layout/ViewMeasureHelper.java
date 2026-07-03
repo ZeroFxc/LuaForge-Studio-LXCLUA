@@ -60,7 +60,7 @@ public class ViewMeasureHelper {
                 var lines = heightMode != View.MeasureSpec.EXACTLY ? new int[text.getLineCount()] : null;
                 var lineMaxSize = new MutableInt(0);
                 text.runReadActionsOnLines(0, text.getLineCount() - 1, (Content.ContentLineConsumer) (index, line, directions) -> {
-                    int measured = (int) Math.ceil(measurer.measureText(line.getBackingCharArray(), 0, line.length(), paint));
+                    int measured = (int) Math.ceil(measurer.measureText(line, 0, line.length(), paint));
                     if (measured > lineMaxSize.value) {
                         lineMaxSize.value = measured;
                     }
@@ -76,7 +76,7 @@ public class ViewMeasureHelper {
                     if (availableSize <= 0) {
                         rowCount.value = text.length();
                     } else {
-                        for (int i = 0; i < lines.length; i++) {
+                        for (int i = 0;i < lines.length;i++) {
                             rowCount.value += Math.max(1, Math.ceil(1.0 * lines[i] / availableSize));
                         }
                     }
@@ -91,7 +91,7 @@ public class ViewMeasureHelper {
                         rowCount.value = text.length();
                     } else {
                         text.runReadActionsOnLines(0, text.getLineCount() - 1, (Content.ContentLineConsumer) (index, line, directions) -> {
-                            int measured = (int) Math.ceil(measurer.measureText(line.getBackingCharArray(), 0, line.length(), paint));
+                            int measured = (int) Math.ceil(measurer.measureText(line, 0, line.length(), paint));
                             rowCount.value += Math.max(1, Math.ceil(1.0 * measured / availableSize));
                         });
                     }
@@ -103,7 +103,7 @@ public class ViewMeasureHelper {
             if (widthMode != View.MeasureSpec.EXACTLY) {
                 var lineMaxSize = new MutableInt(0);
                 text.runReadActionsOnLines(0, text.getLineCount() - 1, (Content.ContentLineConsumer) (index, line, directions) -> {
-                    int measured = (int) Math.ceil(measurer.measureText(line.getBackingCharArray(), 0, line.length(), paint));
+                    int measured = (int) Math.ceil(measurer.measureText(line, 0, line.length(), paint));
                     if (measured > lineMaxSize.value) {
                         lineMaxSize.value = measured;
                     }

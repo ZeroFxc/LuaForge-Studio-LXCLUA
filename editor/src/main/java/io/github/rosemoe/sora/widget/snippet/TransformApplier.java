@@ -92,7 +92,8 @@ public class TransformApplier {
         for (FormatString formatString : formatStringList) {
             if (formatString instanceof NoFormat) {
                 sb.append(applyFirstUpperCase(((NoFormat) formatString).getText(), nextUpperCase));
-            } else if (formatString instanceof ConditionalFormat format) {
+            } else if (formatString instanceof ConditionalFormat) {
+                var format = (ConditionalFormat) formatString;
                 var group = matcher.group(format.getGroup());
                 if (format.getShorthand() != null) {
                     if (group != null) {

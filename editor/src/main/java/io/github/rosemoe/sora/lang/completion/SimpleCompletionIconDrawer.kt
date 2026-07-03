@@ -31,25 +31,35 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 
+interface FileIconProvider {
+    /**
+     * Attempts to load a file/folder icon from the given source string.
+     * @param src Source string (e.g., absolute or relative path)
+     * @param isFolder True if the source is a folder, false if it's a file
+     * @return A [Drawable] if successful, or null if no icon can be loaded.
+     */
+    fun load(src: String, isFolder: Boolean): Drawable?
+}
 
 object SimpleCompletionIconDrawer {
+    var globalFileIconProvider: FileIconProvider? = null
+
     @JvmStatic
     @JvmOverloads
-    fun draw(
-        kind: CompletionItemKind,
-        circle: Boolean = false,
-        cornerRadius: Float = 20f
-    ): Drawable {
-        return CircleDrawable(kind, circle, cornerRadius)
+    fun draw(kind: CompletionItemKind, circle: Boolean = true): Drawable {
+        return CircleDrawable(kind, circle)
+    }
+
+    fun drawFileFolder(src: String, isFolder: Boolean): Drawable? {
+        return globalFileIconProvider?.load(src, isFolder)
+    }
+
+    fun drawColorSpan(colorSpan: Int): Drawable {
+        return ColorSpanDrawable(colorSpan)
     }
 }
 
-
-internal class CircleDrawable(
-    kind: CompletionItemKind,
-    circle: Boolean,
-    private val cornerRadius: Float = 20f
-) :
+internal class CircleDrawable(kind: CompletionItemKind, circle: Boolean) :
     Drawable() {
     private val mPaint: Paint
     private val mTextPaint: Paint
@@ -68,7 +78,6 @@ internal class CircleDrawable(
                 .displayMetrics.density * 14
             textAlign = Paint.Align.CENTER
         }
-
     }
 
     override fun draw(canvas: Canvas) {
@@ -77,8 +86,7 @@ internal class CircleDrawable(
         if (mCircle) {
             canvas.drawCircle(width / 2, height / 2, width / 2, mPaint)
         } else {
-            // 绘制圆角矩形（方圆形）
-            canvas.drawRoundRect(0f, 0f, width, height, cornerRadius, cornerRadius, mPaint)
+            canvas.drawRect(0f, 0f, width, height, mPaint)
         }
         canvas.save()
         canvas.translate(width / 2f, height / 2f)
@@ -103,6 +111,30 @@ internal class CircleDrawable(
     override fun getOpacity(): Int {
         return PixelFormat.OPAQUE
     }
+}
 
+internal class ColorSpanDrawable(colorSpan: Int) : Drawable() {
+    private val mColorPaint: Paint = Paint().apply {
+        isAntiAlias = true
+        color = colorSpan
+    }
 
+    override fun draw(canvas: Canvas) {
+        val width = bounds.right.toFloat()
+        val height = bounds.bottom.toFloat()
+
+        canvas.drawRect(0f, 0f, width, height, mColorPaint)
+    }
+
+    override fun setAlpha(p1: Int) {}
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+
+    @Deprecated(
+        "Deprecated in Java",
+        ReplaceWith("PixelFormat.OPAQUE", "android.graphics.PixelFormat")
+    )
+    override fun getOpacity(): Int {
+        return PixelFormat.OPAQUE
+    }
 }

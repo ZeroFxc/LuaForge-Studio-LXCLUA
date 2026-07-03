@@ -23,11 +23,17 @@
  */
 package io.github.rosemoe.sora.lang.smartEnter;
 
-/**
- * @param text      Text to insert
- * @param shiftLeft Count to shift left from the end of {@link NewlineHandleResult#text()}
- */
-public record NewlineHandleResult(CharSequence text, int shiftLeft) {
+public class NewlineHandleResult {
+
+    /**
+     * Text to insert
+     */
+    public final CharSequence text;
+
+    /**
+     * Count to shift left from the end of {@link NewlineHandleResult#text}
+     */
+    public final int shiftLeft;
 
     public NewlineHandleResult(CharSequence text, int shiftLeft) {
         this.text = text;

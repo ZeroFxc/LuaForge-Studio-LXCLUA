@@ -32,8 +32,8 @@ import io.github.rosemoe.sora.util.IntPair;
  */
 public class FoldingRegion {
 
-    private final long start;
-    private final long end;
+    private long start;
+    private long end;
     private boolean collapsed;
     private List<FoldingRegion> children;
 

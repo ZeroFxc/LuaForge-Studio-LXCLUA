@@ -107,7 +107,7 @@ public class CodeSnippetTokenizer {
         return index + length;
     }
 
-    private static final SparseArray<TokenType> staticTypes = new SparseArray<>();
+    private static SparseArray<TokenType> staticTypes = new SparseArray<>();
 
     static {
         for (TokenType value : TokenType.values()) {

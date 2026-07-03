@@ -48,7 +48,6 @@ public class HandleStateChangeEvent extends Event {
 
     /**
      * Get handle type of this event
-     *
      * @see #HANDLE_TYPE_LEFT
      * @see #HANDLE_TYPE_RIGHT
      * @see #HANDLE_TYPE_INSERT

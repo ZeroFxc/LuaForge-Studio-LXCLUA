@@ -24,7 +24,6 @@
 package io.github.rosemoe.sora.widget.component;
 
 import android.content.Context;
-import android.graphics.Typeface;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -106,9 +105,6 @@ public class EditorAutoCompletion extends EditorPopupWindow implements EditorBui
     private boolean enabled = true;
     private boolean loading = false;
     private boolean highlightMatchedLabel = true;
-
-    // 字体字段
-    private Typeface customTypeface = null;
 
     /**
      * Create a panel instance for the given editor
@@ -607,61 +603,7 @@ public class EditorAutoCompletion extends EditorPopupWindow implements EditorBui
     public void resetScrollPosition() {
         editor.postDelayedInLifecycle(() -> {
             layout.ensureListPositionVisible(0, 0);
-        }, 10);
-    }
-
-    /**
-     * 设置完成项的自定义字体
-     *
-     * @param typeface 要设置的字体，如果为null则使用系统默认字体
-     */
-    public void setCompletionItemTypeface(@Nullable Typeface typeface) {
-        this.customTypeface = typeface;
-        notifyAdapterDataChanged();
-    }
-
-    /**
-     * 通过资源文件设置完成项的自定义字体
-     *
-     * @param context  上下文
-     * @param fontPath 字体文件路径（assets目录下的相对路径）
-     */
-    public void setCompletionItemTypeface(@NonNull Context context, @NonNull String fontPath) {
-        try {
-            this.customTypeface = Typeface.createFromAsset(context.getAssets(), fontPath);
-            notifyAdapterDataChanged();
-        } catch (Exception e) {
-            Log.e("EditorAutoCompletion", "Failed to load font from assets: " + fontPath, e);
-        }
-    }
-
-    /**
-     * 清除自定义字体，恢复默认字体
-     */
-    public void clearCompletionItemTypeface() {
-        this.customTypeface = null;
-        notifyAdapterDataChanged();
-    }
-
-    /**
-     * 获取当前设置的自定义字体
-     */
-    @Nullable
-    public Typeface getCompletionItemTypeface() {
-        return customTypeface;
-    }
-
-    /**
-     * 通知适配器数据变化
-     */
-    private void notifyAdapterDataChanged() {
-        if (adapter != null) {
-            editor.postInLifecycle(() -> {
-                if (adapter instanceof DefaultCompletionItemAdapter) {
-                    adapter.notifyDataSetChanged();
-                }
-            });
-        }
+        },10);
     }
 
     /**
@@ -738,3 +680,4 @@ public class EditorAutoCompletion extends EditorPopupWindow implements EditorBui
     }
 
 }
+

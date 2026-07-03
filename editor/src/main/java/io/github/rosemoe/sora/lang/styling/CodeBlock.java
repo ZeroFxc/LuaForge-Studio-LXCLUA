@@ -24,7 +24,6 @@
 package io.github.rosemoe.sora.lang.styling;
 
 import androidx.annotation.NonNull;
-
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -157,8 +156,8 @@ public class CodeBlock {
         }
         CodeBlock codeBlock = (CodeBlock) o;
         return startLine == codeBlock.startLine && startColumn == codeBlock.startColumn &&
-                endLine == codeBlock.endLine && endColumn == codeBlock.endColumn &&
-                toBottomOfEndLine == codeBlock.toBottomOfEndLine;
+          endLine == codeBlock.endLine && endColumn == codeBlock.endColumn &&
+          toBottomOfEndLine == codeBlock.toBottomOfEndLine;
     }
 
     @Override

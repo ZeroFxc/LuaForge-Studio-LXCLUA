@@ -31,6 +31,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -40,6 +41,7 @@ import io.github.rosemoe.sora.event.ContentChangeEvent;
 import io.github.rosemoe.sora.event.PublishSearchResultEvent;
 import io.github.rosemoe.sora.event.SelectionChangeEvent;
 import io.github.rosemoe.sora.text.Content;
+import io.github.rosemoe.sora.text.PreserveCaseReplace;
 import io.github.rosemoe.sora.text.TextUtils;
 import io.github.rosemoe.sora.util.IntPair;
 import io.github.rosemoe.sora.util.LongArrayList;
@@ -50,6 +52,7 @@ import io.github.rosemoe.sora.util.regex.RegexBackrefToken;
 
 /**
  * Search text in editor.
+ * <p>
  * Note that editor searches text in another thread, so results may not be available immediately. Also,
  * the searcher does not match empty text. For example, you will never match a single empty
  * line by regex '^.*$'. What's more, zero-length pattern is not permitted.
@@ -66,6 +69,7 @@ public class EditorSearcher {
     private final CodeEditor editor;
     protected String currentPattern;
     protected SearchOptions searchOptions;
+    protected ReplaceOptions replaceOptions;
     protected Thread currentThread;
     /**
      * Search results. Note that it is naturally sorted by start index (and also end index).
@@ -73,6 +77,7 @@ public class EditorSearcher {
      */
     protected LongArrayList lastResults;
     private boolean cyclicJumping = true;
+    private boolean ensureOccurrenceVisible = false;
 
     EditorSearcher(@NonNull CodeEditor editor) {
         this.editor = editor;
@@ -81,6 +86,7 @@ public class EditorSearcher {
                 executeMatch();
             }
         }));
+        replaceOptions = ReplaceOptions.DEFAULT;
     }
 
     /**
@@ -97,6 +103,39 @@ public class EditorSearcher {
      */
     public boolean isCyclicJumping() {
         return cyclicJumping;
+    }
+
+    /**
+     * Set whether the editor should automatically scroll to the nearest occurrence
+     * when executing a search.
+     *
+     * @see #isEnsureOccurrenceVisible()
+     */
+    public void setEnsureOccurrenceVisible(boolean ensureOccurrenceVisible) {
+        this.ensureOccurrenceVisible = ensureOccurrenceVisible;
+    }
+
+    /**
+     * @see #setEnsureOccurrenceVisible(boolean)
+     */
+    public boolean isEnsureOccurrenceVisible() {
+        return ensureOccurrenceVisible;
+    }
+
+    /**
+     * Set the options when replacing text
+     */
+    public void setReplaceOptions(@NonNull ReplaceOptions replaceOptions) {
+        this.replaceOptions = Objects.requireNonNull(replaceOptions);
+    }
+
+    /**
+     * Get the options when replacing text
+     *
+     * @see #setReplaceOptions(ReplaceOptions)
+     */
+    public ReplaceOptions getReplaceOptions() {
+        return replaceOptions;
     }
 
     /**
@@ -290,19 +329,6 @@ public class EditorSearcher {
      *
      * @param replacement The text for replacement
      * @throws IllegalStateException if no search is in progress
-     * @deprecated Confusing method name. Use {@link #replaceCurrentMatch(String)} instead.
-     */
-    @Deprecated(since = "0.24.0", forRemoval = true)
-    public void replaceThis(@NonNull String replacement) {
-        replaceCurrentMatch(replacement);
-    }
-
-    /**
-     * Replace currently selected region if the region is exactly a match of searching pattern.
-     * Otherwise, attempt to jump to next matched position.
-     *
-     * @param replacement The text for replacement
-     * @throws IllegalStateException if no search is in progress
      */
     public void replaceCurrentMatch(@NonNull String replacement) {
         if (!editor.isEditable()) {
@@ -315,13 +341,18 @@ public class EditorSearcher {
                 if (searchOptions.type == SearchOptions.TYPE_REGULAR_EXPRESSION &&
                         searchOptions.regexBackrefGrammar != null) {
                     var cursor = editor.getCursor();
-                    String currentText = editor.getText().substring(cursor.getLeft(), cursor.getRight());
+                    var currentText = editor.getText().substring(cursor.getLeft(), cursor.getRight());
                     var pattern = Pattern.compile(currentPattern, (searchOptions.caseInsensitive ? Pattern.CASE_INSENSITIVE : 0) | Pattern.MULTILINE);
                     var matcher = pattern.matcher(currentText);
                     if (!matcher.find()) {
                         return;
                     }
                     replacement = RegexBackrefHelper.computeReplacement(matcher, searchOptions.regexBackrefGrammar, replacement);
+                }
+                if (replaceOptions.preserveCase) {
+                    var cursor = editor.getCursor();
+                    var currentText = editor.getText().substring(cursor.getLeft(), cursor.getRight());
+                    replacement = PreserveCaseReplace.getReplacementSimple(currentText, replacement);
                 }
                 editor.commitText(replacement, false, false);
             }
@@ -392,6 +423,12 @@ public class EditorSearcher {
                         var computedReplacement = RegexBackrefHelper.computeReplacement(matcher, tokens);
                         var newLength = computedReplacement.length();
                         var oldLength = end - start;
+                        if (replaceOptions.preserveCase) {
+                            computedReplacement = PreserveCaseReplace.getReplacementSimple(
+                                    sb.substring(start + delta, end + delta),
+                                    computedReplacement
+                            );
+                        }
                         sb.replace(start + delta, end + delta, computedReplacement);
                         delta += newLength - oldLength;
                     }
@@ -403,7 +440,11 @@ public class EditorSearcher {
                         var start = IntPair.getFirst(region);
                         var end = IntPair.getSecond(region);
                         var oldLength = end - start;
-                        sb.replace(start + delta, end + delta, replacement);
+                        var replaceText = replacement;
+                        if (replaceOptions.preserveCase) {
+                            replaceText = PreserveCaseReplace.getReplacementSimple(sb.substring(start + delta, end + delta), replacement);
+                        }
+                        sb.replace(start + delta, end + delta, replaceText);
                         delta += newLength - oldLength;
                     }
                 }
@@ -461,7 +502,7 @@ public class EditorSearcher {
          * Create a new searching option with the given attributes.
          *
          * @param type            type of searching method
-         * @param caseInsensitive Case insensitive
+         * @param caseInsensitive Case-insensitive
          * @see #TYPE_NORMAL
          * @see #TYPE_WHOLE_WORD
          * @see #TYPE_REGULAR_EXPRESSION
@@ -474,7 +515,7 @@ public class EditorSearcher {
          * Create a new searching option with the given attributes.
          *
          * @param type                type of searching method
-         * @param caseInsensitive     Case insensitive
+         * @param caseInsensitive     Case-insensitive
          * @param regexBackrefGrammar Back reference grammar in regular expression replace mode
          * @see #TYPE_NORMAL
          * @see #TYPE_WHOLE_WORD
@@ -487,6 +528,29 @@ public class EditorSearcher {
             this.type = type;
             this.caseInsensitive = caseInsensitive;
             this.regexBackrefGrammar = regexBackrefGrammar;
+        }
+
+    }
+
+    /**
+     * Replace options for {@link EditorSearcher#replaceCurrentMatch} and {@link EditorSearcher#replaceAll}
+     */
+    public static class ReplaceOptions {
+
+        public final static ReplaceOptions DEFAULT = new ReplaceOptions(false);
+
+        /**
+         * Preserve the case of text being replaced
+         */
+        public final boolean preserveCase;
+
+        /**
+         * Create a new replace option with given attributes
+         *
+         * @param preserveCase Whether to preserve the case of text being replaced
+         */
+        public ReplaceOptions(boolean preserveCase) {
+            this.preserveCase = preserveCase;
         }
 
     }
@@ -552,6 +616,19 @@ public class EditorSearcher {
                         editor.invalidate();
                         editor.dispatchEvent(new PublishSearchResultEvent(editor));
                         currentThread = null;
+                        if (ensureOccurrenceVisible && results.size() > 0) {
+                            var right = editor.getCursor().getRight();
+                            var index = results.lowerBoundByFirst(right);
+
+                            if (index >= results.size()) {
+                                index = results.size() - 1;
+                            }
+
+                            var match = results.get(index);
+                            var start = IntPair.getFirst(match);
+                            var startPos = editor.getText().getIndexer().getCharPosition(start);
+                            editor.ensurePositionVisible(startPos.line, startPos.column);
+                        }
                     }
                 });
             }

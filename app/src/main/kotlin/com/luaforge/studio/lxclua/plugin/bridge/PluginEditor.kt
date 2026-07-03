@@ -3,6 +3,9 @@ package com.luaforge.studio.lxclua.plugin.bridge
 import android.os.Handler
 import android.os.Looper
 import com.luaforge.studio.lxclua.plugin.PluginManager
+import com.luaforge.studio.lxclua.ui.editor.bridge.LuaTextActionWindow
+import io.github.rosemoe.sora.widget.component.EditorTextActionWindow
+import io.github.rosemoe.sora.widget.EditorSearcher
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.io.File
@@ -12,7 +15,7 @@ import java.io.File
  * 
  * 使用方式: plugin.editor.getText()
  */
-class PluginEditor {
+class PluginEditor(private val pluginId: String) {
 
     /**
      * 获取当前活动编辑器信息（含文件路径、内容、语言、光标位置等）
@@ -427,5 +430,130 @@ class PluginEditor {
         } else {
             android.os.Handler(android.os.Looper.getMainLooper()).post(action)
         }
+    }
+
+    // ========== 查找与替换 ==========
+
+    /**
+     * 在编辑器中查找文本
+     * @param query 搜索关键词
+     * @param caseSensitive 是否区分大小写
+     * @param useRegex 是否使用正则表达式
+     * @return 匹配数量（异步，立即可用时为 0 表示未找到或正在搜索中）
+     */
+    fun findText(query: String, caseSensitive: Boolean, useRegex: Boolean): Int {
+        val editor = PluginManager.activeViewModel?.getActiveEditor() ?: return 0
+        if (query.isEmpty()) return 0
+        val type = if (useRegex) EditorSearcher.SearchOptions.TYPE_REGULAR_EXPRESSION else EditorSearcher.SearchOptions.TYPE_NORMAL
+        val options = EditorSearcher.SearchOptions(type, !caseSensitive)
+        runOnUiThread {
+            editor.searcher.search(query, options)
+        }
+        return 0
+    }
+
+    /**
+     * 跳转到下一个匹配项
+     * @return true=跳转成功
+     */
+    fun findNext(): Boolean {
+        val editor = PluginManager.activeViewModel?.getActiveEditor() ?: return false
+        return editor.searcher.gotoNext()
+    }
+
+    /**
+     * 跳转到上一个匹配项
+     * @return true=跳转成功
+     */
+    fun findPrevious(): Boolean {
+        val editor = PluginManager.activeViewModel?.getActiveEditor() ?: return false
+        return editor.searcher.gotoPrevious()
+    }
+
+    /**
+     * 替换当前匹配项
+     * @param replacement 替换文本
+     */
+    fun replaceCurrentMatch(replacement: String) {
+        val editor = PluginManager.activeViewModel?.getActiveEditor() ?: return
+        runOnUiThread {
+            editor.searcher.replaceCurrentMatch(replacement)
+        }
+    }
+
+    /**
+     * 替换所有匹配项
+     * @param replacement 替换文本
+     */
+    fun replaceAllMatches(replacement: String) {
+        val editor = PluginManager.activeViewModel?.getActiveEditor() ?: return
+        runOnUiThread {
+            editor.searcher.replaceAll(replacement)
+        }
+    }
+
+    /**
+     * 停止搜索并清除高亮
+     */
+    fun stopFind() {
+        val editor = PluginManager.activeViewModel?.getActiveEditor() ?: return
+        runOnUiThread {
+            editor.searcher.stopSearch()
+        }
+    }
+
+    // ========== 文本操作窗口（长按浮动工具栏） ==========
+
+    private fun getLuaTextActionWindow(): LuaTextActionWindow? {
+        val editor = PluginManager.activeViewModel?.getActiveEditor() ?: return null
+        val textAction = editor.getComponent(EditorTextActionWindow::class.java)
+        return textAction as? LuaTextActionWindow
+    }
+
+    /**
+     * 注册文本操作窗口自定义按钮
+     * @param id 按钮唯一标识
+     * @param icon 图标：内置常量名（如 "SEARCH"）或自定义图片路径
+     * @param label 按钮标签
+     * @return true=注册成功
+     */
+    fun registerTextActionButton(id: String, icon: String, label: String): Boolean {
+        val window = getLuaTextActionWindow()
+        if (window != null) {
+            return window.registerButton(id, pluginId, icon, label)
+        }
+        // 编辑器尚未创建，加入待处理队列
+        val iconResId = LuaTextActionWindow.ICON_MAP[icon] ?: 0
+        val isPath = iconResId == 0 && (icon.contains("/") || icon.contains("."))
+        val customPath = if (isPath) icon else ""
+        LuaTextActionWindow.scheduleButton(id, pluginId, iconResId, customPath, label)
+        return true
+    }
+
+    /**
+     * 注销文本操作窗口自定义按钮
+     */
+    fun unregisterTextActionButton(id: String): Boolean {
+        val window = getLuaTextActionWindow()
+        if (window != null && window.unregisterButton(id)) return true
+        return LuaTextActionWindow.unregisterPendingButton(id)
+    }
+
+    /**
+     * 获取已注册的自定义按钮 ID 列表（含待处理队列）
+     */
+    fun getTextActionButtons(): Array<String> {
+        val window = getLuaTextActionWindow()
+        val liveIds = window?.getRegisteredButtons() ?: emptyList()
+        val pendingIds = LuaTextActionWindow.getPendingButtonIds(pluginId)
+        return (liveIds + pendingIds).toTypedArray()
+    }
+
+    /**
+     * 获取内置图标常量表
+     * 返回格式：{ "ICON_NAME" = true, ... }
+     */
+    fun getTextActionIcons(): Map<String, Boolean> {
+        return LuaTextActionWindow.ICON_MAP.keys.associateWith { true }
     }
 }

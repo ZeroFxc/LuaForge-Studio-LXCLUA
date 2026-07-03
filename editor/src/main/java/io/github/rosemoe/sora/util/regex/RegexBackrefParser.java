@@ -41,7 +41,7 @@ public class RegexBackrefParser {
     public List<RegexBackrefToken> parse(@NonNull String pattern, int groupCount) {
         pattern = pattern + '\0'; // add an extra char to truncate trailing backref
         List<RegexBackrefToken> result = new ArrayList<>();
-        char escapeChar = grammar.escapeChar(), backrefChar = grammar.backrefStartChar();
+        char escapeChar = grammar.escapeChar, backrefChar = grammar.backrefStartChar;
         int index = 0;
         int len = pattern.length();
         // State 0: Text

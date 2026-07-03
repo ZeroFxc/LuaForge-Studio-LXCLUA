@@ -24,6 +24,11 @@
 
 package io.github.rosemoe.sora.lang.styling.patching
 
+import java.lang.IllegalStateException
+import java.lang.UnsupportedOperationException
+import java.util.Arrays
+import java.util.Collections
+
 /*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
@@ -96,7 +101,7 @@ class SparseStylePatches {
     fun updateForDeletion(startLine: Int, startColumn: Int, endLine: Int, endColumn: Int) {
         val coordinator = StylePatch(startLine, 0, startLine, 0)
         var index = getInsertionPoint(coordinator)
-        endLine - startLine
+        val delta = endLine - startLine
         while (index < patches.size) {
             val e = patches[index]
             // TODO

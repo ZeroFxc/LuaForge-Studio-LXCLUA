@@ -62,8 +62,8 @@ public class ScrollEvent extends Event {
     private final int endX;
     private final int endY;
     private final int cause;
-    private final float flingVelocityX;
-    private final float flingVelocityY;
+    private float flingVelocityX;
+    private float flingVelocityY;
 
     public ScrollEvent(@NonNull CodeEditor editor, int startX, int startY, int endX, int endY, int cause) {
         this(editor, startX, startY, endX, endY, cause, 0f, 0f);

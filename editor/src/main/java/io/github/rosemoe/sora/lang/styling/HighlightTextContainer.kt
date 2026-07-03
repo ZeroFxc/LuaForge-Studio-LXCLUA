@@ -56,14 +56,7 @@ class HighlightTextContainer {
     }
 
     fun add(highlight: HighlightText) {
-        require(
-            comparePositions(
-                highlight.startLine,
-                highlight.startColumn,
-                highlight.endLine,
-                highlight.endColumn
-            ) <= 0
-        ) {
+        require(comparePositions(highlight.startLine, highlight.startColumn, highlight.endLine, highlight.endColumn) <= 0) {
             "Highlight start must not be after its end"
         }
         val index = getInsertionPoint(highlight)
@@ -132,13 +125,7 @@ class HighlightTextContainer {
             if (!highlight.hasLength()) {
                 continue
             }
-            if (comparePositions(
-                    startLine,
-                    startColumn,
-                    highlight.startLine,
-                    highlight.startColumn
-                ) < 0
-            ) {
+            if (comparePositions(startLine, startColumn, highlight.startLine, highlight.startColumn) < 0) {
                 val newStart = shiftForInsertion(
                     highlight.startLine,
                     highlight.startColumn,
@@ -151,13 +138,7 @@ class HighlightTextContainer {
                 highlight.startColumn = newStart.second
             }
 
-            if (comparePositions(
-                    startLine,
-                    startColumn,
-                    highlight.endLine,
-                    highlight.endColumn
-                ) < 0
-            ) {
+            if (comparePositions(startLine, startColumn, highlight.endLine, highlight.endColumn) < 0) {
                 val newEnd = shiftForInsertion(
                     highlight.endLine,
                     highlight.endColumn,
@@ -185,41 +166,22 @@ class HighlightTextContainer {
                 continue
             }
 
-            if (comparePositions(
-                    highlight.endLine,
-                    highlight.endColumn,
-                    startLine,
-                    startColumn
-                ) <= 0
-            ) {
+            if (comparePositions(highlight.endLine, highlight.endColumn, startLine, startColumn) <= 0) {
                 continue
             }
 
-            if (comparePositions(
-                    highlight.startLine,
-                    highlight.startColumn,
-                    endLine,
-                    endColumn
-                ) >= 0
-            ) {
+            if (comparePositions(highlight.startLine, highlight.startColumn, endLine, endColumn) >= 0) {
                 shiftForDeletion(highlight, startLine, startColumn, endLine, endColumn)
                 continue
             }
 
-            val startsBefore = comparePositions(
-                highlight.startLine,
-                highlight.startColumn,
-                startLine,
-                startColumn
-            ) < 0
-            val endsAfter =
-                comparePositions(highlight.endLine, highlight.endColumn, endLine, endColumn) > 0
+            val startsBefore = comparePositions(highlight.startLine, highlight.startColumn, startLine, startColumn) < 0
+            val endsAfter = comparePositions(highlight.endLine, highlight.endColumn, endLine, endColumn) > 0
 
             when {
                 !startsBefore && !endsAfter -> {
                     iterator.remove()
                 }
-
                 startsBefore && !endsAfter -> {
                     highlight.endLine = startLine
                     highlight.endColumn = startColumn
@@ -227,7 +189,6 @@ class HighlightTextContainer {
                         iterator.remove()
                     }
                 }
-
                 !startsBefore && endsAfter -> {
                     highlight.startLine = startLine
                     highlight.startColumn = startColumn
@@ -241,7 +202,6 @@ class HighlightTextContainer {
                         iterator.remove()
                     }
                 }
-
                 startsBefore && endsAfter -> {
                     val newEnd = shiftPositionAfterDeletion(
                         highlight.endLine, highlight.endColumn,

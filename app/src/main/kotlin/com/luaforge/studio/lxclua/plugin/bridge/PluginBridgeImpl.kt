@@ -593,6 +593,43 @@ class PluginBridgeImpl(val pluginId: String) : IPluginBridge {
         }
     }
     
+    // ==================== 文本操作窗口（长按浮动工具栏） ====================
+
+    override fun registerTextActionButton(id: String, icon: String, label: String): Boolean {
+        handler.post {
+            val editor = PluginManager.activeViewModel?.getActiveEditor() ?: return@post
+            val textAction = editor.getComponent(io.github.rosemoe.sora.widget.component.EditorTextActionWindow::class.java)
+            if (textAction is com.luaforge.studio.lxclua.ui.editor.bridge.LuaTextActionWindow) {
+                textAction.registerButton(id, pluginId, icon, label)
+            }
+        }
+        return true
+    }
+
+    override fun unregisterTextActionButton(id: String): Boolean {
+        handler.post {
+            val editor = PluginManager.activeViewModel?.getActiveEditor() ?: return@post
+            val textAction = editor.getComponent(io.github.rosemoe.sora.widget.component.EditorTextActionWindow::class.java)
+            if (textAction is com.luaforge.studio.lxclua.ui.editor.bridge.LuaTextActionWindow) {
+                textAction.unregisterButton(id)
+            }
+        }
+        return true
+    }
+
+    override fun getTextActionButtons(): Array<String> {
+        val editor = PluginManager.activeViewModel?.getActiveEditor() ?: return emptyArray()
+        val textAction = editor.getComponent(io.github.rosemoe.sora.widget.component.EditorTextActionWindow::class.java)
+        if (textAction is com.luaforge.studio.lxclua.ui.editor.bridge.LuaTextActionWindow) {
+            return textAction.getRegisteredButtons().toTypedArray()
+        }
+        return emptyArray()
+    }
+
+    override fun getTextActionIcons(): Map<String, Boolean> {
+        return com.luaforge.studio.lxclua.ui.editor.bridge.LuaTextActionWindow.ICON_MAP.keys.associateWith { true }
+    }
+
     // ==================== 项目操作 ====================
     
     override fun getProjectPath(): String? {

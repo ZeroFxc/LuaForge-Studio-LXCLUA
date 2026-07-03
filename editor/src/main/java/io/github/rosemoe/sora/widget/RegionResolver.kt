@@ -51,7 +51,7 @@ fun CodeEditor.resolveTouchRegion(event: MotionEvent, pointerIndex: Int = -1): L
         x in lineNumberWidth..lineNumberWidth + iconWidth -> REGION_SIDE_ICON
         x in lineNumberWidth + iconWidth..lineNumberWidth + iconWidth + dividerMarginLeft
                 || x in (lineNumberWidth + iconWidth + dividerMarginLeft + dividerWidth)..(lineNumberWidth + iconWidth + dividerMarginLeft + dividerMarginRight + dividerWidth)
-            -> REGION_DIVIDER_MARGIN
+        -> REGION_DIVIDER_MARGIN
 
         x in lineNumberWidth + iconWidth + dividerMarginLeft..lineNumberWidth + iconWidth + dividerMarginLeft + dividerWidth -> REGION_DIVIDER
         x in textOffset..(scrollMaxX + width).toFloat() -> REGION_TEXT

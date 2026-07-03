@@ -28,7 +28,9 @@ package io.github.rosemoe.sora.lang.brackets;
  *
  * @author Rosemoe
  */
-public record PairedBracket(int leftIndex, int leftLength, int rightIndex, int rightLength) {
+public class PairedBracket {
+
+    public final int leftIndex, leftLength, rightIndex, rightLength;
 
     /**
      * Currently length is always 1.
@@ -45,6 +47,10 @@ public record PairedBracket(int leftIndex, int leftLength, int rightIndex, int r
      * @param rightIndex  Index of right bracket in text
      * @param rightLength Text length of right bracket
      */
-    public PairedBracket {
+    public PairedBracket(int leftIndex, int leftLength, int rightIndex, int rightLength) {
+        this.leftIndex = leftIndex;
+        this.leftLength = leftLength;
+        this.rightIndex = rightIndex;
+        this.rightLength = rightLength;
     }
 }

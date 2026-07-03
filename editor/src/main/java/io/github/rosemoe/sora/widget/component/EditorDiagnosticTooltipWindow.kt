@@ -29,6 +29,7 @@ import android.view.MotionEvent
 import android.view.View
 import io.github.rosemoe.sora.R
 import io.github.rosemoe.sora.event.ColorSchemeUpdateEvent
+import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.EditorFocusChangeEvent
 import io.github.rosemoe.sora.event.EditorReleaseEvent
 import io.github.rosemoe.sora.event.HoverEvent
@@ -45,11 +46,10 @@ import io.github.rosemoe.sora.util.ViewUtils
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.base.EditorPopupWindow
 import io.github.rosemoe.sora.widget.getComponent
+import kotlin.math.PI
 import kotlin.math.abs
 
-open class EditorDiagnosticTooltipWindow(editor: CodeEditor) :
-    EditorPopupWindow(editor, FEATURE_HIDE_WHEN_FAST_SCROLL or FEATURE_SHOW_OUTSIDE_VIEW_ALLOWED),
-    EditorBuiltinComponent {
+open class EditorDiagnosticTooltipWindow(editor: CodeEditor) : EditorPopupWindow(editor, FEATURE_HIDE_WHEN_FAST_SCROLL or FEATURE_SHOW_OUTSIDE_VIEW_ALLOWED), EditorBuiltinComponent {
 
     protected val eventManager = editor.createSubEventManager()
     private lateinit var rootView: View
@@ -260,11 +260,7 @@ open class EditorDiagnosticTooltipWindow(editor: CodeEditor) :
         return buffer[0] >= editor.offsetY && buffer[0] - editor.rowHeight <= editor.offsetY + editor.height && buffer[1] >= editor.offsetX && buffer[1] - 100f /* larger than a single character */ <= editor.offsetX + editor.width
     }
 
-    protected open fun updateDiagnostic(
-        diagnostic: DiagnosticDetail?,
-        region: DiagnosticRegion?,
-        position: CharPosition?
-    ) {
+    protected open fun updateDiagnostic(diagnostic: DiagnosticDetail?, region: DiagnosticRegion?, position: CharPosition?) {
         if (!isEnabled) {
             return
         }
@@ -283,9 +279,9 @@ open class EditorDiagnosticTooltipWindow(editor: CodeEditor) :
             region === previousRegion -> true
             region == null || previousRegion == null -> false
             else -> region.id == previousRegion.id &&
-                    region.startIndex == previousRegion.startIndex &&
-                    region.endIndex == previousRegion.endIndex &&
-                    region.severity == previousRegion.severity
+                region.startIndex == previousRegion.startIndex &&
+                region.endIndex == previousRegion.endIndex &&
+                region.severity == previousRegion.severity
         }
         if (diagnostic == currentDiagnostic && sameRegion) {
             if (diagnostic != null && !editor.isInMouseMode) {

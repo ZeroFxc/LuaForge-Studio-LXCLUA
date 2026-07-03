@@ -141,12 +141,19 @@ object EditorColorSchemeManager {
         scheme.setColor(EditorColorScheme.LINE_NUMBER_PANEL, primaryColor)
         scheme.setColor(EditorColorScheme.LINE_NUMBER_PANEL_TEXT, onSurfaceColor)
 
+        // 诊断提示框（点击波浪线弹出的报错建议框）
+        scheme.setColor(EditorColorScheme.DIAGNOSTIC_TOOLTIP_BACKGROUND, surfaceColor)
+        scheme.setColor(EditorColorScheme.DIAGNOSTIC_TOOLTIP_BRIEF_MSG, onSurfaceColor)
+        scheme.setColor(EditorColorScheme.DIAGNOSTIC_TOOLTIP_DETAILED_MSG, outlineColor)
+        scheme.setColor(EditorColorScheme.DIAGNOSTIC_TOOLTIP_ACTION, primaryColor)
+
         // 文本操作窗口
         scheme.setColor(EditorColorScheme.TEXT_ACTION_WINDOW_BACKGROUND, surfaceColor)
         scheme.setColor(EditorColorScheme.TEXT_ACTION_WINDOW_ICON_COLOR, onSurfaceColor)
         scheme.setColor(EditorColorScheme.TEXT_ACTION_WINDOW_STROKE_COLOR, outlineColor)
 
         // 补全窗口
+        scheme.setColor(EditorColorScheme.COMPLETION_WND_BACKGROUND, surfaceColor)
         scheme.setColor(EditorColorScheme.COMPLETION_WND_TEXT_PRIMARY, onSurfaceColor)
         scheme.setColor(EditorColorScheme.COMPLETION_WND_TEXT_SECONDARY, outlineColor)
 

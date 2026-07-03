@@ -24,6 +24,7 @@
 package io.github.rosemoe.sora.util.regex;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.util.regex.Matcher;
 

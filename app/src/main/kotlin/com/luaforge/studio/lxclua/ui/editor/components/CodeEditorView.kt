@@ -60,6 +60,8 @@ import com.luaforge.studio.lxclua.utils.LogCatcher
 import com.luaforge.studio.lxclua.utils.LuaParserUtil
 import io.github.rosemoe.sora.text.ContentListener
 import io.github.rosemoe.sora.event.SelectionChangeEvent
+import io.github.rosemoe.sora.widget.component.EditorDiagnosticTooltipWindow
+import io.github.rosemoe.sora.widget.getComponent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -267,6 +269,13 @@ fun CodeEditorView(
     LaunchedEffect(settingsState.indentGuideEnabled) {
         if (isEditorReady) {
             viewModel.updateEditorIndentGuides(editor)
+        }
+    }
+
+    // 诊断提示框开关（key 包含 isEditorReady 确保编辑器就绪后也能触发）
+    LaunchedEffect(settingsState.diagnosticTooltipEnabled, isEditorReady) {
+        if (isEditorReady) {
+            editor.getComponent<EditorDiagnosticTooltipWindow>().setEnabled(settingsState.diagnosticTooltipEnabled)
         }
     }
 

@@ -98,7 +98,7 @@ class SnippetController(private val editor: CodeEditor) {
     private var currentTabStopIndex = -1
     private var inSequenceEdits = false
 
-    private val variableResolver = CompositeSnippetVariableResolver().also {
+    val variableResolver = CompositeSnippetVariableResolver().also {
         it.addResolver(ClipboardBasedSnippetVariableResolver(editor.clipboardManager))
         it.addResolver(EditorBasedSnippetVariableResolver(editor))
         it.addResolver(RandomBasedSnippetVariableResolver())
@@ -120,7 +120,7 @@ class SnippetController(private val editor: CodeEditor) {
                     stopSnippet()
                 } else if (event.action == ContentChangeEvent.ACTION_INSERT) {
                     if (checkIndex(event.changeStart.index)) {
-                        var exitOnEnd = false
+                        var exitOnEnd = false;
                         val addedTextLength = if (event.changedText.contains(lineSeparatorRegex)) {
                             exitOnEnd = true
                             event.changedText.indexOfFirst { it == '\r' || it == '\n' }
@@ -241,7 +241,7 @@ class SnippetController(private val editor: CodeEditor) {
         // Stage 2: resolve the variables and execute shell codes
         val elements = clonedSnippet.items!!
         val variableItemMapping = mutableMapOf<String, PlaceholderDefinition>()
-        var maxTabStop = 0
+        var maxTabStop = 0;
         elements.forEach {
             if (it is PlaceholderItem && it.definition.id > maxTabStop) {
                 maxTabStop = it.definition.id
@@ -369,10 +369,7 @@ class SnippetController(private val editor: CodeEditor) {
                         deltaIndex += element.text.length
                     } else if (element is VariableItem) {
                         var value = when {
-                            variableResolver.canResolve(element.name) -> variableResolver.resolve(
-                                element.name
-                            )
-
+                            variableResolver.canResolve(element.name) -> variableResolver.resolve(element.name)
                             element.name == "selection" -> selectedText
                             element.defaultValue != null -> element.defaultValue
                             else -> null

@@ -25,6 +25,8 @@
 package io.github.rosemoe.sora.widget.rendering
 
 import androidx.collection.MutableIntList
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * Cache for editor rendering, including line-based data and measure

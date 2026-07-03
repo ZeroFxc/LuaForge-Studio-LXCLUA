@@ -45,6 +45,8 @@ public class ContentIO {
 
     private final static int BUFFER_SIZE = 16384;
 
+    final static int CHAR_BUFFER_SIZE = 1024;
+
     /**
      * Create a {@link Content} from stream.
      * The stream will get closed if the operation is successfully done.
@@ -140,16 +142,22 @@ public class ContentIO {
      *
      * @param text           Text to be written
      * @param writer         Output writer
-     * @param closeOnSucceed If true, the stream will be closed when operation is successfully
+     * @param closeOnSucceed If true, the stream will be closed when operation is successful
      */
     public static void writeTo(@NonNull Content text, @NonNull Writer writer, boolean closeOnSucceed) throws IOException {
         // Use buffered writer to avoid frequently IO when there are a lot of short lines
         final var buffered = (writer instanceof BufferedWriter) ? (BufferedWriter) writer : new BufferedWriter(writer, BUFFER_SIZE);
+        char[] buf = new char[CHAR_BUFFER_SIZE];
         try {
             text.runReadActionsOnLines(0, text.getLineCount() - 1, (Content.ContentLineConsumer2) (index, line, flag) -> {
                 try {
                     // Write line content
-                    buffered.write(line.getBackingCharArray(), 0, line.length());
+                    for (int i = 0; i < line.length(); ) {
+                        int end = Math.min(i + buf.length, line.length());
+                        line.getChars(i, end, buf, 0);
+                        buffered.write(buf, 0, end - i);
+                        i = end;
+                    }
                     // Write line feed (the last line has empty line feed)
                     buffered.write(line.getLineSeparator().getChars());
                 } catch (IOException e) {

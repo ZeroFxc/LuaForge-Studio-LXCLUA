@@ -25,12 +25,6 @@ package io.github.rosemoe.sora.lang.completion.snippet.parser;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
-
 import io.github.rosemoe.sora.lang.completion.snippet.CodeSnippet;
 import io.github.rosemoe.sora.lang.completion.snippet.ConditionalFormat;
 import io.github.rosemoe.sora.lang.completion.snippet.FormatString;
@@ -41,6 +35,10 @@ import io.github.rosemoe.sora.lang.completion.snippet.PlaceholderDefinition;
 import io.github.rosemoe.sora.lang.completion.snippet.PlainPlaceholderElement;
 import io.github.rosemoe.sora.lang.completion.snippet.Transform;
 import io.github.rosemoe.sora.lang.completion.snippet.VariableItem;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 public class CodeSnippetParser {
 
@@ -320,8 +318,9 @@ public class CodeSnippetParser {
 
     private static void appendPlaceholderElement(@NonNull ArrayList<PlaceHolderElement> elements, @NonNull String t) {
         if (!elements.isEmpty()) {
-            if (elements.get(elements.size() - 1) instanceof PlainPlaceholderElement plain) {
+            if (elements.get(elements.size() - 1) instanceof PlainPlaceholderElement) {
                 // merge with the last plain placeholder element
+                var plain = (PlainPlaceholderElement) elements.get(elements.size() - 1);
                 plain.setText(plain.getText() + t);
                 return;
             }

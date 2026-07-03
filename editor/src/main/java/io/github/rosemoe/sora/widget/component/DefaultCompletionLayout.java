@@ -28,6 +28,7 @@ import android.content.Context;
 import android.graphics.Outline;
 import android.graphics.drawable.GradientDrawable;
 import android.os.SystemClock;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
@@ -40,10 +41,18 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
-import io.github.rosemoe.sora.widget.CodeEditor;
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 
 public class DefaultCompletionLayout implements CompletionLayout {
+
+    private static final String TAG = "DefaultCompletionLayout";
+    
+    /**
+     * Maximum iterations for scroll operations to prevent infinite loops and ANR.
+     * This safety limit ensures that even if the scroll state becomes inconsistent,
+     * the UI thread won't be blocked indefinitely.
+     */
+    private static final int MAX_SCROLL_ITERATIONS = 100;
 
     private ListView listView;
     private ProgressBar progressBar;
@@ -109,26 +118,14 @@ public class DefaultCompletionLayout implements CompletionLayout {
         progressBarLayoutParams.leftMargin = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4, context.getResources().getDisplayMetrics());
         progressBarLayoutParams.rightMargin = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4, context.getResources().getDisplayMetrics());
 
-        // 创建与 EditorTextActionWindow 一样的 GradientDrawable
         GradientDrawable gd = new GradientDrawable();
-        gd.setShape(GradientDrawable.RECTANGLE);
-        // 圆角半径12dp
         gd.setCornerRadius(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, context.getResources().getDisplayMetrics()));
-
-        // 初始背景颜色（稍后在onApplyColorScheme中更新）
-        gd.setColor(0xFFFFFFFF); // 临时白色背景
-
-        // 初始边框（稍后在onApplyColorScheme中更新）
-        int strokeWidth = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1, context.getResources().getDisplayMetrics());
-        gd.setStroke(strokeWidth, 0xFFCCCCCC); // 临时灰色边框
 
         rootLayout.setBackground(gd);
 
-        // 设置圆角裁剪
         setRootViewOutlineProvider(rootView);
 
-        // 添加分割线（1像素高度）
-        listView.setDividerHeight(1);
+        listView.setDividerHeight(0);
         setLoading(true);
 
         listView.setOnItemClickListener((parent, view, position, id) -> {
@@ -140,46 +137,22 @@ public class DefaultCompletionLayout implements CompletionLayout {
             }
         });
 
+
         return rootLayout;
     }
 
     @Override
     public void onApplyColorScheme(@NonNull EditorColorScheme colorScheme) {
-        if (editorAutoCompletion == null || editorAutoCompletion.getEditor() == null) {
-            return;
-        }
-
-        CodeEditor editor = editorAutoCompletion.getEditor();
-
-        // 创建与 EditorTextActionWindow 完全一样的 GradientDrawable
         GradientDrawable gd = new GradientDrawable();
-        gd.setShape(GradientDrawable.RECTANGLE);
-        // 圆角半径8dp
-        gd.setCornerRadius(8 * editor.getDpUnit());
-
-        // 背景颜色
-        gd.setColor(colorScheme.getColor(EditorColorScheme.TEXT_ACTION_WINDOW_BACKGROUND));
-
-        // 添加边框 - 使用与文本操作框相同的边框颜色
-        int strokeWidth = (int) (1 * editor.getDpUnit());
-        int strokeColor = colorScheme.getColor(EditorColorScheme.TEXT_ACTION_WINDOW_STROKE_COLOR);
-        gd.setStroke(strokeWidth, strokeColor);
-
+        gd.setCornerRadius(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, editorAutoCompletion.getContext().getResources().getDisplayMetrics()));
+        gd.setStroke(
+                (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1, editorAutoCompletion.getContext().getResources().getDisplayMetrics()),
+                colorScheme.getColor(EditorColorScheme.COMPLETION_WND_CORNER)
+        );
+        gd.setColor(colorScheme.getColor(EditorColorScheme.COMPLETION_WND_BACKGROUND));
         rootView.setBackground(gd);
 
-        // 更新圆角裁剪，确保与背景圆角一致
         setRootViewOutlineProvider(rootView);
-
-        // 设置分割线颜色
-        if (listView != null) {
-            // 使用文本次要颜色作为分割线颜色，或者创建一个新的颜色定义
-            int dividerColor = colorScheme.getColor(EditorColorScheme.COMPLETION_WND_TEXT_SECONDARY);
-            // 设置透明度为0.2，使分割线更柔和
-            dividerColor = (dividerColor & 0x00FFFFFF) | 0x20000000;
-            listView.setDivider(new android.graphics.drawable.ColorDrawable(dividerColor));
-            // 设置分割线高度为1dp
-            listView.setDividerHeight((int) (1 * editor.getDpUnit()));
-        }
     }
 
     @Override
@@ -214,18 +187,10 @@ public class DefaultCompletionLayout implements CompletionLayout {
     }
 
     private void setRootViewOutlineProvider(View rootView) {
-        if (editorAutoCompletion == null || editorAutoCompletion.getEditor() == null) {
-            return;
-        }
-
-        CodeEditor editor = editorAutoCompletion.getEditor();
-
         rootView.setOutlineProvider(new ViewOutlineProvider() {
             @Override
             public void getOutline(View view, Outline outline) {
-                // 设置与GradientDrawable完全一致的圆角轮廓
-                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(),
-                        8 * editor.getDpUnit());
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, view.getContext().getResources().getDisplayMetrics()));
             }
         });
         rootView.setClipToOutline(true);
@@ -239,11 +204,30 @@ public class DefaultCompletionLayout implements CompletionLayout {
                 listView.setSelectionFromTop(0, 0);
                 return;
             }
-            while (listView.getFirstVisiblePosition() + 1 > position && listView.canScrollList(-1)) {
+            
+            // a FIX: Add iteration counters to prevent infinite loops that can cause ANR!!!
+            int upScrollIterations = 0;
+            while (listView.getFirstVisiblePosition() + 1 > position && 
+                   listView.canScrollList(-1) && 
+                   upScrollIterations < MAX_SCROLL_ITERATIONS) {
                 performScrollList(increment / 2);
+                upScrollIterations++;
             }
-            while (listView.getLastVisiblePosition() - 1 < position && listView.canScrollList(1)) {
+            
+            int downScrollIterations = 0;
+            while (listView.getLastVisiblePosition() - 1 < position && 
+                   listView.canScrollList(1) && 
+                   downScrollIterations < MAX_SCROLL_ITERATIONS) {
                 performScrollList(-increment / 2);
+                downScrollIterations++;
+            }
+            
+            // Log warning if we hit the iteration limit (indicates potential issue)
+            if (upScrollIterations >= MAX_SCROLL_ITERATIONS || downScrollIterations >= MAX_SCROLL_ITERATIONS) {
+                Log.w(TAG, "ensureListPositionVisible hit iteration limit: " +
+                        "position=" + position + 
+                        ", upScrolls=" + upScrollIterations + 
+                        ", downScrolls=" + downScrollIterations);
             }
         });
     }

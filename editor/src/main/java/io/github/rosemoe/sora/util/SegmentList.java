@@ -81,7 +81,7 @@ public class SegmentList<T> extends AbstractList<T> {
         }
     }
 
-    private final FindResult<T> result = new FindResult<>();
+    private FindResult<T> result = new FindResult<>();
 
     private FindResult<T> makeResult(Segment<T> segment, int offset, int segIndex) {
         result.blockIndex = segIndex;

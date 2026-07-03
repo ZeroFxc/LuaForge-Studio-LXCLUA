@@ -90,45 +90,16 @@ class DefaultDiagnosticTooltipLayout : DiagnosticTooltipLayout {
 
     override fun applyColorScheme(colorScheme: EditorColorScheme) {
         val editor = window.editor
-
-        // 设置文本颜色
         briefMessageText.setTextColor(colorScheme.getColor(EditorColorScheme.DIAGNOSTIC_TOOLTIP_BRIEF_MSG))
         detailMessageText.setTextColor(colorScheme.getColor(EditorColorScheme.DIAGNOSTIC_TOOLTIP_DETAILED_MSG))
         quickfixText.setTextColor(colorScheme.getColor(EditorColorScheme.DIAGNOSTIC_TOOLTIP_ACTION))
         moreActionText.setTextColor(colorScheme.getColor(EditorColorScheme.DIAGNOSTIC_TOOLTIP_ACTION))
 
-        // 创建与代码补全框和文本操作框一致的GradientDrawable
         val background = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            // 圆角半径8dp，与代码补全框一致
-            cornerRadius = editor.dpUnit * 8
-
-            // 背景颜色使用与代码补全框一致的文本操作框背景颜色
-            val backgroundColor =
-                colorScheme.getColor(EditorColorScheme.TEXT_ACTION_WINDOW_BACKGROUND)
-            setColor(backgroundColor)
-
-            // 添加边框，使用与代码补全框一致的边框颜色
-            val strokeWidth = (1 * editor.dpUnit).toInt()
-            val strokeColor =
-                colorScheme.getColor(EditorColorScheme.TEXT_ACTION_WINDOW_STROKE_COLOR)
-            setStroke(strokeWidth, strokeColor)
+            cornerRadius = editor.dpUnit * 5
+            setColor(colorScheme.getColor(EditorColorScheme.DIAGNOSTIC_TOOLTIP_BACKGROUND))
         }
-
         root.background = background
-
-        // 设置圆角裁剪，确保与背景圆角一致
-        root.outlineProvider = null // 重置outlineProvider
-        root.clipToOutline = true
-        root.post {
-            // 确保在视图布局完成后设置圆角轮廓
-            root.outlineProvider = object : android.view.ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: android.graphics.Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, editor.dpUnit * 8)
-                }
-            }
-            root.invalidateOutline()
-        }
     }
 
     override fun renderDiagnostic(diagnostic: DiagnosticDetail?) {
@@ -165,10 +136,7 @@ class DefaultDiagnosticTooltipLayout : DiagnosticTooltipLayout {
         var bottomBarHeight = 0
         var bottomBarWidth = 0
         if (quickfixPanel.visibility == View.VISIBLE) {
-            quickfixPanel.measure(
-                widthSpec,
-                MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST)
-            )
+            quickfixPanel.measure(widthSpec, MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST))
             bottomBarHeight = quickfixPanel.measuredHeight
             bottomBarWidth = quickfixPanel.measuredWidth.coerceAtMost(maxWidth)
         }
@@ -176,10 +144,7 @@ class DefaultDiagnosticTooltipLayout : DiagnosticTooltipLayout {
         val layoutParams = messagePanel.layoutParams
         layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
         messagePanel.layoutParams = layoutParams
-        messagePanel.measure(
-            widthSpec,
-            MeasureSpec.makeMeasureSpec(restHeight, MeasureSpec.AT_MOST)
-        )
+        messagePanel.measure(widthSpec, MeasureSpec.makeMeasureSpec(restHeight, MeasureSpec.AT_MOST))
         val messageHeight = messagePanel.measuredHeight.coerceAtMost(restHeight)
         layoutParams.height = messageHeight
         messagePanel.layoutParams = layoutParams

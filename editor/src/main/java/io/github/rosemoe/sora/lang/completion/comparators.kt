@@ -107,7 +107,6 @@ fun filterCompletionItems(
     // picks a score function based on the number of
     // items that we have to score/filter and based on the
     // user-configuration
-
     val scoreFn = FuzzyScorer { pattern,
                                 lowPattern,
                                 patternPos,
@@ -128,7 +127,6 @@ fun filterCompletionItems(
                 options
             )
         }
-
     }
 
     for (originItem in completionItemList) {
@@ -184,7 +182,7 @@ fun filterCompletionItems(
                 // and if that doesn't yield a result we have no highlights,
                 // despite having the match
                 // by default match `word` against the `label`
-                val match = scoreFn.calculateScore(
+                val filterTextMatch = scoreFn.calculateScore(
                     word,
                     wordLow,
                     wordPos,
@@ -197,7 +195,7 @@ fun filterCompletionItems(
                 // compareIgnoreCase(item.completion.filterText, item.textLabel) === 0
                 if (filterText.equals(originItem.label.toString(), ignoreCase = true)) {
                     // filterText and label are actually the same -> use good highlights
-                    item.score = match
+                    item.score = filterTextMatch
                 } else {
                     // re-run the scorer on the label in the hope of a result BUT use the rank
                     // of the filterText-match
@@ -210,9 +208,8 @@ fun filterCompletionItems(
                         0
                     )
                     item.score = labelMatch
-                    labelMatch.matches[0] = match.matches[0] // use score from filterText
+                    labelMatch.score = filterTextMatch.score // use score from filterText
                 }
-
             } else {
                 // by default match `word` against the `label`
                 val match = scoreFn.calculateScore(
@@ -229,7 +226,6 @@ fun filterCompletionItems(
             }
 
             originItem.extra = item
-
         }
 
         result.add(originItem)
@@ -287,13 +283,13 @@ fun List<CompletionItem>.highlightMatchLabel(colorSchema: EditorColorScheme?): L
 
         for (index in score.matches.indices.reversed()) {
             val matchIndex = score.matches[index]
-
+        
             // Skip invalid indices
             if (matchIndex < 0 || matchIndex >= spannable.length) continue
-
+        
             val end = (matchIndex + 1).coerceAtMost(spannable.length)
             if (end <= matchIndex) continue
-
+        
             try {
                 spannable.setSpan(
                     ForegroundColorSpan(matchedColor),
