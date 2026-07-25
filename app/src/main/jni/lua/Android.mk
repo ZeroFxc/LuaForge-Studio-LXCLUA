@@ -20,6 +20,7 @@ LOCAL_SRC_FILES := \
 	src/utils/laio.c\
     src/utils/crc.c\
     src/stdlib/lfs.c\
+    src/stdlib/lastlib.c\
 	src/core/lapi.c \
 	src/vm/lbytecode.c \
 	src/core/lauxlib.c \
@@ -47,6 +48,12 @@ LOCAL_SRC_FILES := \
 	src/core/lopcodes.c \
 	src/stdlib/loslib.c \
 	src/compiler/lparser.c \
+	src/compiler/lasm.c \
+	src/compiler/last.c \
+	src/compiler/last_parse.c \
+	src/compiler/last_visitor.c \
+	src/compiler/last_serialize.c \
+	src/compiler/lcodegen.c \
 	src/utils/lpromise.c \
 	src/core/lstate.c \
 	src/core/lstring.c \
@@ -114,7 +121,6 @@ LOCAL_SRC_FILES := \
 	src/vm/jit/codegen/ljit_cg_arith.c \
 	src/vm/jit/codegen/ljit_cg_ctrl.c \
 	src/vm/jit/codegen/ljit_cg_table.c \
-	src/vm/jit/codegen/ljit_cg_call.c \
 	src/vm/jit/codegen/ljit_cg_conv.c \
 	src/vm/jit/codegen/ljit_cg_closure.c \
 	src/vm/jit/codegen/ljit_cg_oop.c \
@@ -206,5 +212,7 @@ endif
 
 # 添加缺失的库依赖
 LOCAL_LDLIBS += -llog -lz
+# 静态库的 LDLIBS 会被忽略，需要用 EXPORT 传递给链接它的共享库
+LOCAL_EXPORT_LDLIBS := -llog
 
 include $(BUILD_STATIC_LIBRARY) 

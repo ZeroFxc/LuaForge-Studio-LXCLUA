@@ -598,6 +598,7 @@ Tokens.HEX_COLOR -> {
                 Tokens.CONCEPT, Tokens.NAMESPACE,Tokens.TRAIT,Tokens.USE, Tokens.USING, Tokens.REQUIRES,
                 Tokens.BOOL, Tokens.CHAR, Tokens.DOUBLE, Tokens.FLOAT,
                 Tokens.TYPE_INT, Tokens.LONG, Tokens.VOID,
+                Tokens.ASTPARSER,
                 Tokens.PLUGIN_KEYWORD -> {
                     classNamePrevious = false
                     SpanFactory.obtain(

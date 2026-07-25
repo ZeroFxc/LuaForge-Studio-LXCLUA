@@ -7,7 +7,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavEntryDecorator
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.logD
 import com.nirithy.luacompose.logE
 import com.nirithy.luacompose.logW
@@ -133,7 +133,7 @@ class Navigation3Plugin : ComposePlugin {
 
         /**
          * 注入导航相关 API 到 Lua 全局环境
-         * 在 ComposeBridge.inject() 中调用
+         * 在 ComposeBridgeInstance.current.inject() 中调用
          */
         fun injectNavigationApis(L: LuaState) {
             logD(TAG) { "[inject] 开始注入导航 API" }
@@ -235,8 +235,8 @@ class Navigation3Plugin : ComposePlugin {
 
                     // 始终返回同一个缓存实例，避免每次 main() 重新执行时
                     // 创建新实例导致 NavDisplay 内部状态重置
-                    if (ComposeBridge.navBackStackCache.isNotEmpty()) {
-                        val cached = ComposeBridge.navBackStackCache[0]
+                    if (ComposeBridgeInstance.current.navBackStackCache.isNotEmpty()) {
+                        val cached = ComposeBridgeInstance.current.navBackStackCache[0]
                         logD(TAG) { "[rememberNavBackStack] 返回缓存实例, size=${cached.size}" }
                         L.pushJavaObject(cached)
                         return 1
@@ -267,11 +267,11 @@ class Navigation3Plugin : ComposePlugin {
                     }
 
                     val backStack = NavBackStack(initialKeys) {
-                        ComposeBridge.scheduleRefresh()
+                        ComposeBridgeInstance.current.scheduleRefresh()
                     }
-                    ComposeBridge.navBackStackCache.add(backStack)
+                    ComposeBridgeInstance.current.navBackStackCache.add(backStack)
                     // 注册为活跃回退栈，供 LuaActivity.onBackPressed 使用
-                    ComposeBridge.activeBackStack = backStack
+                    ComposeBridgeInstance.current.activeBackStack = backStack
                     logD(TAG) { "[rememberNavBackStack] 创建回退栈, 初始键: $initialKeys" }
                     L.pushJavaObject(backStack)
                     return 1

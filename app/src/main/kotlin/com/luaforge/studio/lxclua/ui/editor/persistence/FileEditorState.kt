@@ -27,7 +27,6 @@ data class FileEditorState(
     // 文件内容摘要（用于检测文件是否被外部修改）
     var contentHash: String = ""
 ) : Serializable {
-
     companion object {
         private const val serialVersionUID = 1L
 

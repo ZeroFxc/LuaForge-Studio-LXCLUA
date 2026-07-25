@@ -43,7 +43,8 @@ import com.nirithy.luacompose.render.ComposeRenderer
 @Composable
 fun LaunchedEffectRenderer(node: ComposeNode) {
     val key = node.props["key"]
-    val block = node.props["block"] as? LuaObject
+    // ★ 修复：block 是函数，NodeParser 将其存入 callbacks，而非 props
+    val block = node.callbacks["block"]
 
     LaunchedEffect(key) {
         try {
@@ -70,7 +71,8 @@ fun KeyRenderer(node: ComposeNode) {
 @Composable
 fun DisposableEffectRenderer(node: ComposeNode) {
     val key = node.props["key"]
-    val effect = node.props["effect"] as? LuaObject
+    // ★ 修复：effect 是函数，NodeParser 将其存入 callbacks，而非 props
+    val effect = node.callbacks["effect"]
 
     DisposableEffect(key) {
         val onDisposeFn: Any? = if (effect != null) {

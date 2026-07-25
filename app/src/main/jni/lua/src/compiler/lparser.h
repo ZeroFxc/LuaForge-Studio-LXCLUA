@@ -288,6 +288,7 @@ LUAI_FUNC void statlist (struct LexState *ls);
 LUAI_FUNC void statement (struct LexState *ls);
 LUAI_FUNC void enterblock (FuncState *fs, struct BlockCnt *bl, lu_byte isloop);
 LUAI_FUNC void leaveblock (FuncState *fs);
+LUAI_FUNC void add_export (struct LexState *ls, TString *name);
 LUAI_FUNC void adjustlocalvars (struct LexState *ls, int nvars);
 LUAI_FUNC int testnext (struct LexState *ls, int c);
 LUAI_FUNC void checknext (struct LexState *ls, int c);
@@ -312,6 +313,9 @@ LUAI_FUNC void namedvararg (struct LexState *ls, TString *varargname);
       luaX_newstring(ls, "" v, (sizeof(v)/sizeof(char)) - 1))
 
 LUAI_FUNC int new_localvar (struct LexState *ls, TString *name);
+
+/* astparser_runner - C 闭包回调函数，用于运行时执行预编译的 astparser 代码 */
+LUAI_FUNC int astparser_runner (lua_State *L);
 
 
 #endif

@@ -24,7 +24,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.node.ComposeNode
 import com.nirithy.luacompose.render.ComposeRenderer
 
@@ -136,10 +136,10 @@ fun AnimatedVisibilityRenderer(node: ComposeNode) {
         exit = exit
     ) {
         // this = AnimatedVisibilityScope，推入栈供 sharedElement 使用
-        ComposeBridge.pushActiveAnimatedVisibilityScope(this)
+        ComposeBridgeInstance.current.pushActiveAnimatedVisibilityScope(this)
         // RenderChildren是Composable不能被try-catch包裹，pop直接在其后执行
         // 若RenderChildren抛异常，pop可能不执行——但Compose异常会终止重组，影响有限
         ComposeRenderer.RenderChildren(node)
-        ComposeBridge.popActiveAnimatedVisibilityScope()
+        ComposeBridgeInstance.current.popActiveAnimatedVisibilityScope()
     }
 }

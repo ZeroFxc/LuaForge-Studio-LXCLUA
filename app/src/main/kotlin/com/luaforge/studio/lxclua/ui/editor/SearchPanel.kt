@@ -59,10 +59,11 @@ fun SearchPanel(
     onSearchNext: () -> Unit,
     onSearchPrev: () -> Unit,
     onReplaceCurrent: (String) -> Unit,
-    onReplaceAll: (String) -> Unit
+    onReplaceAll: (String) -> Unit,
+    isReplaceVisible: Boolean = false,
+    onReplaceVisibleChange: (Boolean) -> Unit = {}
 ) {
-    var isReplaceVisible by remember { mutableStateOf(false) }
-
+    // 替换栏状态由父组件管理，避免面板隐藏再显示时重置
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -128,7 +129,7 @@ fun SearchPanel(
                             Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.code_editor_next))
                         }
                         IconButton(
-                            onClick = { isReplaceVisible = !isReplaceVisible },
+                            onClick = { onReplaceVisibleChange(!isReplaceVisible) },
                             modifier = Modifier.padding(horizontal = 4.dp)
                         ) {
                             Icon(

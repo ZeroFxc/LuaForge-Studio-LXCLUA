@@ -466,6 +466,30 @@ public class EditorColorScheme {
             case DIAGNOSTIC_TOOLTIP_ACTION:
                 color = 0xff42A5F5;
                 break;
+            case MATCHED_TEXT_BORDER:
+                color = 0xff42A5F5;
+                break;
+            case SELECTED_TEXT_BORDER:
+                color = isDark() ? 0xffffffff : 0xff333333;
+                break;
+            case CURRENT_ROW_BORDER:
+                color = isDark() ? 0x40ffffff : 0x40333333;
+                break;
+            case CLASS_NAME:
+                color = 0xFFA4E227;
+                break;
+            case LOCAL_VARIABLE:
+                color = 0xFFCE9155;
+                break;
+            case TEXT_ACTION_WINDOW_STROKE_COLOR:
+                color = isDark() ? 0x40ffffff : 0x40000000;
+                break;
+            case COMPLETION_WND_DIVIDER_COLOR:
+                color = isDark() ? 0x20ffffff : 0x20000000;
+                break;
+            case COMPLETION_WND_ICON_BACKGROUND:
+                color = isDark() ? 0x20ffffff : 0x20000000;
+                break;
             case TEXT_HIGHLIGHT_STRONG_BACKGROUND:
                 color = isDark() ? 0xB8004972 : 0x400e639c;
                 break;

@@ -54,7 +54,8 @@ class LuaTextTokenizer {
                 "new", "super", "private", "protected", "public", "static",
                 "async", "await", "struct", "superstruct", "concept", "namespace","trait","use",
                 "using", "requires",
-                "bool", "char", "double", "float", "int", "long", "void"
+                "bool", "char", "double", "float", "int", "long", "void",
+                "astparser"
             )
 
             val sTokens = arrayOf(
@@ -78,7 +79,8 @@ class LuaTextTokenizer {
                 Tokens.ASYNC, Tokens.AWAIT, Tokens.STRUCT, Tokens.SUPERSTRUCT,
                 Tokens.CONCEPT, Tokens.NAMESPACE,Tokens.TRAIT,Tokens.USE, Tokens.USING, Tokens.REQUIRES,
                 Tokens.BOOL, Tokens.CHAR, Tokens.DOUBLE, Tokens.FLOAT,
-                Tokens.TYPE_INT, Tokens.LONG, Tokens.VOID
+                Tokens.TYPE_INT, Tokens.LONG, Tokens.VOID,
+                Tokens.ASTPARSER
             )
 
             keywords = TrieTree()

@@ -16,7 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.node.ComposeNode
 import com.nirithy.luacompose.plugin.ComposePlugin
 import com.nirithy.luacompose.render.ComposeRenderer
@@ -112,7 +112,7 @@ object ComplementComponents : ComposePlugin {
     private fun FabLayout(node: ComposeNode) {
         val onClick = node.callbacks["onClick"]
         FloatingActionButton(
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
             containerColor = node.props["color"]?.let { resolveColor(it) } ?: MaterialTheme.colorScheme.primaryContainer,
         ) { ComposeRenderer.RenderChildren(node) }
@@ -122,7 +122,7 @@ object ComplementComponents : ComposePlugin {
     private fun SmallFabLayout(node: ComposeNode) {
         val onClick = node.callbacks["onClick"]
         SmallFloatingActionButton(
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
         ) { ComposeRenderer.RenderChildren(node) }
     }
@@ -131,7 +131,7 @@ object ComplementComponents : ComposePlugin {
     private fun LargeFabLayout(node: ComposeNode) {
         val onClick = node.callbacks["onClick"]
         LargeFloatingActionButton(
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
         ) { ComposeRenderer.RenderChildren(node) }
     }
@@ -141,7 +141,7 @@ object ComplementComponents : ComposePlugin {
         val onClick = node.callbacks["onClick"]
         val text = node.stringProp("text") ?: ""
         ExtendedFloatingActionButton(
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
             text = { Text(text) },
             icon = { ComposeRenderer.RenderChildren(node) },
@@ -155,7 +155,7 @@ object ComplementComponents : ComposePlugin {
         val onClick = node.callbacks["onClick"]
         val label = node.stringProp("label") ?: ""
         AssistChip(
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
             label = { Text(label) },
             leadingIcon = if (node.children.isNotEmpty()) { { ComposeRenderer.RenderChildren(node) } } else null,
@@ -168,7 +168,7 @@ object ComplementComponents : ComposePlugin {
         val label = node.stringProp("label") ?: ""
         val selected = node.boolProp("selected", false)
         FilterChip(
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
             selected = selected,
             label = { Text(label) },
@@ -184,7 +184,7 @@ object ComplementComponents : ComposePlugin {
         val label = node.stringProp("label") ?: ""
         val selected = node.boolProp("selected", false)
         InputChip(
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
             selected = selected,
             label = { Text(label) },
@@ -196,7 +196,7 @@ object ComplementComponents : ComposePlugin {
         val onClick = node.callbacks["onClick"]
         val label = node.stringProp("label") ?: ""
         SuggestionChip(
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
             label = { Text(label) },
         )
@@ -220,7 +220,7 @@ object ComplementComponents : ComposePlugin {
         val selected = node.boolProp("selected", false)
         Tab(
             selected = selected,
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
             text = { Text(text) },
         )
@@ -255,8 +255,8 @@ object ComplementComponents : ComposePlugin {
         }
         // 同步抽屉状态变化到Lua回调
         LaunchedEffect(drawerState.currentValue) {
-            if (drawerState.currentValue == DrawerValue.Open) synchronized(ComposeBridge.luaLock) { onOpen?.call() }
-            else if (drawerState.currentValue == DrawerValue.Closed) synchronized(ComposeBridge.luaLock) { onClose?.call() }
+            if (drawerState.currentValue == DrawerValue.Open) synchronized(ComposeBridgeInstance.current.luaLock) { onOpen?.call() }
+            else if (drawerState.currentValue == DrawerValue.Closed) synchronized(ComposeBridgeInstance.current.luaLock) { onClose?.call() }
         }
 
         ModalNavigationDrawer(
@@ -319,20 +319,26 @@ object ComplementComponents : ComposePlugin {
             query = query,
             onQueryChange = { newQuery ->
                 query = newQuery
-                synchronized(ComposeBridge.luaLock) { onQueryChange?.call(newQuery) }
+                synchronized(ComposeBridgeInstance.current.luaLock) { onQueryChange?.call(newQuery) }
             },
-            onSearch = { synchronized(ComposeBridge.luaLock) { onSearch?.call(query) } },
+            onSearch = { synchronized(ComposeBridgeInstance.current.luaLock) { onSearch?.call(query) } },
             active = active,
             onActiveChange = { newActive ->
                 active = newActive
-                synchronized(ComposeBridge.luaLock) { onActiveChange?.call(newActive) }
+                synchronized(ComposeBridgeInstance.current.luaLock) { onActiveChange?.call(newActive) }
             },
             modifier = ComposeRenderer.resolveModifier(node).heightIn(max = 400.dp),
             placeholder = { Text(placeholder) },
             leadingIcon = node.props["leadingIcon"]?.let { iconName ->
                 { Icon(IconComponent.iconMap[iconName.toString()] ?: Icons.Filled.Info, contentDescription = null) }
             },
-        ) { ComposeRenderer.RenderChildren(node) }
+        ) {
+            // ★ 修复 Material3 SearchBar 内部 measure 异常（IllegalArgumentException: height）
+            // SearchBar 展开时内容区域可能获得无限高度约束，用 Column + heightIn 限制
+            Column(modifier = Modifier.heightIn(max = 280.dp)) {
+                ComposeRenderer.RenderChildren(node)
+            }
+        }
     }
 
     @Composable
@@ -352,17 +358,21 @@ object ComplementComponents : ComposePlugin {
             query = query,
             onQueryChange = { newQuery ->
                 query = newQuery
-                synchronized(ComposeBridge.luaLock) { onQueryChange?.call(newQuery) }
+                synchronized(ComposeBridgeInstance.current.luaLock) { onQueryChange?.call(newQuery) }
             },
-            onSearch = { synchronized(ComposeBridge.luaLock) { onSearch?.call(query) } },
+            onSearch = { synchronized(ComposeBridgeInstance.current.luaLock) { onSearch?.call(query) } },
             active = active,
             onActiveChange = { newActive ->
                 active = newActive
-                synchronized(ComposeBridge.luaLock) { onActiveChange?.call(newActive) }
+                synchronized(ComposeBridgeInstance.current.luaLock) { onActiveChange?.call(newActive) }
             },
             modifier = ComposeRenderer.resolveModifier(node).heightIn(max = 400.dp),
             placeholder = { Text(placeholder) },
-        ) { ComposeRenderer.RenderChildren(node) }
+        ) {
+            Column(modifier = Modifier.heightIn(max = 280.dp)) {
+                ComposeRenderer.RenderChildren(node)
+            }
+        }
     }
 
     // ========== DatePicker / TimePicker ==========
@@ -373,7 +383,7 @@ object ComplementComponents : ComposePlugin {
         val onDateSelected = node.callbacks["onDateSelected"]
         // 日期变化时回调
         LaunchedEffect(state.selectedDateMillis) {
-            state.selectedDateMillis?.let { synchronized(ComposeBridge.luaLock) { onDateSelected?.call(it) } }
+            state.selectedDateMillis?.let { synchronized(ComposeBridgeInstance.current.luaLock) { onDateSelected?.call(it) } }
         }
         DatePicker(
             state = state,
@@ -387,14 +397,14 @@ object ComplementComponents : ComposePlugin {
         val onDismiss = node.callbacks["onDismiss"]
         val state = rememberDatePickerState()
         DatePickerDialog(
-            onDismissRequest = { synchronized(ComposeBridge.luaLock) { onDismiss?.call() } },
+            onDismissRequest = { synchronized(ComposeBridgeInstance.current.luaLock) { onDismiss?.call() } },
             confirmButton = {
                 TextButton(onClick = {
-                    synchronized(ComposeBridge.luaLock) { onConfirm?.call(state.selectedDateMillis) }
+                    synchronized(ComposeBridgeInstance.current.luaLock) { onConfirm?.call(state.selectedDateMillis) }
                 }) { Text("确定") }
             },
             dismissButton = {
-                TextButton(onClick = { synchronized(ComposeBridge.luaLock) { onDismiss?.call() } }) { Text("取消") }
+                TextButton(onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onDismiss?.call() } }) { Text("取消") }
             },
         ) { DatePicker(state = state, modifier = ComposeRenderer.resolveModifier(node)) }
     }
@@ -488,7 +498,7 @@ object ComplementComponents : ComposePlugin {
 
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { synchronized(ComposeBridge.luaLock) { onDismiss?.call() } },
+            onDismissRequest = { synchronized(ComposeBridgeInstance.current.luaLock) { onDismiss?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
         ) {
             // 渲染子节点：DropdownMenuItem 直接渲染为菜单项，其他节点作为内容
@@ -498,7 +508,7 @@ object ComplementComponents : ComposePlugin {
                         text = { Text(child.stringProp("text") ?: "") },
                         onClick = {
                             val onClick = child.callbacks["onClick"]
-                            synchronized(ComposeBridge.luaLock) { onClick?.call() }
+                            synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() }
                         },
                         leadingIcon = child.props["leadingIcon"]?.let { iconName ->
                             { Icon(IconComponent.iconMap[iconName.toString()] ?: Icons.Filled.Info, contentDescription = null) }
@@ -555,13 +565,13 @@ object ComplementComponents : ComposePlugin {
         // 拖拽关闭时同步 visible 状态
         LaunchedEffect(sheetState.isVisible) {
             if (!sheetState.isVisible && visible) {
-                synchronized(ComposeBridge.luaLock) { onDismiss?.call() }
+                synchronized(ComposeBridgeInstance.current.luaLock) { onDismiss?.call() }
             }
         }
 
         if (visible || sheetState.isVisible) {
             ModalBottomSheet(
-                onDismissRequest = { synchronized(ComposeBridge.luaLock) { onDismiss?.call() } },
+                onDismissRequest = { synchronized(ComposeBridgeInstance.current.luaLock) { onDismiss?.call() } },
                 modifier = ComposeRenderer.resolveModifier(node),
                 sheetState = sheetState,
                 dragHandle = if (node.boolProp("dragHandle", true)) {
@@ -635,7 +645,7 @@ object ComplementComponents : ComposePlugin {
             expanded = expanded,
             onExpandedChange = { newExpanded ->
                 expanded = newExpanded
-                synchronized(ComposeBridge.luaLock) { onExpandedChange?.call(newExpanded) }
+                synchronized(ComposeBridgeInstance.current.luaLock) { onExpandedChange?.call(newExpanded) }
             },
             modifier = ComposeRenderer.resolveModifier(node),
         ) {
@@ -668,7 +678,7 @@ object ComplementComponents : ComposePlugin {
 
         PullToRefreshBox(
             isRefreshing = isRefreshing,
-            onRefresh = { synchronized(ComposeBridge.luaLock) { onRefresh?.call() } },
+            onRefresh = { synchronized(ComposeBridgeInstance.current.luaLock) { onRefresh?.call() } },
             modifier = ComposeRenderer.resolveModifier(node),
         ) {
             ComposeRenderer.RenderChildren(node)
@@ -699,7 +709,7 @@ object ComplementComponents : ComposePlugin {
 
         // 页面变化回调
         LaunchedEffect(pagerState.currentPage) {
-            synchronized(ComposeBridge.luaLock) { onPageChanged?.call(pagerState.currentPage.toDouble()) }
+            synchronized(ComposeBridgeInstance.current.luaLock) { onPageChanged?.call(pagerState.currentPage.toDouble()) }
         }
 
         HorizontalPager(
@@ -710,7 +720,7 @@ object ComplementComponents : ComposePlugin {
             if (childrenFunc != null) {
                 // 调用 Lua 函数获取当前页的节点树
                 val pageNode = try {
-                    synchronized(ComposeBridge.luaLock) {
+                    synchronized(ComposeBridgeInstance.current.luaLock) {
                         childrenFunc.call(page.toDouble())
                     } as? ComposeNode
                 } catch (_: Exception) { null }
@@ -737,7 +747,7 @@ object ComplementComponents : ComposePlugin {
 
         // 页面变化回调
         LaunchedEffect(pagerState.currentPage) {
-            synchronized(ComposeBridge.luaLock) { onPageChanged?.call(pagerState.currentPage.toDouble()) }
+            synchronized(ComposeBridgeInstance.current.luaLock) { onPageChanged?.call(pagerState.currentPage.toDouble()) }
         }
 
         VerticalPager(
@@ -747,7 +757,7 @@ object ComplementComponents : ComposePlugin {
         ) { page ->
             if (childrenFunc != null) {
                 val pageNode = try {
-                    synchronized(ComposeBridge.luaLock) {
+                    synchronized(ComposeBridgeInstance.current.luaLock) {
                         childrenFunc.call(page.toDouble())
                     } as? ComposeNode
                 } catch (_: Exception) { null }
@@ -787,17 +797,17 @@ object ComplementComponents : ComposePlugin {
 
         if (visible) {
             AlertDialog(
-                onDismissRequest = { synchronized(ComposeBridge.luaLock) { onDismiss?.call() } },
+                onDismissRequest = { synchronized(ComposeBridgeInstance.current.luaLock) { onDismiss?.call() } },
                 title = if (title != null) { { Text(title) } } else null,
                 text = if (text != null) { { Text(text) } } else null,
                 confirmButton = {
                     TextButton(onClick = {
-                        synchronized(ComposeBridge.luaLock) { onConfirm?.call() }
+                        synchronized(ComposeBridgeInstance.current.luaLock) { onConfirm?.call() }
                     }) { Text(confirmText) }
                 },
                 dismissButton = {
                     TextButton(onClick = {
-                        synchronized(ComposeBridge.luaLock) { onDismiss?.call() }
+                        synchronized(ComposeBridgeInstance.current.luaLock) { onDismiss?.call() }
                     }) { Text(dismissText) }
                 },
                 modifier = ComposeRenderer.resolveModifier(node),
@@ -847,7 +857,7 @@ object ComplementComponents : ComposePlugin {
         val iconName = node.stringProp("icon")
         NavigationBarItem(
             selected = selected,
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             icon = {
                 if (iconName != null) {
                     Icon(IconComponent.iconMap[iconName] ?: Icons.Filled.Info, contentDescription = label)
@@ -884,11 +894,11 @@ object ComplementComponents : ComposePlugin {
             confirmValueChange = { value ->
                 when (value) {
                     SwipeToDismissBoxValue.StartToEnd -> {
-                        synchronized(ComposeBridge.luaLock) { onDismissedToEnd?.call() }
+                        synchronized(ComposeBridgeInstance.current.luaLock) { onDismissedToEnd?.call() }
                         true
                     }
                     SwipeToDismissBoxValue.EndToStart -> {
-                        synchronized(ComposeBridge.luaLock) { onDismissedToStart?.call() }
+                        synchronized(ComposeBridgeInstance.current.luaLock) { onDismissedToStart?.call() }
                         true
                     }
                     SwipeToDismissBoxValue.Settled -> false
@@ -953,7 +963,7 @@ object ComplementComponents : ComposePlugin {
         val text = node.stringProp("text") ?: ""
         SegmentedButton(
             selected = selected,
-            onClick = { synchronized(ComposeBridge.luaLock) { onClick?.call() } },
+            onClick = { synchronized(ComposeBridgeInstance.current.luaLock) { onClick?.call() } },
             shape = MaterialTheme.shapes.medium,
             modifier = ComposeRenderer.resolveModifier(node),
         ) {
@@ -974,7 +984,7 @@ object ComplementComponents : ComposePlugin {
         SegmentedButton(
             checked = checked,
             onCheckedChange = { newChecked ->
-                synchronized(ComposeBridge.luaLock) { onCheckedChange?.call(newChecked) }
+                synchronized(ComposeBridgeInstance.current.luaLock) { onCheckedChange?.call(newChecked) }
             },
             shape = MaterialTheme.shapes.medium,
             modifier = ComposeRenderer.resolveModifier(node),
@@ -1015,7 +1025,7 @@ object ComplementComponents : ComposePlugin {
                 alignment = resolvePopupAlignment(node.stringProp("alignment")),
                 offset = androidx.compose.ui.unit.IntOffset(offsetX, offsetY),
                 onDismissRequest = if (dismissOnBackPress) {
-                    { synchronized(ComposeBridge.luaLock) { onDismiss?.call() } }
+                    { synchronized(ComposeBridgeInstance.current.luaLock) { onDismiss?.call() } }
                 } else null,
                 properties = PopupProperties(
                     dismissOnBackPress = dismissOnBackPress,

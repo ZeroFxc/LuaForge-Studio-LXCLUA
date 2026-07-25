@@ -15,7 +15,9 @@ class ComposeNode(
     val children: List<ComposeNode> = emptyList(),
     val callbacks: Map<String, LuaObject> = emptyMap(),
     /** 当 children 为 Lua 函数时存储函数引用，用于 Crossfade/AnimatedContent 等需要动态子节点的场景 */
-    val childrenFunc: LuaObject? = null
+    val childrenFunc: LuaObject? = null,
+    /** 节点路径ID，如 "0.2.1"，用于预览模式下的节点选中和定位 */
+    val nodePath: String? = null
 ) {
     /** 手动实现 copy，替代 data class 的 copy() */
     fun copy(
@@ -23,8 +25,9 @@ class ComposeNode(
         props: Map<String, Any?> = this.props,
         children: List<ComposeNode> = this.children,
         callbacks: Map<String, LuaObject> = this.callbacks,
-        childrenFunc: LuaObject? = this.childrenFunc
-    ): ComposeNode = ComposeNode(type, props, children, callbacks, childrenFunc)
+        childrenFunc: LuaObject? = this.childrenFunc,
+        nodePath: String? = this.nodePath
+    ): ComposeNode = ComposeNode(type, props, children, callbacks, childrenFunc, nodePath)
 
     /**
      * 从 props 中获取值，自动解包 StateWrapper

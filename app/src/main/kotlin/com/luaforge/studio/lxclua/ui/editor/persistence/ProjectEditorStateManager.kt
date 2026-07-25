@@ -57,10 +57,13 @@ class ProjectEditorStateManager private constructor(context: Context) : ViewMode
 
     /**
      * 获取项目的状态文件名
+     * 使用项目路径的 SHA-256 哈希作为文件名，避免 hashCode 冲突导致数据覆盖
      */
     private fun getStateFileName(projectPath: String): String {
-        // 使用项目路径的哈希作为文件名，避免路径中的非法字符
-        val hash = projectPath.hashCode().toUInt().toString(16)
+        val hash = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(projectPath.toByteArray(Charsets.UTF_8))
+            .take(8)
+            .joinToString("") { "%02x".format(it) }
         return "project_state_$hash.dat"
     }
 

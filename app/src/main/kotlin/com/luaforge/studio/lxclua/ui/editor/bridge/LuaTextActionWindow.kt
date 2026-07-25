@@ -148,6 +148,13 @@ class LuaTextActionWindow(editor: CodeEditor) : EditorTextActionWindow(editor) {
     private val innerContainer: LinearLayout?
         get() = (getView().findViewById<View>(R.id.panel_hv) as? android.widget.HorizontalScrollView)
             ?.getChildAt(0) as? LinearLayout
+    /** 插件卸载事件监听器引用，用于 dispose 时注销 */
+    private val pluginUnloadListener = object : IPluginEventListener {
+        override fun onEvent(vararg args: Any?) {
+            val pluginId = args.firstOrNull() as? String ?: return
+            onPluginUnloaded(pluginId)
+        }
+    }
 
     init {
         registerInstance(this)
@@ -155,18 +162,14 @@ class LuaTextActionWindow(editor: CodeEditor) : EditorTextActionWindow(editor) {
         EventManager.registerEventListener(
             "__lua_text_action__",
             PluginEvents.ON_PLUGIN_UNLOADED,
-            object : IPluginEventListener {
-                override fun onEvent(vararg args: Any?) {
-                    val pluginId = args.firstOrNull() as? String ?: return
-                    onPluginUnloaded(pluginId)
-                }
-            }
+            pluginUnloadListener
         )
     }
 
     /** 释放资源（编辑器销毁时调用） */
     fun dispose() {
         unregisterInstance(this)
+        EventManager.unregisterEventListener(PluginEvents.ON_PLUGIN_UNLOADED, pluginUnloadListener)
     }
 
     // ==================== 公开 API ====================
@@ -277,6 +280,8 @@ class LuaTextActionWindow(editor: CodeEditor) : EditorTextActionWindow(editor) {
     }
 
     override fun displayWindow() {
+        // 确保 view 已 inflate 后再应用颜色方案（修复父类构造函数中 view 未 inflate 的问题）
+        applyColorScheme()
         // 触发插件事件
         val selText = getSelectedText()
         EventManager.fireEvent(PluginEvents.ON_TEXT_ACTION_WINDOW_SHOWN, selText)
@@ -337,31 +342,37 @@ class LuaTextActionWindow(editor: CodeEditor) : EditorTextActionWindow(editor) {
     }
 
     private fun ImageButton.loadCustomImage(path: String) {
-        try {
-            val file = File(path)
-            if (!file.exists()) return
+        val btn = this
+        // 在后台线程解码 Bitmap，避免主线程卡顿
+        Thread {
+            try {
+                val file = File(path)
+                if (!file.exists()) return@Thread
 
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
-            BitmapFactory.decodeFile(path, options)
+                val options = BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                BitmapFactory.decodeFile(path, options)
 
-            var sampleSize = 1
-            val maxDim = maxOf(options.outWidth, options.outHeight)
-            while (maxDim / sampleSize > MAX_IMAGE_SIZE_PX) {
-                sampleSize *= 2
-            }
+                var sampleSize = 1
+                val maxDim = maxOf(options.outWidth, options.outHeight)
+                while (maxDim / sampleSize > MAX_IMAGE_SIZE_PX) {
+                    sampleSize *= 2
+                }
 
-            val decodeOptions = BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
+                val decodeOptions = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                }
+                val bitmap = BitmapFactory.decodeFile(path, decodeOptions)
+                if (bitmap != null) {
+                    btn.post {
+                        btn.setImageDrawable(BitmapDrawable(btn.resources, bitmap))
+                    }
+                }
+            } catch (_: Exception) {
+                // 加载失败静默处理
             }
-            val bitmap = BitmapFactory.decodeFile(path, decodeOptions)
-            if (bitmap != null) {
-                setImageDrawable(BitmapDrawable(resources, bitmap))
-            }
-        } catch (_: Exception) {
-            // 加载失败静默处理
-        }
+        }.start()
     }
 
     private fun getSelectedText(): String {

@@ -19,7 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.node.ComposeNode
 import com.nirithy.luacompose.plugin.ComposePlugin
 import com.nirithy.luacompose.render.ComposeRenderer
@@ -144,7 +144,7 @@ object InputComponents : ComposePlugin {
         )
     }
     private fun invokeCallback(node: ComposeNode, key: String, vararg args: Any?) {
-        synchronized(ComposeBridge.luaLock) {
+        synchronized(ComposeBridgeInstance.current.luaLock) {
             try { node.callback(key)?.call(*args) } catch (e: LuaException) { e.printStackTrace() }
         }
     }

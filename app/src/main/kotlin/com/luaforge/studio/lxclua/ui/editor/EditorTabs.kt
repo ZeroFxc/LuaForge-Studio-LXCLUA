@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import com.luaforge.studio.lxclua.R
 import com.luaforge.studio.lxclua.ui.editor.components.CodeEditorView
+import com.luaforge.studio.lxclua.ui.editor.designer.DesignerModeWrapper
 import com.luaforge.studio.lxclua.ui.editor.viewmodel.EditorViewModel
 import kotlinx.coroutines.launch
 import java.io.File
@@ -457,13 +458,13 @@ fun FileTabView(
                     ) { page ->
                         if (page in openFiles.indices) {
                             val isActiveFile = page == activeFileIndex
-                            CodeEditorView(
+                            DesignerModeWrapper(
                                 modifier = Modifier.fillMaxSize(),
                                 state = openFiles[page],
                                 viewModel = viewModel,
                                 isActiveFile = isActiveFile,
                                 expansionRatio = panelState.expansionRatio,
-                                onSwipe = onSwipe // 传递滑动手势回调
+                                onSwipe = onSwipe
                             )
                         } else {
                             Box(

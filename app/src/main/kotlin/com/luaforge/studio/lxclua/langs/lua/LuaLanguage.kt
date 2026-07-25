@@ -43,6 +43,8 @@ class LuaLanguage : Language {
     companion object {
         private val DEFAULT_KEYWORDS = listOf(
             "and",
+            "asm",
+            "astparser",
             "break",
             "case",
             "catch",

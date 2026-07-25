@@ -15,7 +15,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.node.ComposeNode
 import com.nirithy.luacompose.render.ComposeRenderer
 import com.nirithy.luacompose.logE
@@ -91,7 +91,7 @@ fun AnimatedContentRenderer(node: ComposeNode) {
         label = "AnimatedContent"
     ) { target ->
         // this = AnimatedVisibilityScope，推入栈供 sharedElement 使用
-        ComposeBridge.pushActiveAnimatedVisibilityScope(this as AnimatedVisibilityScope)
+        ComposeBridgeInstance.current.pushActiveAnimatedVisibilityScope(this as AnimatedVisibilityScope)
         var error: Exception? = null
         var result: ComposeNode? = null
         val childrenFn = node.childrenFunc
@@ -112,6 +112,6 @@ fun AnimatedContentRenderer(node: ComposeNode) {
         } else if (childrenFn == null) {
             ComposeRenderer.RenderChildren(node)
         }
-        ComposeBridge.popActiveAnimatedVisibilityScope()
+        ComposeBridgeInstance.current.popActiveAnimatedVisibilityScope()
     }
 }

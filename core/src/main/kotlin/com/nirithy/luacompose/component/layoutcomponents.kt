@@ -19,7 +19,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.logE
 import com.nirithy.luacompose.node.ComposeNode
 import com.nirithy.luacompose.plugin.ComposePlugin
@@ -198,7 +198,7 @@ object LayoutComponents : ComposePlugin {
     private fun androidx.compose.foundation.lazy.grid.LazyGridScope.renderLazyGridItems(node: ComposeNode) {
         val childrenFunc = node.childrenFunc
         if (childrenFunc != null) {
-            synchronized(ComposeBridge.luaLock) {
+            synchronized(ComposeBridgeInstance.current.luaLock) {
                 try {
                     val result = childrenFunc.call()
                     when (result) {
@@ -235,7 +235,7 @@ object LayoutComponents : ComposePlugin {
         val childrenFunc = node.childrenFunc
         if (childrenFunc != null) {
             val wrapper = LazyListScopeWrapper(this)
-            synchronized(ComposeBridge.luaLock) {
+            synchronized(ComposeBridgeInstance.current.luaLock) {
                 try {
                     val result = childrenFunc.call(wrapper)
                     // 如果 Lua 侧通过 scope:item()/scope:items() 添加了子项，result 为 nil

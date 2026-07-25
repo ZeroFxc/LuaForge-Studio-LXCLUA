@@ -52,7 +52,6 @@ import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlinx.coroutines.Dispatchers as KotlinDispatchers
@@ -108,18 +107,27 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
     var openFiles by mutableStateOf<List<CodeEditorState>>(emptyList()); private set
     var activeFileIndex by mutableIntStateOf(-1); private set
     var isCompletionDataLoading by mutableStateOf(false); private set
-    var completionDataProgress by mutableStateOf(0f)    // 新增进度状态
+    var completionDataProgress by mutableStateOf(0f)
     /** 文本变化版本号，每次文本变更时递增，用于Compose侧防抖监听 */
     var textChangeVersion by mutableIntStateOf(0); private set
+    /** 标志位：由设计器更新代码时防止内容监听循环 */
+    var isUpdatingFromDesigner by mutableStateOf(false)
+        private set
     private var _isInitialized by mutableStateOf(false)
     val isInitialized: Boolean get() = _isInitialized
     val activeFileState: CodeEditorState?
         get() = if (activeFileIndex in openFiles.indices) openFiles[activeFileIndex] else null
 
+    /** 保存 SettingsManager 监听器引用，用于 onCleared 时正确移除 */
+    private var settingsListener: ((com.luaforge.studio.lxclua.ui.settings.SettingsData) -> Unit)? = null
+
     private val editorInstances = mutableMapOf<String, CodeEditor>()
     private val cursorListeners = mutableMapOf<String, SubscriptionReceipt<SelectionChangeEvent>>()
     /** 装饰事件订阅: 按 filePath 存储，用于文件关闭/编辑器清理时取消订阅 */
     private val decorationEventSubscriptions = mutableMapOf<String, List<SubscriptionReceipt<*>>>()
+    /** 诊断刷新防抖 Handler: 按 filePath 存储，用于编辑器释放时清理待执行任务 */
+    private val diagHandlers = mutableMapOf<String, Handler>()
+    private val diagRunnables = mutableMapOf<String, Runnable>()
     private lateinit var appContext: Context
     private lateinit var stateManager: ProjectEditorStateManager
 
@@ -185,9 +193,15 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
 
     // 符号频率
     val symbolFrequencyMap = mutableStateMapOf<String, Int>()
+    private var symbolSaveJob: kotlinx.coroutines.Job? = null
     fun incrementSymbolFrequency(symbol: String) {
         symbolFrequencyMap[symbol] = (symbolFrequencyMap[symbol] ?: 0) + 1
-        viewModelScope.launch { saveSymbolFrequency() }
+        // 防抖：500ms 内多次调用只保存一次
+        symbolSaveJob?.cancel()
+        symbolSaveJob = viewModelScope.launch {
+            delay(500)
+            saveSymbolFrequency()
+        }
     }
 
     private suspend fun loadSymbolFrequency() {
@@ -218,9 +232,15 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
     // 快捷功能频率
     val quickActionFrequencyMap = mutableStateMapOf<String, Int>()
     var isQuickActionFrequencyLoaded by mutableStateOf(false); private set
+    private var quickActionSaveJob: kotlinx.coroutines.Job? = null
     fun incrementQuickActionFrequency(actionLabel: String) {
         quickActionFrequencyMap[actionLabel] = (quickActionFrequencyMap[actionLabel] ?: 0) + 1
-        viewModelScope.launch { saveQuickActionFrequency() }
+        // 防抖：500ms 内多次调用只保存一次
+        quickActionSaveJob?.cancel()
+        quickActionSaveJob = viewModelScope.launch {
+            delay(500)
+            saveQuickActionFrequency()
+        }
     }
 
     private suspend fun loadQuickActionFrequency() {
@@ -257,20 +277,20 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
         val filePath = state.file.absolutePath
         val currentIndex = activeFileIndex
         val file = state.file
-        runBlocking(KotlinDispatchers.IO) {
-            try {
-                if (file.exists() && file.canWrite()) {
-                    file.writeText(newContent, Charsets.UTF_8)
-                    LogCatcher.i("EditorViewModel", "布局助手返回，已同步保存文件: $filePath")
-                } else {
-                    LogCatcher.w("EditorViewModel", "文件不可写，无法保存: $filePath")
-                }
-            } catch (e: Exception) {
-                LogCatcher.e("EditorViewModel", "布局助手返回保存文件失败: ${file.name}", e)
-            }
-        }
-        closeFile(currentIndex)
         viewModelScope.launch {
+            withContext(KotlinDispatchers.IO) {
+                try {
+                    if (file.exists() && file.canWrite()) {
+                        file.writeText(newContent, Charsets.UTF_8)
+                        LogCatcher.i("EditorViewModel", "布局助手返回，已同步保存文件: $filePath")
+                    } else {
+                        LogCatcher.w("EditorViewModel", "文件不可写，无法保存: $filePath")
+                    }
+                } catch (e: Exception) {
+                    LogCatcher.e("EditorViewModel", "布局助手返回保存文件失败: ${file.name}", e)
+                }
+            }
+            closeFile(currentIndex)
             openFile(file)
             getActiveEditor()?.let { editor ->
                 editor.post { editor.setSelection(0, 0) }
@@ -362,7 +382,8 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
             CompletionDataManager.initialize(context)
         }
 
-        SettingsManager.addListener { newSettings ->
+        // 保存监听器引用，用于 onCleared 时正确移除
+        settingsListener = { newSettings ->
             val fontChanged = newSettings.editorFontType != currentEditorFontType ||
                     newSettings.customFontPath != currentCustomFontPath
             val activeEditor = openFiles.getOrNull(activeFileIndex)?.file?.absolutePath
@@ -402,6 +423,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                     ?.setHighlightHexColorsEnabled(SettingsManager.currentSettings.hexColorHighlightEnabled)
             }
         }
+        SettingsManager.addListener(settingsListener!!)
 
         viewModelScope.launch {
             loadSymbolFrequency()
@@ -667,6 +689,12 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
             }
         }
         decorationEventSubscriptions.clear()
+        // 清理所有诊断刷新防抖 Handler
+        diagRunnables.forEach { (filePath, runnable) ->
+            diagHandlers[filePath]?.removeCallbacks(runnable)
+        }
+        diagRunnables.clear()
+        diagHandlers.clear()
         editorInstances.values.forEach { editor ->
             try {
                 // 清理编辑器诊断（波浪线），防止关闭后残留
@@ -686,7 +714,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
         editorInstances.clear()
     }
 
-    @Synchronized
+    // getOrCreateEditor 仅在主线程调用，无需 @Synchronized
     fun getOrCreateEditor(context: Context, state: CodeEditorState): CodeEditor {
         val filePath = state.file.absolutePath
         val isActiveEditor = activeFileIndex in openFiles.indices &&
@@ -814,8 +842,15 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                 }
 
                 private fun scheduleDiagRefresh() {
+                    if (isUpdatingFromDesigner) return
                     diagHandler.removeCallbacks(diagRunnable)
                     diagHandler.postDelayed(diagRunnable, 500)
+                }
+
+                // 保存 Handler/Runnable 引用，用于编辑器释放时清理
+                init {
+                    diagHandlers[filePath] = diagHandler
+                    diagRunnables[filePath] = diagRunnable
                 }
 
                 override fun beforeReplace(content: io.github.rosemoe.sora.text.Content) {}
@@ -829,9 +864,11 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                 ) {
                     state.onContentChanged(content.toString())
                     // 递增文本变化版本号，由 Compose 侧 LaunchedEffect 防抖后触发 ON_TEXT_CHANGED 事件
-                    textChangeVersion++
+                    if (!isUpdatingFromDesigner) {
+                        textChangeVersion++
+                    }
                     // 防抖：同一帧内多次文本变更只触发一次重应用
-                    if (PluginDecoration.tryScheduleReapply()) {
+                    if (!isUpdatingFromDesigner && PluginDecoration.tryScheduleReapply()) {
                         val fp = state.file.absolutePath
                         this@apply.post {
                             PluginDecoration.markReapplyDone()
@@ -852,9 +889,11 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
                 ) {
                     state.onContentChanged(content.toString())
                     // 递增文本变化版本号，由 Compose 侧 LaunchedEffect 防抖后触发 ON_TEXT_CHANGED 事件
-                    textChangeVersion++
+                    if (!isUpdatingFromDesigner) {
+                        textChangeVersion++
+                    }
                     // 防抖：同一帧内多次文本变更只触发一次重应用
-                    if (PluginDecoration.tryScheduleReapply()) {
+                    if (!isUpdatingFromDesigner && PluginDecoration.tryScheduleReapply()) {
                         val fp = state.file.absolutePath
                         this@apply.post {
                             PluginDecoration.markReapplyDone()
@@ -920,7 +959,7 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
         super.onCleared()
         LogCatcher.i("EditorViewModel", "onCleared")
         cleanupEditors()
-        SettingsManager.removeListener { }
+        settingsListener?.let { SettingsManager.removeListener(it) }
         CompletionDataManager.removeListener(this)
         editorInstances.values.forEach { (it.editorLanguage as? LuaLanguage)?.releaseMemory() }
         isCompletionDataLoading = false
@@ -1016,6 +1055,8 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
             state.onContentLoaded(content)
             editorInstances[state.file.absolutePath]?.let { editor ->
                 editor.post {
+                    // 检查编辑器是否已被释放（仍在 editorInstances 中）
+                    if (editorInstances[state.file.absolutePath] !== editor) return@post
                     editor.setText(content)
                     val (cursorLine, cursorColumn) = getFileCursorPosition(state.file.absolutePath)
                     try {
@@ -1166,6 +1207,32 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
     fun redo() =
         openFiles.getOrNull(activeFileIndex)?.let { editorInstances[it.file.absolutePath]?.redo() }
 
+    /**
+     * 安全替换编辑器内容（设计器生成新代码时使用）
+     * 会暂时禁止内容变更监听，避免触发循环更新
+     *
+     * @param file 要替换内容的文件
+     * @param newContent 新的代码内容
+     */
+    fun replaceEditorContent(file: File, newContent: String) {
+        val filePath = file.absolutePath
+        val editor = editorInstances[filePath] ?: return
+        val state = openFiles.find { it.file.absolutePath == filePath } ?: return
+
+        isUpdatingFromDesigner = true
+        editor.post {
+            try {
+                editor.setText(newContent)
+                state.onContentChanged(newContent)
+                textChangeVersion++
+            } finally {
+                Handler(Looper.getMainLooper()).postDelayed({
+                    isUpdatingFromDesigner = false
+                }, 100)
+            }
+        }
+    }
+
     // 搜索
     private var lastSearchQuery by mutableStateOf("")
     private var isIgnoreCase by mutableStateOf(true)
@@ -1260,10 +1327,18 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
         cursorListeners.remove(filePath)?.unsubscribe()
         // 取消装饰事件订阅
         decorationEventSubscriptions.remove(filePath)?.forEach { it.unsubscribe() }
+        // 清理诊断刷新防抖 Handler
+        diagRunnables.remove(filePath)?.let { diagHandlers.remove(filePath)?.removeCallbacks(it) }
         // 清理该文件的装饰注册表数据
         PluginDecoration.removeFileDecorations(filePath)
-        openFiles.getOrNull(indexToClose)?.file?.absolutePath?.let {
-            editorInstances.remove(it)?.release()
+        openFiles.getOrNull(indexToClose)?.file?.absolutePath?.let { path ->
+            editorInstances.remove(path)?.let { editor ->
+                try {
+                    editor.release()
+                } catch (_: IllegalStateException) {
+                    // sora-editor release 在root event manager下会抛异常，安全忽略
+                }
+            }
         }
         openFiles = openFiles.toMutableList().also { it.removeAt(indexToClose) }
         if (openFiles.isEmpty()) activeFileIndex = -1

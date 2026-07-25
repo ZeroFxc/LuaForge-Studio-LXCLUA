@@ -9,7 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.node.ComposeNode
 import com.nirithy.luacompose.render.ComposeRenderer
 import com.nirithy.luacompose.logE
@@ -51,12 +51,12 @@ object SharedTransitionComponents {
 
         SharedTransitionLayout(modifier = modifier) {
             // this = SharedTransitionScope
-            ComposeBridge.pushActiveSharedTransitionScope(this)
+            ComposeBridgeInstance.current.pushActiveSharedTransitionScope(this)
             var renderError: Exception? = null
             var resultNode: ComposeNode? = null
             if (contentFn != null) {
                 try {
-                    val result = synchronized(ComposeBridge.luaLock) { contentFn.call(this) }
+                    val result = synchronized(ComposeBridgeInstance.current.luaLock) { contentFn.call(this) }
                     resultNode = result as? ComposeNode
                 } catch (e: Exception) {
                     renderError = e
@@ -71,7 +71,7 @@ object SharedTransitionComponents {
             } else if (contentFn == null) {
                 ComposeRenderer.RenderChildren(node)
             }
-            ComposeBridge.popActiveSharedTransitionScope()
+            ComposeBridgeInstance.current.popActiveSharedTransitionScope()
         }
     }
 
@@ -90,8 +90,8 @@ object SharedTransitionComponents {
         sharedElementKey: String,
         boundsTransformFn: LuaObject? = null
     ): Modifier {
-        val scope = ComposeBridge.getActiveSharedTransitionScope() ?: return baseModifier
-        val visibilityScope = ComposeBridge.getActiveAnimatedVisibilityScope() ?: return baseModifier
+        val scope = ComposeBridgeInstance.current.getActiveSharedTransitionScope() ?: return baseModifier
+        val visibilityScope = ComposeBridgeInstance.current.getActiveAnimatedVisibilityScope() ?: return baseModifier
 
         // 使用 remember 缓存 SharedContentState，key 不变时复用
         val state = remember(sharedElementKey) {

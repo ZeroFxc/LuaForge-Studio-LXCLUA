@@ -321,7 +321,9 @@ fun CodeEditorView(
                     editor.clearFocus()
                     val inputMethodManager =
                         context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                    inputMethodManager.hideSoftInputFromWindow(editor.windowToken, 0)
+                    editor.windowToken?.let { token ->
+                        inputMethodManager.hideSoftInputFromWindow(token, 0)
+                    }
                 }
             }
         }
@@ -334,6 +336,13 @@ fun CodeEditorView(
     }
 
     DisposableEffect(editor) {
+        // 文本变更防抖：300ms 内多次变更只触发一次 parseLuaCode
+        val parseHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        val parseRunnable = Runnable {
+            try {
+                parseLuaCode(editor.text.toString())
+            } catch (_: Exception) {}
+        }
         val listener = object : ContentListener {
             override fun beforeReplace(content: io.github.rosemoe.sora.text.Content) {}
             override fun afterInsert(
@@ -342,7 +351,8 @@ fun CodeEditorView(
                 endLine: Int, endColumn: Int,
                 inserted: CharSequence
             ) {
-                parseLuaCode(content.toString())
+                parseHandler.removeCallbacks(parseRunnable)
+                parseHandler.postDelayed(parseRunnable, 300)
             }
 
             override fun afterDelete(
@@ -351,7 +361,8 @@ fun CodeEditorView(
                 endLine: Int, endColumn: Int,
                 deleted: CharSequence
             ) {
-                parseLuaCode(content.toString())
+                parseHandler.removeCallbacks(parseRunnable)
+                parseHandler.postDelayed(parseRunnable, 300)
             }
         }
         editor.text.addContentListener(listener)
@@ -371,6 +382,7 @@ fun CodeEditorView(
         }
 
         onDispose {
+            parseHandler.removeCallbacks(parseRunnable)
             parseJob?.cancel()
             try {
                 editor.setOnTouchListener(null)

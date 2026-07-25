@@ -163,6 +163,7 @@ fun CodeEditScreen(
     var searchText by remember { mutableStateOf("") }
     var replaceText by remember { mutableStateOf("") }
     var ignoreCase by remember { mutableStateOf(true) }
+    var isReplaceVisible by remember { mutableStateOf(false) } // 替换栏展开状态，父组件管理避免面板隐藏时重置
 
     val onSearchTextChange: (String) -> Unit = { text ->
         searchText = text
@@ -319,7 +320,9 @@ fun CodeEditScreen(
     }
 
     // 优先关闭覆盖层
+    val isBackHandling = remember { mutableStateOf(false) }
     BackHandler(enabled = true) {
+        if (isBackHandling.value) return@BackHandler
         scope.launch {
             when {
                 isSearchVisible -> {
@@ -339,8 +342,13 @@ fun CodeEditScreen(
                     fileTreeDrawerState.close()
                 }
                 else -> {
-                    viewModel.saveAllFilesSilently()
-                    onBack()
+                    isBackHandling.value = true
+                    try {
+                        viewModel.saveAllFilesSilently()
+                        onBack()
+                    } finally {
+                        isBackHandling.value = false
+                    }
                 }
             }
         }
@@ -352,7 +360,7 @@ fun CodeEditScreen(
             viewModel.saveAllFilesSilently()
             isBuilding = true
             val result = try {
-                this.async<String>(Dispatchers.IO) { buildProject(context, projectPath) }.await()
+                buildProject(context, projectPath)
             } catch (e: Exception) {
                 LogCatcher.e("CodeEditScreen", "构建协程异常", e)
                 "error: ${context.getString(R.string.code_editor_build_exception, e.message)}"
@@ -386,7 +394,7 @@ fun CodeEditScreen(
             viewModel.saveAllFilesSilently()
             isBackingUp = true
             val result = try {
-                this.async<String>(Dispatchers.IO) { backupProject(context, projectPath) }.await()
+                backupProject(context, projectPath)
             } catch (e: Exception) {
                 LogCatcher.e("CodeEditScreen", "备份协程异常", e)
                 "error: ${context.getString(R.string.code_editor_backup_failed, e.message)}"
@@ -420,8 +428,9 @@ fun CodeEditScreen(
         }
         scope.launch {
             try {
-                val baseDir = if (viewModel.activeFileState?.file?.exists() == true) {
-                    viewModel.activeFileState!!.file.parentFile ?: File(projectPath)
+                val activeFile = viewModel.activeFileState
+                val baseDir = if (activeFile?.file?.exists() == true) {
+                    activeFile.file.parentFile ?: File(projectPath)
                 } else {
                     File(projectPath)
                 }
@@ -735,7 +744,9 @@ fun CodeEditScreen(
                                                     SwipeDirection.DOWN -> true
                                                 }
                                             },
-                                            projectName = project.name
+                                            projectName = project.name,
+                                            isReplaceVisible = isReplaceVisible,
+                                            onReplaceVisibleChange = { isReplaceVisible = it }
                                         )
                                     }
                                 }
@@ -776,8 +787,9 @@ fun CodeEditScreen(
                             )
 
                             if (showNewFileDialog) {
-                                val baseDir = if (viewModel.activeFileState?.file?.exists() == true) {
-                                    viewModel.activeFileState!!.file.parentFile ?: File(projectPath)
+                                val activeFile = viewModel.activeFileState
+                                val baseDir = if (activeFile?.file?.exists() == true) {
+                                    activeFile.file.parentFile ?: File(projectPath)
                                 } else {
                                     File(projectPath)
                                 }
@@ -1003,7 +1015,9 @@ fun EditorContent(
     symbolBarScrollState: ScrollState,
     quickBarVisible: Boolean,
     onSwipe: (SwipeDirection) -> Unit,
-    projectName: String = ""
+    projectName: String = "",
+    isReplaceVisible: Boolean = false,
+    onReplaceVisibleChange: (Boolean) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val hasOpenFiles = viewModel.openFiles.isNotEmpty()
@@ -1078,7 +1092,9 @@ fun EditorContent(
                         onSearchNext = onSearchNext,
                         onSearchPrev = onSearchPrev,
                         onReplaceCurrent = { text -> onReplaceCurrent(text) },
-                        onReplaceAll = { text -> onReplaceAll(text) }
+                        onReplaceAll = { text -> onReplaceAll(text) },
+                        isReplaceVisible = isReplaceVisible,
+                        onReplaceVisibleChange = onReplaceVisibleChange
                     )
                 }
 

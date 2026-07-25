@@ -483,9 +483,10 @@ static int luaK_codek (FuncState *fs, int reg, int k) {
 void luaK_checkstack (FuncState *fs, int n) {
   int newstack = fs->freereg + n;
   if (newstack > fs->f->maxstacksize) {
-    if (newstack >= MAXREGS)
+    if (newstack >= MAXREGS) {
       luaX_syntaxerror(fs->ls,
         "function or expression needs too many registers");
+    }
     fs->f->maxstacksize = cast_byte(newstack);
   }
 }
@@ -593,6 +594,17 @@ int luaK_stringK (FuncState *fs, TString *s) {
   TValue o;
   setsvalue(fs->ls->L, &o, s);
   return addk(fs, &o, &o);  /* use string itself as key */
+}
+
+
+/*
+** Add a closure to list of constants and return its index.
+** 将闭包添加到常量列表并返回其索引
+** 用于字符串插值中复杂表达式的预编译
+*/
+int luaK_closureK (FuncState *fs, TValue *cl) {
+  lua_assert(ttisfunction(cl) || ttisclfunction(cl));
+  return addk(fs, cl, cl);  /* use closure itself as key */
 }
 
 
@@ -1363,8 +1375,9 @@ static int isSCnumber (expdesc *e, int *pi, int *isfloat) {
     *pi = int2sC(cast_int(i));
     return 1;
   }
-  else
+  else {
     return 0;
+  }
 }
 
 
@@ -1857,8 +1870,9 @@ void luaK_posfix (FuncState *fs, BinOpr opr,
       break;
     }
     case OPR_CONCAT: {  /* e1 .. e2 */
-      /* 范围操作符：TODO - 需要精确检测 '..' 前无空格后重新启用
-       * 目前暂时禁用，避免 "1 .. 2 .. 3" 被误判为范围操作符 */
+      /* 范围操作符已在解析器中处理（lparser.c:5374-5396）：
+       * 当 '..' 前无空格且两端为整数常量时，调用 luaK_range 生成范围表。
+       * 此处处理正常的字符串拼接操作。 */
       luaK_dischargevars(fs, e1);
       luaK_dischargevars(fs, e2);
       /* e1 已在 luaK_infix 中保存到新寄存器，确保 e2 在 e1 的下一个寄存器 */
@@ -2132,6 +2146,8 @@ void luaK_pipe (FuncState *fs, expdesc *e1, expdesc *e2) {
   int e1_reg = -1;
   int nargs = 1;  /* 默认1个参数 */
   int is_self = e2->is_pipe_self;  /* 是否为管道方法引用（obj:method） */
+  /* 在 dischange 前判断 e1 是否为链式管道（前一次管道的结果） */
+  int e1_is_chain = (e1->k == VCALL);
 
   if (is_self) nargs = 2;  /* 方法引用需要2个参数（self + 管道值） */
 
@@ -2139,9 +2155,6 @@ void luaK_pipe (FuncState *fs, expdesc *e1, expdesc *e2) {
   luaK_dischargevars(fs, e1);
   if (e1->k == VNONRELOC) {
     e1_reg = e1->u.info;
-  } else if (e1->k == VCALL) {
-    /* 从 VCALL 指令中提取结果寄存器，用于后续将管道结果移回原位 */
-    e1_reg = GETARG_A(fs->f->code[e1->u.info]);
   }
 
   /* 步骤2：方法引用不使用链式优化，避免 SELF 指令的寄存器冲突 */
@@ -2160,7 +2173,7 @@ void luaK_pipe (FuncState *fs, expdesc *e1, expdesc *e2) {
     }
     arg_reg = func_reg + 2;
     luaK_exp2reg(fs, e1, arg_reg);
-  } else if (e1_reg >= 0) {
+  } else if (e1_is_chain && e1_reg >= 0) {
     /*
      * 链式管道：e1 已经在寄存器 R[e1_reg] 中
      * 结果应该也在 R[e1_reg]，这样链式调用的最终结果
@@ -2196,6 +2209,14 @@ void luaK_pipe (FuncState *fs, expdesc *e1, expdesc *e2) {
       luaK_codeABC(fs, OP_MOVE, temp_reg, e1_reg, 0);  /* 保存 e1 到临时寄存器 */
       luaK_exp2reg(fs, e2, func_reg);  /* 移动 e2 从 arg_reg 到 func_reg */
       luaK_codeABC(fs, OP_MOVE, arg_reg, temp_reg, 0);  /* 恢复 e1 到 arg_reg */
+    } else if (e2->k == VRELOC) {
+      /* VRELOC：指令已在字节码流中，修复其目标寄存器到 func_reg 会覆盖 e1_reg
+       * 需要先保存 e1 到临时寄存器，再修复 VRELOC，最后移动管道值到 arg_reg */
+      int temp_reg = fs->freereg;
+      luaK_reserveregs(fs, 1);
+      luaK_codeABC(fs, OP_MOVE, temp_reg, e1_reg, 0);  /* 保存管道值到临时寄存器 */
+      luaK_exp2reg(fs, e2, func_reg);  /* 修复 VRELOC 到 func_reg（覆盖 e1_reg） */
+      luaK_codeABC(fs, OP_MOVE, arg_reg, temp_reg, 0);  /* 管道值移动到 arg_reg */
     } else {
       /* 无冲突：先保存 e1 到 arg_reg，再加载 e2 到 func_reg */
       luaK_codeABC(fs, OP_MOVE, arg_reg, e1_reg, 0);

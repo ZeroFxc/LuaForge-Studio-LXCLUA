@@ -5,6 +5,7 @@ import androidx.compose.animation.core.DurationBasedAnimationSpec
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.dp
 import com.nirithy.luacompose.*
 import com.nirithy.luacompose.animation.AnimationSpecs
 import com.nirithy.luacompose.animation.EasingTable
@@ -30,14 +31,14 @@ import kotlinx.coroutines.launch
 /**
  * ComposeBridge 的 Lua API 注入器
  * 将所有 register* 工厂函数从 ComposeBridge.kt 中提取出来，保持单一职责。
- * 每个函数都是 ComposeBridge 的扩展函数，通过 internal 可见性访问 ComposeBridge 的状态字段。
+ * 每个函数都是 ComposeBridgeInstance 的扩展函数，通过 internal 可见性访问 bridge 实例的状态字段。
  */
 private const val TAG = "ComposeBridge"
 
 // ========== 核心状态工厂 ==========
 
 /** compose.Modifier() — 创建 ModifierChain 实例 */
-internal fun ComposeBridge.registerModifierFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerModifierFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val chain = ModifierChain.create()
@@ -50,7 +51,7 @@ internal fun ComposeBridge.registerModifierFactory(L: LuaState) {
 }
 
 /** compose.state(value) — 创建响应式状态，变更时触发全量刷新 */
-internal fun ComposeBridge.registerStateFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerStateFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -79,8 +80,8 @@ internal fun ComposeBridge.registerStateFactory(L: LuaState) {
     L.setField(-2, "state")
 }
 
-/** compose.mutableState(value) — 创建不触发全量刷新的可变状态，适用于拖拽等连续操作 */
-internal fun ComposeBridge.registerMutableState(L: LuaState) {
+/** compose.mutableState(value) — 创建可变状态，变更时触发全量刷新重建节点树 */
+internal fun ComposeBridgeInstance.registerMutableState(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -91,10 +92,10 @@ internal fun ComposeBridge.registerMutableState(L: LuaState) {
             }
             val obj = L.toJavaObject(2)
             val wrapper = when (obj) {
-                is Boolean -> StateWrapper(obj) { recomposeTrigger.value++ }
-                is Number -> StateWrapper(obj.toFloat()) { recomposeTrigger.value++ }
-                is String -> StateWrapper(obj) { recomposeTrigger.value++ }
-                else -> StateWrapper(obj) { recomposeTrigger.value++ }
+                is Boolean -> StateWrapper(obj) { scheduleRefresh() }
+                is Number -> StateWrapper(obj.toFloat()) { scheduleRefresh() }
+                is String -> StateWrapper(obj) { scheduleRefresh() }
+                else -> StateWrapper(obj) { scheduleRefresh() }
             }
             stateCache.add(wrapper)
             L.pushJavaObject(wrapper); return 1
@@ -104,7 +105,7 @@ internal fun ComposeBridge.registerMutableState(L: LuaState) {
 }
 
 /** compose.remember(initFn) — 按调用顺序缓存计算结果 */
-internal fun ComposeBridge.registerRememberFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerRememberFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -128,7 +129,7 @@ internal fun ComposeBridge.registerRememberFactory(L: LuaState) {
 }
 
 /** compose.derivedStateOf(computeFn) — 派生状态，依赖的 state 变化时自动重新计算 */
-internal fun ComposeBridge.registerDerivedStateFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerDerivedStateFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -154,7 +155,7 @@ internal fun ComposeBridge.registerDerivedStateFactory(L: LuaState) {
 // ========== 动画规格工厂（spring / tween） ==========
 
 /** compose.spring(dampingRatio, stiffness) — 创建弹簧动画规格 */
-internal fun ComposeBridge.registerSpringFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerSpringFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -171,7 +172,7 @@ internal fun ComposeBridge.registerSpringFactory(L: LuaState) {
 }
 
 /** compose.tween(durationMs, easing) — 创建 tween 动画规格 */
-internal fun ComposeBridge.registerTweenFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerTweenFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -190,7 +191,7 @@ internal fun ComposeBridge.registerTweenFactory(L: LuaState) {
 // ========== 动画状态工厂 ==========
 
 /** compose.animateFloatAsState(target) — 动画浮点状态，支持表参数 {targetValue=..., animationSpec=...} */
-internal fun ComposeBridge.registerAnimateFloatFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerAnimateFloatFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -213,7 +214,11 @@ internal fun ComposeBridge.registerAnimateFloatFactory(L: LuaState) {
             }
             val idx = animIndex++
             if (idx < animatedFloats.size) {
-                L.pushJavaObject(animatedFloats[idx]); return 1
+                // ★ 修复：缓存复用时必须更新 target，否则 Lua 状态变化后动画目标值不更新
+                val anim = animatedFloats[idx]
+                anim.targetValue.value = target
+                anim.spec = spec
+                L.pushJavaObject(anim); return 1
             }
             val anim = AnimatedFloat(target, useRecompose = useRecompose, spec = spec)
             animatedFloats.add(anim)
@@ -224,14 +229,16 @@ internal fun ComposeBridge.registerAnimateFloatFactory(L: LuaState) {
 }
 
 /** compose.animateFloatAsStateRecompose(target) — 轻量重组模式动画，仅触发 recomposeTrigger */
-internal fun ComposeBridge.registerAnimateFloatRecomposeFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerAnimateFloatRecomposeFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
             val target = if (top >= 2) L.toNumber(2).toFloat() else 0f
             val idx = animIndex++
             if (idx < animatedFloats.size) {
-                L.pushJavaObject(animatedFloats[idx]); return 1
+                val anim = animatedFloats[idx]
+                anim.targetValue.value = target
+                L.pushJavaObject(anim); return 1
             }
             val anim = AnimatedFloat(target, useRecompose = true)
             animatedFloats.add(anim)
@@ -242,7 +249,7 @@ internal fun ComposeBridge.registerAnimateFloatRecomposeFactory(L: LuaState) {
 }
 
 /** compose.animateFloatAsStateTween(target, durationMs, easingName) — tween 动画 */
-internal fun ComposeBridge.registerAnimateFloatTweenFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerAnimateFloatTweenFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -251,7 +258,12 @@ internal fun ComposeBridge.registerAnimateFloatTweenFactory(L: LuaState) {
             val easingName = if (top >= 4) L.toString(4) else "FastOutSlowIn"
             val idx = animIndex++
             if (idx < animatedFloats.size) {
-                L.pushJavaObject(animatedFloats[idx]); return 1
+                val anim = animatedFloats[idx]
+                anim.targetValue.value = target
+                anim.spec = AnimatedFloat.parseSpec(
+                    mapOf("type" to "tween", "durationMs" to durationMs, "easing" to easingName)
+                )
+                L.pushJavaObject(anim); return 1
             }
             val anim = AnimatedFloat(target, spec = AnimatedFloat.parseSpec(
                 mapOf("type" to "tween", "durationMs" to durationMs, "easing" to easingName)
@@ -264,7 +276,7 @@ internal fun ComposeBridge.registerAnimateFloatTweenFactory(L: LuaState) {
 }
 
 /** compose.animateFloatAsStateRecomposeTween(target, durationMs, easingName) — 轻量重组 + tween */
-internal fun ComposeBridge.registerAnimateFloatRecomposeTweenFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerAnimateFloatRecomposeTweenFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -273,7 +285,12 @@ internal fun ComposeBridge.registerAnimateFloatRecomposeTweenFactory(L: LuaState
             val easingName = if (top >= 4) L.toString(4) else "FastOutSlowIn"
             val idx = animIndex++
             if (idx < animatedFloats.size) {
-                L.pushJavaObject(animatedFloats[idx]); return 1
+                val anim = animatedFloats[idx]
+                anim.targetValue.value = target
+                anim.spec = AnimatedFloat.parseSpec(
+                    mapOf("type" to "tween", "durationMs" to durationMs, "easing" to easingName)
+                )
+                L.pushJavaObject(anim); return 1
             }
             val anim = AnimatedFloat(target, useRecompose = true, spec = AnimatedFloat.parseSpec(
                 mapOf("type" to "tween", "durationMs" to durationMs, "easing" to easingName)
@@ -286,7 +303,7 @@ internal fun ComposeBridge.registerAnimateFloatRecomposeTweenFactory(L: LuaState
 }
 
 /** compose.animateColorAsState(targetColor) — 颜色动画状态 */
-internal fun ComposeBridge.registerAnimateColorFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerAnimateColorFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -312,7 +329,12 @@ internal fun ComposeBridge.registerAnimateColorFactory(L: LuaState) {
             }
             val idx = animColorIndex++
             if (idx < animatedColors.size) {
-                L.pushJavaObject(animatedColors[idx]); return 1
+                val anim = animatedColors[idx]
+                anim.targetValue.value = Color(targetColor)
+                if (animSpec != null) {
+                    anim.animationSpec = animSpec
+                }
+                L.pushJavaObject(anim); return 1
             }
             val anim = AnimatedColor(targetColor)
             if (animSpec != null) {
@@ -326,14 +348,16 @@ internal fun ComposeBridge.registerAnimateColorFactory(L: LuaState) {
 }
 
 /** compose.animateDpAsState(targetDp) — Dp 动画状态 */
-internal fun ComposeBridge.registerAnimateDpFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerAnimateDpFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
             val targetDp = if (top >= 2) L.toNumber(2).toFloat() else 0f
             val idx = animDpIndex++
             if (idx < animatedDps.size) {
-                L.pushJavaObject(animatedDps[idx]); return 1
+                val anim = animatedDps[idx]
+                anim.targetValue.value = targetDp.dp
+                L.pushJavaObject(anim); return 1
             }
             val anim = AnimatedDp(targetDp)
             animatedDps.add(anim)
@@ -346,7 +370,7 @@ internal fun ComposeBridge.registerAnimateDpFactory(L: LuaState) {
 // ========== 单位与颜色 ==========
 
 /** compose.dp(value) — dp 单位转换（当前为数字透传） */
-internal fun ComposeBridge.registerDpHelper(L: LuaState) {
+internal fun ComposeBridgeInstance.registerDpHelper(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -358,7 +382,7 @@ internal fun ComposeBridge.registerDpHelper(L: LuaState) {
 }
 
 /** compose.color(argb/r,g,b,a) — 创建 ARGB 颜色值 */
-internal fun ComposeBridge.registerColorHelper(L: LuaState) {
+internal fun ComposeBridgeInstance.registerColorHelper(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -381,7 +405,7 @@ internal fun ComposeBridge.registerColorHelper(L: LuaState) {
 }
 
 /** compose.now() — 返回当前毫秒时间戳，用于计时等场景 */
-internal fun ComposeBridge.registerTimeHelper(L: LuaState) {
+internal fun ComposeBridgeInstance.registerTimeHelper(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             L.pushNumber(System.currentTimeMillis().toDouble())
@@ -392,7 +416,7 @@ internal fun ComposeBridge.registerTimeHelper(L: LuaState) {
 }
 
 /** compose.backgroundColor(argb) — 设置根 Surface 背景色 */
-internal fun ComposeBridge.registerBackgroundColor(L: LuaState) {
+internal fun ComposeBridgeInstance.registerBackgroundColor(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -410,7 +434,7 @@ internal fun ComposeBridge.registerBackgroundColor(L: LuaState) {
 // ========== 主题 ==========
 
 /** compose.Theme — 由 ComposeHost 在 recomposition 时同步颜色值 */
-internal fun ComposeBridge.registerThemeTable(L: LuaState) {
+internal fun ComposeBridgeInstance.registerThemeTable(L: LuaState) {
     L.newTable()
     val themeIdx = L.getTop()
     L.newTable()
@@ -438,7 +462,7 @@ internal fun ComposeBridge.registerThemeTable(L: LuaState) {
 }
 
 /** 创建 Theme 子表（typography 或 shapes），带 __index 元表 */
-internal fun ComposeBridge.createThemeSubTable(
+internal fun ComposeBridgeInstance.createThemeSubTable(
     L: LuaState,
     dataSource: MutableState<Map<String, Map<String, Float>>>
 ) {
@@ -468,7 +492,7 @@ internal fun ComposeBridge.createThemeSubTable(
 }
 
 /** compose.LocalDensity — 屏幕密度信息 */
-internal fun ComposeBridge.registerLocalDensity(L: LuaState) {
+internal fun ComposeBridgeInstance.registerLocalDensity(L: LuaState) {
     L.newTable()
     val densityIdx = L.getTop()
     L.newTable()
@@ -492,7 +516,7 @@ internal fun ComposeBridge.registerLocalDensity(L: LuaState) {
 // ========== 枚举表 ==========
 
 /** compose.FontWeight — 字重枚举表 */
-internal fun ComposeBridge.registerFontWeightTable(L: LuaState) {
+internal fun ComposeBridgeInstance.registerFontWeightTable(L: LuaState) {
     L.newTable()
     val weights = mapOf(
         "Thin" to 100, "ExtraLight" to 200, "Light" to 300,
@@ -509,7 +533,7 @@ internal fun ComposeBridge.registerFontWeightTable(L: LuaState) {
 }
 
 /** compose.Arrangement — 布局排列枚举表 */
-internal fun ComposeBridge.registerArrangementTable(L: LuaState) {
+internal fun ComposeBridgeInstance.registerArrangementTable(L: LuaState) {
     L.newTable()
     val items = listOf("Start", "Center", "End", "Top", "Bottom",
         "SpaceAround", "SpaceBetween", "SpaceEvenly")
@@ -520,7 +544,7 @@ internal fun ComposeBridge.registerArrangementTable(L: LuaState) {
 }
 
 /** compose.Alignment — 对齐方式枚举表 */
-internal fun ComposeBridge.registerAlignmentTable(L: LuaState) {
+internal fun ComposeBridgeInstance.registerAlignmentTable(L: LuaState) {
     L.newTable()
     val items = listOf("TopStart", "TopCenter", "TopEnd",
         "CenterStart", "Center", "CenterEnd",
@@ -536,7 +560,7 @@ internal fun ComposeBridge.registerAlignmentTable(L: LuaState) {
 // ========== 动画规格 ==========
 
 /** 注册动画规格工厂：tween, spring, repeatable, infiniteRepeatable */
-internal fun ComposeBridge.registerAnimationSpecs(L: LuaState) {
+internal fun ComposeBridgeInstance.registerAnimationSpecs(L: LuaState) {
     // tween(durationMs, delayMs)
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
@@ -596,7 +620,7 @@ internal fun ComposeBridge.registerAnimationSpecs(L: LuaState) {
 }
 
 /** 注册进出场动画工厂：fadeIn, fadeOut, slideIn, slideOut, scaleIn, scaleOut 等 */
-internal fun ComposeBridge.registerAnimationTransitions(L: LuaState) {
+internal fun ComposeBridgeInstance.registerAnimationTransitions(L: LuaState) {
     // 淡入淡出
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int { L.pushJavaObject(AnimationSpecs.fadeInEnter()); return 1 }
@@ -709,7 +733,7 @@ internal fun ComposeBridge.registerAnimationTransitions(L: LuaState) {
 }
 
 /** compose.Spring — Spring 动画常量表 */
-internal fun ComposeBridge.registerSpringConstants(L: LuaState) {
+internal fun ComposeBridgeInstance.registerSpringConstants(L: LuaState) {
     L.newTable()
     L.pushNumber(Spring.DampingRatioHighBouncy.toDouble()); L.setField(-2, "DampingRatioHighBouncy")
     L.pushNumber(Spring.DampingRatioMediumBouncy.toDouble()); L.setField(-2, "DampingRatioMediumBouncy")
@@ -726,7 +750,7 @@ internal fun ComposeBridge.registerSpringConstants(L: LuaState) {
 // ========== 图形首类对象 ==========
 
 /** 注册图形首类对象工厂：Color, Offset, Size, Rect */
-internal fun ComposeBridge.registerGraphicsFactories(L: LuaState) {
+internal fun ComposeBridgeInstance.registerGraphicsFactories(L: LuaState) {
     // compose.Color(argb)
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
@@ -777,7 +801,7 @@ internal fun ComposeBridge.registerGraphicsFactories(L: LuaState) {
 // ========== 渲染与反射 ==========
 
 /** compose.render(renderFn) — 存储 Lua 渲染函数引用，不立即调用 */
-internal fun ComposeBridge.registerRenderFunction(L: LuaState) {
+internal fun ComposeBridgeInstance.registerRenderFunction(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -793,7 +817,7 @@ internal fun ComposeBridge.registerRenderFunction(L: LuaState) {
 }
 
 /** compose.wrapObject / compose.wrapClass — 反射辅助函数 */
-internal fun ComposeBridge.registerReflectHelpers(L: LuaState) {
+internal fun ComposeBridgeInstance.registerReflectHelpers(L: LuaState) {
     // wrapObject(javaObj)
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
@@ -832,7 +856,7 @@ internal fun ComposeBridge.registerReflectHelpers(L: LuaState) {
 // ========== 其他工厂 ==========
 
 /** compose.Path() / compose.LuaPath() — 创建 LuaPath 实例 */
-internal fun ComposeBridge.registerPathFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerPathFactory(L: LuaState) {
     // 注册两个名字：Path（推荐）和 LuaPath（兼容）
     for (name in listOf("Path", "LuaPath")) {
         L.pushJavaFunction(object : JavaFunction(L) {
@@ -845,7 +869,7 @@ internal fun ComposeBridge.registerPathFactory(L: LuaState) {
 }
 
 /** compose.rememberCoroutineScope() — 创建协程作用域 */
-internal fun ComposeBridge.registerCoroutineScopeFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerCoroutineScopeFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             L.pushJavaObject(LuaCoroutineScope()); return 1
@@ -855,7 +879,7 @@ internal fun ComposeBridge.registerCoroutineScopeFactory(L: LuaState) {
 }
 
 /** compose.Animatable(initialValue) — 创建 Animatable 实例 */
-internal fun ComposeBridge.registerAnimatableFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerAnimatableFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -867,7 +891,7 @@ internal fun ComposeBridge.registerAnimatableFactory(L: LuaState) {
 }
 
 /** compose.Easing — 缓动函数表 */
-internal fun ComposeBridge.registerEasingTable(L: LuaState) {
+internal fun ComposeBridgeInstance.registerEasingTable(L: LuaState) {
     L.newTable()
     L.pushJavaObject(EasingTable.Linear); L.setField(-2, "Linear")
     L.pushJavaObject(EasingTable.FastOutSlowIn); L.setField(-2, "FastOutSlowIn")
@@ -889,7 +913,7 @@ internal fun ComposeBridge.registerEasingTable(L: LuaState) {
 // ========== 高优 1: sp 单位 ==========
 
 /** compose.sp(value) — sp 字体大小单位（当前为数字透传，与 dp 语义区分） */
-internal fun ComposeBridge.registerSpHelper(L: LuaState) {
+internal fun ComposeBridgeInstance.registerSpHelper(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -903,7 +927,7 @@ internal fun ComposeBridge.registerSpHelper(L: LuaState) {
 // ========== 高优 2: LocalContext ==========
 
 /** compose.LocalContext — Android Context 的延迟访问代理 */
-internal fun ComposeBridge.registerLocalContext(L: LuaState) {
+internal fun ComposeBridgeInstance.registerLocalContext(L: LuaState) {
     L.newTable()
     val ctxIdx = L.getTop()
     L.newTable()
@@ -942,7 +966,7 @@ internal fun ComposeBridge.registerLocalContext(L: LuaState) {
 // ========== 高优 3: LocalConfiguration ==========
 
 /** compose.LocalConfiguration — 屏幕方向、暗色模式、语言等配置 */
-internal fun ComposeBridge.registerLocalConfiguration(L: LuaState) {
+internal fun ComposeBridgeInstance.registerLocalConfiguration(L: LuaState) {
     L.newTable()
     val cfgIdx = L.getTop()
     L.newTable()
@@ -990,7 +1014,7 @@ internal fun ComposeBridge.registerLocalConfiguration(L: LuaState) {
  *     r:someMethod()  -- receiver 的方法
  *   end)
  */
-internal fun ComposeBridge.registerWithContext(L: LuaState) {
+internal fun ComposeBridgeInstance.registerWithContext(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -1019,7 +1043,7 @@ internal fun ComposeBridge.registerWithContext(L: LuaState) {
  *
  * 返回一个 Lua 表，存储手势配置，供 ModifierChain 消费
  */
-internal fun ComposeBridge.registerGesturesNamespace(L: LuaState) {
+internal fun ComposeBridgeInstance.registerGesturesNamespace(L: LuaState) {
     L.newTable()
     val gesturesIdx = L.getTop()
 
@@ -1089,7 +1113,7 @@ internal fun ComposeBridge.registerGesturesNamespace(L: LuaState) {
  * Lua 用法:
  *   local result = compose.remember(count, function() return count * 2 end)
  */
-internal fun ComposeBridge.registerRememberKeysFactory(L: LuaState) {
+internal fun ComposeBridgeInstance.registerRememberKeysFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -1166,7 +1190,7 @@ data class RememberKeyEntry(val keys: List<Any?>, val value: Any?) {
  *   1. 直接调用: compose.LaunchedEffect(someKey, function() ... end)
  *   2. Table 组件语法: compose.LaunchedEffect({ key = ..., block = function() ... end, children = { ... } })
  */
-internal fun ComposeBridge.registerLaunchedEffectApi(L: LuaState) {
+internal fun ComposeBridgeInstance.registerLaunchedEffectApi(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -1225,7 +1249,7 @@ internal fun ComposeBridge.registerLaunchedEffectApi(L: LuaState) {
  *   1. 直接调用: compose.DisposableEffect(someKey, function() return function() ... end end)
  *   2. Table 组件语法: compose.DisposableEffect({ key = ..., effect = function() ... end, children = { ... } })
  */
-internal fun ComposeBridge.registerDisposableEffectApi(L: LuaState) {
+internal fun ComposeBridgeInstance.registerDisposableEffectApi(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -1281,7 +1305,7 @@ internal fun ComposeBridge.registerDisposableEffectApi(L: LuaState) {
  *   1. 直接调用: compose.key(someKey, function() return { ... } end)
  *   2. Table 组件语法: compose.key({ key = ..., children = { ... } })
  */
-internal fun ComposeBridge.registerKeyApi(L: LuaState) {
+internal fun ComposeBridgeInstance.registerKeyApi(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -1331,7 +1355,7 @@ internal fun ComposeBridge.registerKeyApi(L: LuaState) {
  * compose.Arrangement 增强：添加 spacedBy 和 aligned 工厂函数
  * spacedBy(space) 返回 "spacedBy_<space>" 字符串，在 ComposeRenderer 中解析
  */
-internal fun ComposeBridge.registerArrangementEnhancements(L: LuaState) {
+internal fun ComposeBridgeInstance.registerArrangementEnhancements(L: LuaState) {
     // 扩展 Arrangement 表，添加 spacedBy 工厂
     L.getField(-1, "Arrangement")
     if (L.isTable(-1)) {
@@ -1359,7 +1383,7 @@ internal fun ComposeBridge.registerArrangementEnhancements(L: LuaState) {
 // ========== 中优 12: RoundedCornerShape / CircleShape ==========
 
 /** compose.RoundedCornerShape(dp) / compose.CircleShape */
-internal fun ComposeBridge.registerShapeFactories(L: LuaState) {
+internal fun ComposeBridgeInstance.registerShapeFactories(L: LuaState) {
     // RoundedCornerShape(topStart, topEnd, bottomStart, bottomEnd) 或 RoundedCornerShape(all)
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
@@ -1382,7 +1406,7 @@ internal fun ComposeBridge.registerShapeFactories(L: LuaState) {
 // ========== 中优 13: Brush.radialGradient ==========
 
 /** compose.Brush — 画刷工厂表 */
-internal fun ComposeBridge.registerBrushRadialGradient(L: LuaState) {
+internal fun ComposeBridgeInstance.registerBrushRadialGradient(L: LuaState) {
     L.newTable()
     val brushIdx = L.getTop()
 
@@ -1470,7 +1494,7 @@ internal fun ComposeBridge.registerBrushRadialGradient(L: LuaState) {
 // ========== 低优 24: CardDefaults.cardColors ==========
 
 /** compose.CardDefaults.cardColors{ containerColor=..., contentColor=... } */
-internal fun ComposeBridge.registerCardDefaults(L: LuaState) {
+internal fun ComposeBridgeInstance.registerCardDefaults(L: LuaState) {
     L.newTable()
     val cardDefaultsIdx = L.getTop()
 
@@ -1517,7 +1541,7 @@ internal fun ComposeBridge.registerCardDefaults(L: LuaState) {
 // ========== 低优 23: sharedElement 动画 ==========
 
 /** compose.sharedElement(key) — 共享元素过渡动画，返回特殊标记字符串 */
-internal fun ComposeBridge.registerSharedElement(L: LuaState) {
+internal fun ComposeBridgeInstance.registerSharedElement(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -1532,7 +1556,7 @@ internal fun ComposeBridge.registerSharedElement(L: LuaState) {
 // (Path API 基本完善，补充 PathOperation 枚举)
 
 /** compose.PathOperation — 路径布尔运算枚举 */
-internal fun ComposeBridge.registerStrokeTable(L: LuaState) {
+internal fun ComposeBridgeInstance.registerStrokeTable(L: LuaState) {
     L.newTable()
     L.pushString("Difference"); L.setField(-2, "Difference")
     L.pushString("Intersect"); L.setField(-2, "Intersect")
@@ -1552,7 +1576,7 @@ internal fun ComposeBridge.registerStrokeTable(L: LuaState) {
 // ========== 中优 16: Color 伴生对象（预定义颜色、luminance、copy） ==========
 
 /** compose.Color 预定义常量和工具方法 */
-internal fun ComposeBridge.registerColorCompanion(L: LuaState) {
+internal fun ComposeBridgeInstance.registerColorCompanion(L: LuaState) {
     // Color 已在 registerGraphicsFactories 中注册为工厂函数
     // 需要增强：让 Color 表同时支持工厂调用和常量访问
     // 方案：创建 Color 表，设置 __call 元方法为工厂函数，同时添加常量字段
@@ -1592,7 +1616,7 @@ internal fun ComposeBridge.registerColorCompanion(L: LuaState) {
 // ========== 中优 17: dump 调试工具 ==========
 
 /** compose.dump(value) — 打印 Lua 值到 logcat */
-internal fun ComposeBridge.registerDumpTool(L: LuaState) {
+internal fun ComposeBridgeInstance.registerDumpTool(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -1627,7 +1651,8 @@ internal fun ComposeBridge.registerDumpTool(L: LuaState) {
 // ========== delay / withFrameNanos ==========
 
 /** compose.delay(ms) — 非阻塞延迟提示（必须在协程中使用 scope.delay(ms)） */
-internal fun ComposeBridge.registerDelayTool(L: LuaState) {
+internal fun ComposeBridgeInstance.registerDelayTool(L: LuaState) {
+    val bridge = this
     // delay(ms) — 不能在JavaFunction中挂起，仅输出警告不阻塞
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
@@ -1648,7 +1673,7 @@ internal fun ComposeBridge.registerDelayTool(L: LuaState) {
                 val fn = L.getLuaObject(2)
                 try {
                     android.view.Choreographer.getInstance().postFrameCallback { frameTimeNanos ->
-                        synchronized(ComposeBridge.luaLock) {
+                        synchronized(bridge.luaLock) {
                             try {
                                 fn.call(frameTimeNanos.toDouble())
                             } catch (e: Exception) {
@@ -1691,7 +1716,7 @@ internal fun ComposeBridge.registerDelayTool(L: LuaState) {
                 L.pushNil(); return 1
             }
 
-            val scope = ComposeBridge.mainScope
+            val scope = bridge.mainScope
             var running = true
             logI(TAG) { "[startTimer] 启动定时器, intervalMs=$intervalMs, scope=${scope.hashCode()}" }
             val job = scope.launch {
@@ -1707,7 +1732,7 @@ internal fun ComposeBridge.registerDelayTool(L: LuaState) {
                 logI(TAG) { "[startTimer] 协程退出" }
             }
             // 追踪定时器任务，resetState 时统一清理
-            ComposeBridge.timerJobs.add(job)
+            bridge.timerJobs.add(job)
 
             // 返回 stop 函数
             L.newTable()
@@ -1715,7 +1740,7 @@ internal fun ComposeBridge.registerDelayTool(L: LuaState) {
                 override fun execute(): Int {
                     running = false
                     job.cancel()
-                    ComposeBridge.timerJobs.remove(job)
+                    bridge.timerJobs.remove(job)
                     return 0
                 }
             })
@@ -1749,7 +1774,7 @@ internal fun ComposeBridge.registerDelayTool(L: LuaState) {
             }
 
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                synchronized(ComposeBridge.luaLock) {
+                synchronized(bridge.luaLock) {
                     try {
                         callback.call()
                     } catch (e: Exception) {
@@ -1793,7 +1818,7 @@ internal fun ComposeBridge.registerDelayTool(L: LuaState) {
 }
 
 /** compose.SnackbarHostState() — 创建 Snackbar 宿主状态 */
-internal fun ComposeBridge.registerSnackbarHostState(L: LuaState) {
+internal fun ComposeBridgeInstance.registerSnackbarHostState(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             L.pushJavaObject(androidx.compose.material3.SnackbarHostState())
@@ -1812,7 +1837,8 @@ internal fun ComposeBridge.registerSnackbarHostState(L: LuaState) {
  * @param 4 duration: String "Short"|"Long"|"Indefinite" (可选，默认 "Short")
  * @param 5 onResult: function(result) (可选) — result 为 "ActionPerformed" 或 "Dismissed"
  */
-internal fun ComposeBridge.registerShowSnackbar(L: LuaState) {
+internal fun ComposeBridgeInstance.registerShowSnackbar(L: LuaState) {
+    val bridge = this
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -1836,12 +1862,12 @@ internal fun ComposeBridge.registerShowSnackbar(L: LuaState) {
                 else -> androidx.compose.material3.SnackbarDuration.Short
             }
 
-            val scope = ComposeBridge.mainScope
-            scope?.launch {
+            val scope = bridge.mainScope
+            scope.launch {
                 try {
                     val result = state.showSnackbar(message, actionLabel, false, duration)
                     if (onResult != null) {
-                        synchronized(ComposeBridge.luaLock) {
+                        synchronized(bridge.luaLock) {
                             try {
                                 onResult.call(result.name) // "ActionPerformed" 或 "Dismissed"
                             } catch (e: Exception) {

@@ -9,6 +9,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.luajava.LuaObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -24,7 +25,7 @@ import kotlinx.coroutines.launch
  */
 class LuaAnimatable(initialValue: Float) {
     val animatable = Animatable(initialValue)
-    var scope: CoroutineScope? = com.nirithy.luacompose.bridge.ComposeBridge.mainScope
+    private val targetScope: CoroutineScope? get() = ComposeBridgeInstance.current.mainScope
 
     /** 获取当前值 */
     fun getValue(): Float = animatable.value
@@ -35,18 +36,18 @@ class LuaAnimatable(initialValue: Float) {
 
     /** 立即跳转到目标值 */
     fun snapTo(target: Float) {
-        scope?.launch { animatable.snapTo(target) }
+        targetScope?.launch { animatable.snapTo(target) }
     }
 
     /** Lua : 语法兼容：snapTo(self, target) */
     @Suppress("UNUSED_PARAMETER")
     fun snapTo(ignored: Any?, target: Float) {
-        scope?.launch { animatable.snapTo(target) }
+        targetScope?.launch { animatable.snapTo(target) }
     }
 
     /** 动画过渡到目标值（默认 spring） */
     fun animateTo(target: Float) {
-        scope?.launch {
+        targetScope?.launch {
             animatable.animateTo(target, spring())
         }
     }
@@ -54,14 +55,14 @@ class LuaAnimatable(initialValue: Float) {
     /** Lua : 语法兼容：animateTo(self, target) */
     @Suppress("UNUSED_PARAMETER")
     fun animateTo(ignored: Any?, target: Float) {
-        scope?.launch {
+        targetScope?.launch {
             animatable.animateTo(target, spring())
         }
     }
 
     /** 动画过渡到目标值，带 durationMs */
     fun animateTo(target: Float, durationMs: Int) {
-        scope?.launch {
+        targetScope?.launch {
             animatable.animateTo(target, tween(durationMs))
         }
     }
@@ -69,7 +70,7 @@ class LuaAnimatable(initialValue: Float) {
     /** Lua : 语法兼容：animateTo(self, target, durationMs) */
     @Suppress("UNUSED_PARAMETER")
     fun animateTo(ignored: Any?, target: Float, durationMs: Int) {
-        scope?.launch {
+        targetScope?.launch {
             animatable.animateTo(target, tween(durationMs))
         }
     }
@@ -77,7 +78,7 @@ class LuaAnimatable(initialValue: Float) {
     /** 动画过渡到目标值，带 Lua spec 表 {type="spring"/"tween", ...} */
     fun animateTo(target: Float, spec: LuaObject) {
         val animSpec = parseSpec(spec)
-        scope?.launch {
+        targetScope?.launch {
             animatable.animateTo(target, animSpec)
         }
     }
@@ -86,7 +87,7 @@ class LuaAnimatable(initialValue: Float) {
     @Suppress("UNUSED_PARAMETER")
     fun animateTo(ignored: Any?, target: Float, spec: LuaObject) {
         val animSpec = parseSpec(spec)
-        scope?.launch {
+        targetScope?.launch {
             animatable.animateTo(target, animSpec)
         }
     }

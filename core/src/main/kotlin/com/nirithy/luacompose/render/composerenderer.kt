@@ -15,11 +15,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import com.nirithy.luacompose.animation.SharedTransitionComponents
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.draw.DrawScopeWrapper
 import com.nirithy.luacompose.gesture.applyGestures
 import com.nirithy.luacompose.modifier.ModifierChain
 import com.nirithy.luacompose.node.ComposeNode
+import com.nirithy.luacompose.preview.previewNodeInteraction
 
 private const val TAG = "ComposeRenderer"
 
@@ -39,37 +40,37 @@ object ComposeRenderer {
     @Composable
     fun resolveModifier(node: ComposeNode): Modifier {
         val chain = node.props["modifier"] as? ModifierChain
-        return when {
+        var mod = when {
             chain != null -> {
                 logV(TAG) { "[resolveModifier] node=${node.type}, 使用 ModifierChain" }
-                var mod = chain.build()
+                var baseMod = chain.build()
                 // 应用手势
-                mod = mod.applyGestures(chain.gestureConfig)
+                baseMod = baseMod.applyGestures(chain.gestureConfig)
                 // 应用滚动
                 if (chain.scrollable) {
-                    mod = mod.verticalScroll(rememberScrollState())
+                    baseMod = baseMod.verticalScroll(rememberScrollState())
                 }
                 // 应用 drawBehind
                 chain.drawBehindCallback?.let { cb ->
-                    mod = mod.drawBehind { DrawScopeWrapper(this).let { w -> try { cb.call(w) } catch (_: Exception) {} } }
+                    baseMod = baseMod.drawBehind { DrawScopeWrapper(this).let { w -> try { cb.call(w) } catch (_: Exception) {} } }
                 }
                 // 应用 drawWithContent
                 chain.drawWithContentCallback?.let { cb ->
-                    mod = mod.drawWithContent {
+                    baseMod = baseMod.drawWithContent {
                         DrawScopeWrapper(this).let { w -> try { cb.call(w) } catch (_: Exception) {} }
                         drawContent()
                     }
                 }
                 // 应用 sharedElement / sharedBounds
                 if (chain.sharedElementKey != null) {
-                    mod = SharedTransitionComponents.sharedElementModifier(
-                        mod, chain.sharedElementKey!!, chain.sharedElementBoundsTransform
+                    baseMod = SharedTransitionComponents.sharedElementModifier(
+                        baseMod, chain.sharedElementKey!!, chain.sharedElementBoundsTransform
                     )
                 }
                 if (chain.sharedBoundsKey != null) {
-                    mod = SharedTransitionComponents.sharedElementModifier(mod, chain.sharedBoundsKey!!)
+                    baseMod = SharedTransitionComponents.sharedElementModifier(baseMod, chain.sharedBoundsKey!!)
                 }
-                mod
+                baseMod
             }
             else -> {
                 val prop = node.props["modifier"]
@@ -85,6 +86,19 @@ object ComposeRenderer {
                 }
             }
         }
+
+        // 预览模式：添加节点边界记录和点击选中
+        val bridge = ComposeBridgeInstance.current
+        val nodePath = node.nodePath
+        if (bridge.isPreviewMode && nodePath != null) {
+            val collector = bridge.previewBoundsCollector
+            val onNodeClick = bridge.onNodeClick
+            if (collector != null && onNodeClick != null) {
+                mod = mod.previewNodeInteraction(collector, nodePath, onNodeClick)
+            }
+        }
+
+        return mod
     }
 
     /** 从 ModifierChain 中提取 weight 比例 */
@@ -104,7 +118,7 @@ object ComposeRenderer {
             logV(TAG) { "[RenderChildren] node=${node.type}, 使用 childrenFunc 动态渲染" }
             // try-catch 不能包裹 @Composable 调用，所以只包裹非 Composable 部分
             val result: Any? = try {
-                synchronized(ComposeBridge.luaLock) { childrenFunc.call() }
+                synchronized(ComposeBridgeInstance.current.luaLock) { childrenFunc.call() }
             } catch (e: Exception) {
                 logE(TAG) { "[RenderChildren] childrenFunc 调用失败: ${e.message}" }
                 null

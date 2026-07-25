@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import com.luajava.LuaObject
 import kotlin.math.roundToInt
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.draw.DrawScopeWrapper
 import com.nirithy.luacompose.gesture.GestureConfig
 
@@ -111,7 +111,7 @@ class ModifierChain {
     fun fillMaxWidthLambda(callback: com.luajava.LuaObject): ModifierChain {
         modifier = modifier.fillMaxWidth(
             try {
-                synchronized(ComposeBridge.luaLock) { callback.call() }?.let { (it as? Number)?.toFloat() } ?: 1f
+                synchronized(ComposeBridgeInstance.current.luaLock) { callback.call() }?.let { (it as? Number)?.toFloat() } ?: 1f
             } catch (_: Exception) { 1f }
         )
         return this
@@ -149,9 +149,9 @@ class ModifierChain {
             // ★ 读取 recomposeTrigger 让 Compose 追踪此 lambda 的依赖，
             //   mutableState 变更 → recomposeTrigger++ → 此 lambda 重新执行
             @Suppress("UNUSED_EXPRESSION")
-            ComposeBridge.recomposeTrigger.value
+            ComposeBridgeInstance.current.recomposeTrigger.value
             try {
-                val result = synchronized(ComposeBridge.luaLock) { callback.call() }
+                val result = synchronized(ComposeBridgeInstance.current.luaLock) { callback.call() }
                 // Lua 返回的表是 LuaObject，不是 Map，需要用 getField 取值
                 val px: Float
                 val py: Float
@@ -184,9 +184,9 @@ class ModifierChain {
     fun rotateLambda(callback: LuaObject): ModifierChain {
         modifier = modifier.graphicsLayer {
             @Suppress("UNUSED_EXPRESSION")
-            ComposeBridge.recomposeTrigger.value
+            ComposeBridgeInstance.current.recomposeTrigger.value
             try {
-                val degrees = (synchronized(ComposeBridge.luaLock) { callback.call() } as? Number)?.toFloat() ?: 0f
+                val degrees = (synchronized(ComposeBridgeInstance.current.luaLock) { callback.call() } as? Number)?.toFloat() ?: 0f
                 this.rotationZ = degrees
             } catch (_: Exception) {}
         }
@@ -224,9 +224,9 @@ class ModifierChain {
     fun graphicsLayerLambda(callback: LuaObject): ModifierChain {
         modifier = modifier.graphicsLayer {
             @Suppress("UNUSED_EXPRESSION")
-            ComposeBridge.recomposeTrigger.value
+            ComposeBridgeInstance.current.recomposeTrigger.value
             try {
-                val result = synchronized(ComposeBridge.luaLock) { callback.call() }
+                val result = synchronized(ComposeBridgeInstance.current.luaLock) { callback.call() }
                 (result as? Map<*, *>)?.let {
                     this.translationX = ((it["translationX"] as? Number)?.toFloat() ?: 0f)
                     this.translationY = ((it["translationY"] as? Number)?.toFloat() ?: 0f)
@@ -380,7 +380,7 @@ class ModifierChain {
     /** 元素尺寸变化时回调，传入 width, height（像素） */
     fun onSizeChanged(callback: LuaObject): ModifierChain {
         modifier = modifier.onSizeChanged { size ->
-            try { synchronized(ComposeBridge.luaLock) { callback.call(size.width.toDouble(), size.height.toDouble()) } }
+            try { synchronized(ComposeBridgeInstance.current.luaLock) { callback.call(size.width.toDouble(), size.height.toDouble()) } }
             catch (_: Exception) {}
         }
         return this
@@ -457,7 +457,7 @@ class ModifierChain {
             interactionSource = MutableInteractionSource(),
             indication = null,
             onClick = {
-                try { synchronized(ComposeBridge.luaLock) { callback.call() } } catch (_: Exception) {}
+                try { synchronized(ComposeBridgeInstance.current.luaLock) { callback.call() } } catch (_: Exception) {}
             }
         )
         return this

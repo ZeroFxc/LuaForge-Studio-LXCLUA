@@ -89,9 +89,11 @@ public class EditorAutoCompletion extends EditorPopupWindow implements EditorBui
     private final static long SHOW_PROGRESS_BAR_DELAY = 50;
     private final CodeEditor editor;
     protected boolean cancelShowUp = false;
-    protected long requestTime;
+    /** 请求时间戳，工作线程写入/主线程读取，需 volatile 保证可见性 */
+    protected volatile long requestTime;
     protected int maxHeight;
-    protected CompletionThread completionThread;
+    /** 补全线程引用，工作线程设置/主线程读取，需 volatile 保证可见性 */
+    protected volatile CompletionThread completionThread;
     protected CompletionPublisher publisher;
     protected WeakReference<List<CompletionItem>> lastAttachedItems;
     protected int currentSelection = -1;

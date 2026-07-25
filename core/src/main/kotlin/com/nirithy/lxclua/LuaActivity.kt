@@ -1333,7 +1333,9 @@ open class LuaActivity : AppCompatActivity(), OnReceiveListener, LuaContext {
             if (filePath.get(0) != '/') filePath = mLuaDir + "/" + filePath
 
             luaState.setTop(0)
+            DebugLogger.log("LuaActivity", "doFile LloadFile 开始: " + filePath)
             ok = luaState.LloadFile(filePath)
+            DebugLogger.log("LuaActivity", "doFile LloadFile 完成: ok=" + ok)
 
             if (ok == 0) {
                 luaState.getGlobal("debug")
@@ -1344,7 +1346,9 @@ open class LuaActivity : AppCompatActivity(), OnReceiveListener, LuaContext {
                 for (i in 0..<l) {
                     luaState.pushObjectValue(arg[i])
                 }
+                DebugLogger.log("LuaActivity", "doFile pcall 开始: nargs=" + l + ", nresults=1")
                 ok = luaState.pcall(l, 1, -2 - l)
+                DebugLogger.log("LuaActivity", "doFile pcall 完成: ok=" + ok)
                 if (ok == 0) {
                     return luaState.toJavaObject(-1)
                 }

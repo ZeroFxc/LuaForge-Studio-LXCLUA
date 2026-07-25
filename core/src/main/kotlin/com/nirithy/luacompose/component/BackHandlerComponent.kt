@@ -2,7 +2,7 @@ package com.nirithy.luacompose.component
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.node.ComposeNode
 import com.nirithy.luacompose.plugin.ComposePlugin
 
@@ -30,7 +30,7 @@ object BackHandlerComponent : ComposePlugin {
         val onBack = node.callback("onBack")
 
         BackHandler(enabled = enabled) {
-            synchronized(ComposeBridge.luaLock) { onBack?.call() }
+            synchronized(ComposeBridgeInstance.current.luaLock) { onBack?.call() }
         }
     }
 }

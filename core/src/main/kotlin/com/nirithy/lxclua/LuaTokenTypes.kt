@@ -96,6 +96,7 @@ enum class LuaTokenTypes {
     // === 关键字（与 C 层 luaX_tokens 顺序一致）===
     AND,               // and
     ASM,               // asm
+    ASTPARSER,         // astparser
     ASYNC,             // async
     AWAIT,             // await
     BOOL,              // bool

@@ -62,7 +62,16 @@ public class LuaState {
     final public static int LUA_TFUNCTION = 6;
     final public static int LUA_TUSERDATA = 7;
     final public static int LUA_TTHREAD = 8;
-    final public static int LUA_TINTEGER = 9;
+    final public static int LUA_TSTRUCT = 9;
+    final public static int LUA_TPOINTER = 10;
+    final public static int LUA_TCONCEPT = 11;
+    final public static int LUA_TNAMESPACE = 12;
+    final public static int LUA_TSUPERSTRUCT = 13;
+    final public static int LUA_TMAP = 14;
+    final public static int LUA_NUMTYPES = 15;
+
+    /** Java内部方法分派标记：整数类型（非Lua原生类型，仅用于methodType分派，值100避免与C层类型冲突） */
+    final public static int LUA_TINTEGER = 100;
 
     /**
      * Specifies that an unspecified (multiple) number of return arguments

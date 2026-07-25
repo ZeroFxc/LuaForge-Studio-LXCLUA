@@ -225,4 +225,7 @@ enum class Tokens {
 
     // 插件注入
     PLUGIN_KEYWORD,      // 插件注册的自定义关键词（运行时动态注入）
+
+    // astparser 编译期代码块
+    ASTPARSER,           // astparser
 }

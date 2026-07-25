@@ -194,6 +194,7 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   /* 关键字 - 与 C 层 llex.c luaX_tokens 完全一致 */
   "and"                     { return AND; }
   "asm"                     { return ASM; }
+  "astparser"               { return ASTPARSER; }
   "async"                   { return ASYNC; }
   "await"                   { return AWAIT; }
   "bool"                    { return BOOL; }

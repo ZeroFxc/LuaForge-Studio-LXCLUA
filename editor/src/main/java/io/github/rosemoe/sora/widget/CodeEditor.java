@@ -4600,6 +4600,10 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             return;
         }
         released = true;
+        // 禁用事件管理器，防止 release 后仍触发事件回调
+        if (eventManager != null) {
+            eventManager.setEnabled(false);
+        }
         if (editorLanguage != null) {
             editorLanguage.getAnalyzeManager().destroy();
             var formatter = editorLanguage.getFormatter();

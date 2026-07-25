@@ -67,15 +67,15 @@ import io.github.rosemoe.sora.util.regex.RegexBackrefToken;
 public class EditorSearcher {
 
     private final CodeEditor editor;
-    protected String currentPattern;
-    protected SearchOptions searchOptions;
+    protected volatile String currentPattern;
+    protected volatile SearchOptions searchOptions;
     protected ReplaceOptions replaceOptions;
-    protected Thread currentThread;
+    protected volatile Thread currentThread;
     /**
      * Search results. Note that it is naturally sorted by start index (and also end index).
      * No overlapping region is permitted.
      */
-    protected LongArrayList lastResults;
+    protected volatile LongArrayList lastResults;
     private boolean cyclicJumping = true;
     private boolean ensureOccurrenceVisible = false;
 
@@ -296,7 +296,7 @@ public class EditorSearcher {
             }
             var left = editor.getCursor().getLeft();
             var index = res.lowerBoundByFirst(left);
-            if (index == res.size() || IntPair.getFirst(res.get(index)) >= index) {
+            if (index == res.size() || IntPair.getFirst(res.get(index)) >= left) {
                 index--;
             }
             if (index < 0 && cyclicJumping) {
@@ -403,12 +403,12 @@ public class EditorSearcher {
                     Matcher matcher = null;
                     List<RegexBackrefToken> tokens = null;
                     int delta = 0;
-                    var text = sb.toString();
+                    // 避免对大文本调用 sb.toString() 创建完整副本，直接使用 sb.substring() 获取匹配区域
                     for (int i = 0; i < res.size(); i++) {
                         var region = res.get(i);
                         var start = IntPair.getFirst(region);
                         var end = IntPair.getSecond(region);
-                        var regionText = text.substring(start, end);
+                        var regionText = sb.substring(start, end);
                         if (matcher == null) {
                             matcher = regex.matcher(regionText);
                         } else {

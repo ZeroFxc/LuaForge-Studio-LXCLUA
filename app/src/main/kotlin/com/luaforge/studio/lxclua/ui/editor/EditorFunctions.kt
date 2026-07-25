@@ -23,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -95,11 +96,12 @@ suspend fun compileCurrentFile(
                 LogCatcher.e("CodeEditScreen", "编译文件失败: $filePath", e)
                 Pair(null, e.message)
             } finally {
-                // 只进行GC，不关闭LuaState
+                // 清理 LuaState：先 GC 清理栈，再关闭以释放原生内存
                 luaState?.let {
                     try {
                         it.gc(LuaState.LUA_GCCOLLECT, 1)
                         it.top = 0 // 清理栈
+                        it.close()
                     } catch (e: Exception) {
                         LogCatcher.e("CodeEditScreen", "清理LuaState失败", e)
                     }
@@ -164,7 +166,7 @@ suspend fun buildProject(context: Context, projectPath: String): String =
         }
 
         // 在构建前清理内存
-        System.gc()
+        // 注：Android 上显式 System.gc() 会暂停所有线程，已移除
 
         // 读取 settings.json 文件
         val settingsFile = File(projectPath, "settings.json")
@@ -259,21 +261,21 @@ val mavenDependencies = try {
             return@withContext "error: ${context.getString(R.string.code_editor_main_lua_not_found)}"
         }
 
-        // 设置外部存储的输出路径
-        val externalStorageDir = File("/storage/emulated/0/LXC-LUA/build/")
-        if (!externalStorageDir.exists()) {
-            externalStorageDir.mkdirs()
+        // 设置输出路径，使用应用外部存储目录
+        val buildDir = File(context.getExternalFilesDir(null), "build")
+        if (!buildDir.exists()) {
+            buildDir.mkdirs()
         }
 
-        // 使用应用名称作为APK文件名，清理非法字符
-        val cleanAppName = appName.replace("[\\\\W]".toRegex(), "_") // 只替换非单词字符，保留Unicode字母
+        // 使用应用名称作为APK文件名，清理非法字符（仅保留字母数字）
+        val cleanAppName = appName.replace(Regex("[^a-zA-Z0-9]"), "_")
         val baseApkName = "${cleanAppName}.apk"
-        val apkFile = File(externalStorageDir, baseApkName)
+        val apkFile = File(buildDir, baseApkName)
 
         // 如果文件已存在，添加时间戳
         val finalApkFile = if (apkFile.exists()) {
             val timestamp = System.currentTimeMillis()
-            File(externalStorageDir, "${cleanAppName}_${timestamp}.apk")
+            File(buildDir, "${cleanAppName}_${timestamp}.apk")
         } else {
             apkFile
         }
@@ -293,9 +295,7 @@ val mavenDependencies = try {
             )
 
             if ((usedMemory.toFloat() / maxMemory) > 0.8) {
-                LogCatcher.w("CodeEditScreen", "内存使用过高，强制GC")
-                System.gc()
-                delay(500)
+                LogCatcher.w("CodeEditScreen", "内存使用过高，跳过GC（Android 上显式 GC 会暂停所有线程）")
             }
 
             // 调用新的 ApkBuilder.bin 方法
@@ -356,7 +356,7 @@ suspend fun backupProject(context: Context, projectPath: String): String = withC
     LogCatcher.i("CodeEditScreen", "开始备份项目，路径: $projectPath")
 
     // 创建备份目录
-    val backupDir = File("/storage/emulated/0/LXC-LUA/backup/")
+    val backupDir = File(context.getExternalFilesDir(null), "backup")
     if (!backupDir.exists()) {
         val created = backupDir.mkdirs()
         if (!created) {
@@ -371,31 +371,24 @@ suspend fun backupProject(context: Context, projectPath: String): String = withC
     val backupFile = File(backupDir, backupFileName)
 
     try {
-        val zipOut = ZipOutputStream(FileOutputStream(backupFile))
         val projectFile = File(projectPath)
 
-        // 遍历项目文件夹
-        projectFile.walk().forEach { file ->
-            if (file.isFile) {
-                // 计算相对路径
-                val relativePath = file.relativeTo(projectFile).path
-                val zipEntry = ZipEntry(relativePath)
+        // 使用 use 确保流在异常时安全关闭
+        ZipOutputStream(BufferedOutputStream(FileOutputStream(backupFile))).use { zipOut ->
+            projectFile.walk().forEach { file ->
+                if (file.isFile) {
+                    val relativePath = file.relativeTo(projectFile).path
+                    val zipEntry = ZipEntry(relativePath)
+                    zipEntry.time = file.lastModified()
+                    zipOut.putNextEntry(zipEntry)
 
-                // 设置压缩参数
-                zipEntry.time = file.lastModified()
-
-                // 添加文件到zip
-                zipOut.putNextEntry(zipEntry)
-
-                val input = FileInputStream(file)
-                input.copyTo(zipOut, bufferSize = 8192)
-                input.close()
-
-                zipOut.closeEntry()
+                    FileInputStream(file).use { input ->
+                        input.copyTo(zipOut, bufferSize = 8192)
+                    }
+                    zipOut.closeEntry()
+                }
             }
         }
-
-        zipOut.close()
 
         LogCatcher.i("CodeEditScreen", "备份成功，保存到: ${backupFile.absolutePath}")
         return@withContext backupFile.absolutePath

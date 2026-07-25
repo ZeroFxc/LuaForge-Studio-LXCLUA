@@ -2,7 +2,7 @@ package com.nirithy.luacompose.component
 
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import com.nirithy.luacompose.bridge.ComposeBridge
+import com.nirithy.luacompose.bridge.ComposeBridgeInstance
 import com.nirithy.luacompose.node.ComposeNode
 import com.nirithy.luacompose.render.ComposeRenderer
 import com.luajava.LuaObject
@@ -29,7 +29,7 @@ class LazyListScopeWrapper(private val scope: LazyListScope) {
     fun item(content: LuaObject) {
         scope.item {
             val node = try {
-                synchronized(ComposeBridge.luaLock) { content.call() } as? ComposeNode
+                synchronized(ComposeBridgeInstance.current.luaLock) { content.call() } as? ComposeNode
             } catch (_: Exception) { null }
             if (node != null) {
                 ComposeRenderer.RenderNode(node)
@@ -45,7 +45,7 @@ class LazyListScopeWrapper(private val scope: LazyListScope) {
     fun item(key: Any?, content: LuaObject) {
         scope.item(key = key) {
             val node = try {
-                synchronized(ComposeBridge.luaLock) { content.call() } as? ComposeNode
+                synchronized(ComposeBridgeInstance.current.luaLock) { content.call() } as? ComposeNode
             } catch (_: Exception) { null }
             if (node != null) {
                 ComposeRenderer.RenderNode(node)
@@ -61,7 +61,7 @@ class LazyListScopeWrapper(private val scope: LazyListScope) {
     fun items(count: Int, itemContent: LuaObject) {
         scope.items(count) { index ->
             val node = try {
-                synchronized(ComposeBridge.luaLock) {
+                synchronized(ComposeBridgeInstance.current.luaLock) {
                     itemContent.call((index + 1).toDouble()) // Lua 索引从 1 开始
                 } as? ComposeNode
             } catch (_: Exception) { null }
@@ -82,12 +82,12 @@ class LazyListScopeWrapper(private val scope: LazyListScope) {
             count = count,
             key = { index: Int ->
                 try {
-                    synchronized(ComposeBridge.luaLock) { key.call((index + 1).toDouble()) }
+                    synchronized(ComposeBridgeInstance.current.luaLock) { key.call((index + 1).toDouble()) }
                 } catch (_: Exception) { index }
             },
             itemContent = { index: Int ->
                 val node = try {
-                    synchronized(ComposeBridge.luaLock) {
+                    synchronized(ComposeBridgeInstance.current.luaLock) {
                         itemContent.call((index + 1).toDouble())
                     } as? ComposeNode
                 } catch (_: Exception) { null }

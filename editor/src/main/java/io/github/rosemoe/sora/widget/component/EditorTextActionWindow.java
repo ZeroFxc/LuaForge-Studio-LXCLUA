@@ -188,6 +188,10 @@ public class EditorTextActionWindow extends EditorPopupWindow implements View.On
             editor.postDelayedInLifecycle(new Runnable() {
                 @Override
                 public void run() {
+                    // 退出条件：窗口已禁用或已关闭，停止递归
+                    if (!isEnabled() || !isShowing()) {
+                        return;
+                    }
                     if (!editor.getEventHandler().shouldDrawInsertHandle()
                             && !editor.getCursor().isSelected()) {
                         dismiss();
