@@ -26,6 +26,9 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -121,6 +124,8 @@ fun CodeEditScreen(
     var buildResultType by remember { mutableStateOf(BuildResultType.SUCCESS) }
     var buildResultMessage by remember { mutableStateOf<String?>(null) }
     var isBuilding by remember { mutableStateOf(false) }
+    val buildLogLines = remember { mutableStateListOf<String>() }
+    var showBuildLog by remember { mutableStateOf(false) }
     var isCompilingFile by remember { mutableStateOf(false) }
     var showInitialLoader by remember { mutableStateOf(true) }
     var showEditorContent by remember { mutableStateOf(false) }
@@ -359,11 +364,17 @@ fun CodeEditScreen(
         scope.launch {
             viewModel.saveAllFilesSilently()
             isBuilding = true
+            buildLogLines.clear()
+            showBuildLog = true
             val result = try {
-                buildProject(context, projectPath)
+                buildProject(context, projectPath) { logLine ->
+                    buildLogLines.add(logLine)
+                }
             } catch (e: Exception) {
                 LogCatcher.e("CodeEditScreen", "构建协程异常", e)
-                "error: ${context.getString(R.string.code_editor_build_exception, e.message)}"
+                val errMsg = "error: ${context.getString(R.string.code_editor_build_exception, e.message)}"
+                buildLogLines.add("[E] ${e.message}")
+                errMsg
             }
             when {
                 result.startsWith("cancelled:") -> {
@@ -746,7 +757,10 @@ fun CodeEditScreen(
                                             },
                                             projectName = project.name,
                                             isReplaceVisible = isReplaceVisible,
-                                            onReplaceVisibleChange = { isReplaceVisible = it }
+                                            onReplaceVisibleChange = { isReplaceVisible = it },
+                                            showBuildLog = showBuildLog,
+                                            buildLogLines = buildLogLines,
+                                            onCloseBuildLog = { showBuildLog = false }
                                         )
                                     }
                                 }
@@ -1017,12 +1031,16 @@ fun EditorContent(
     onSwipe: (SwipeDirection) -> Unit,
     projectName: String = "",
     isReplaceVisible: Boolean = false,
-    onReplaceVisibleChange: (Boolean) -> Unit = {}
+    onReplaceVisibleChange: (Boolean) -> Unit = {},
+    showBuildLog: Boolean = false,
+    buildLogLines: List<String> = emptyList(),
+    onCloseBuildLog: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val hasOpenFiles = viewModel.openFiles.isNotEmpty()
     val isCompletionLoading by remember { derivedStateOf { viewModel.isCompletionDataLoading } }
     val completionProgress by remember { derivedStateOf { viewModel.completionDataProgress } }
+    val buildLogListState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     Column(modifier = modifier) {
         AnimatedVisibility(
@@ -1095,6 +1113,23 @@ fun EditorContent(
                         onReplaceAll = { text -> onReplaceAll(text) },
                         isReplaceVisible = isReplaceVisible,
                         onReplaceVisibleChange = onReplaceVisibleChange
+                    )
+                }
+
+                // 构建日志面板
+                AnimatedVisibility(
+                    visible = showBuildLog,
+                    enter = expandVertically(animationSpec = tween(300)) + fadeIn(tween(300)),
+                    exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(tween(200))
+                ) {
+                    BuildLogPanel(
+                        logLines = buildLogLines,
+                        isBuilding = isBuilding,
+                        listState = buildLogListState,
+                        onClose = onCloseBuildLog,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 200.dp)
                     )
                 }
 
@@ -1407,4 +1442,128 @@ fun DownloadProgressDialog(
         },
         dismissButton = {} // 不允许直接关闭，只能取消构建
     )
+}
+
+/**
+ * 构建日志面板 - 显示在编辑器底部区域
+ */
+@Composable
+private fun BuildLogPanel(
+    logLines: List<String>,
+    isBuilding: Boolean,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // 自动滚动到底部
+    LaunchedEffect(logLines.size) {
+        if (logLines.isNotEmpty()) {
+            listState.animateScrollToItem(logLines.size - 1)
+        }
+    }
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+        tonalElevation = 4.dp,
+        shadowElevation = 8.dp
+    ) {
+        Column {
+            // 标题栏
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (isBuilding) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    } else {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_code_json),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = stringResource(R.string.build_log_title),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (isBuilding) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "...",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                TextButton(
+                    onClick = onClose,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.build_log_close),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // 日志内容
+            if (logLines.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isBuilding) "等待构建日志..." else "暂无日志",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    items(logLines) { line ->
+                        val textColor = when {
+                            line.contains("[E]") -> MaterialTheme.colorScheme.error
+                            line.contains("[W]") -> Color(0xFFFFA726)
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        Text(
+                            text = line,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            ),
+                            color = textColor,
+                            modifier = Modifier.padding(vertical = 1.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

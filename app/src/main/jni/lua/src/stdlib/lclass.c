@@ -180,9 +180,11 @@ static int luaC_clone_wrap(lua_State *L);
 
 static int class_call(lua_State *L) {
   int nargs = lua_gettop(L) - 1;  /* 排除类本身 */
+  LUA_LOGI("[CLASS] class_call ENTRY nargs=%d top=%d", nargs, lua_gettop(L));
 
   /* 检查第一个参数是否是类 */
   if (!luaC_isclass(L, 1)) {
+    LUA_LOGI("[CLASS] class_call: NOT a class, error");
     luaL_error(L, "attempt to call a non-class value");
     return 0;
   }
@@ -236,7 +238,9 @@ static int class_call(lua_State *L) {
   }
 
   /* 创建新对象实例 */
+  LUA_LOGI("[CLASS] class_call: creating object, nargs=%d", nargs);
   luaC_newobject(L, 1, nargs);
+  LUA_LOGI("[CLASS] class_call: object created, top=%d", lua_gettop(L));
   return 1;
 }
 
@@ -2081,19 +2085,24 @@ static int luaC_clone_wrap(lua_State *L) {
 ** 支持自动调用父类构造函数链
 */
 void luaC_newobject(lua_State *L, int class_idx, int nargs) {
+  LUA_LOGI("[NEWOBJ] luaC_newobject ENTRY class_idx=%d nargs=%d top=%d", class_idx, nargs, lua_gettop(L));
   class_idx = absindex(L, class_idx);
+  LUA_LOGI("[NEWOBJ] after absindex: class_idx=%d", class_idx);
   
   /* 检查是否是有效的类 */
   if (!luaC_isclass(L, class_idx)) {
+    LUA_LOGI("[NEWOBJ] ERROR: not a class!");
     luaL_error(L, "attempt to instantiate a non-class value");
     return;
   }
+  LUA_LOGI("[NEWOBJ] isclass check passed");
   
   /* 检查是否是抽象类（使用rawget避免触发类的__index） */
   lua_pushstring(L, CLASS_KEY_FLAGS);
   lua_rawget(L, class_idx);
   if (lua_isinteger(L, -1)) {
     int flags = (int)lua_tointeger(L, -1);
+    LUA_LOGI("[NEWOBJ] flags=%d", flags);
     if (flags & CLASS_FLAG_ABSTRACT) {
       luaL_error(L, "cannot instantiate abstract class");
       return;
@@ -2104,19 +2113,24 @@ void luaC_newobject(lua_State *L, int class_idx, int nargs) {
     }
   }
   lua_pop(L, 1);
+  LUA_LOGI("[NEWOBJ] flags check done, calling verify_abstracts");
   
   /* 验证所有抽象方法都已实现（包括参数数量验证） */
   luaC_verify_abstracts(L, class_idx);
+  LUA_LOGI("[NEWOBJ] verify_abstracts done");
   
   /* 验证所有接口方法都已正确实现（包括参数数量验证） */
   luaC_verify_interfaces(L, class_idx);
+  LUA_LOGI("[NEWOBJ] verify_interfaces done");
   
   /* 验证所有trait require方法都已实现 */
   luaC_verify_trait_requires(L, class_idx);
+  LUA_LOGI("[NEWOBJ] verify_trait_requires done");
   
   /* 创建对象表 */
   lua_newtable(L);
   int obj_idx = lua_gettop(L);
+  LUA_LOGI("[NEWOBJ] object table created, obj_idx=%d top=%d", obj_idx, lua_gettop(L));
   
   /* 保存对类的引用（使用rawset因为对象还没有元表） */
   lua_pushstring(L, OBJ_KEY_CLASS);
@@ -2137,11 +2151,15 @@ void luaC_newobject(lua_State *L, int class_idx, int nargs) {
   lua_pushstring(L, CLASS_KEY_PARENT);
   lua_rawget(L, class_idx);
   if (lua_istable(L, -1)) {
+    LUA_LOGI("[NEWOBJ] has parent, setting __super");
     lua_pushstring(L, "__super");
     lua_pushvalue(L, -2);
     lua_rawset(L, obj_idx);
+  } else {
+    LUA_LOGI("[NEWOBJ] no parent");
   }
   lua_pop(L, 1);  /* 弹出parent或nil */
+  LUA_LOGI("[NEWOBJ] metatable setup start, top=%d", lua_gettop(L));
   
   /* 创建并设置对象的元表 */
   lua_newtable(L);

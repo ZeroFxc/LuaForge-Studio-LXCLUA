@@ -440,6 +440,9 @@
     <string name="copy_format_import_desc">Import class, can use class name directly in project</string>
     <string name="copy_format_bind_label">luajava.bindClass</string>
     <string name="copy_format_bind_desc">Bind class to local variable, only available in current file</string>
+    <string name="build_log_title">Build Log</string>
+    <string name="build_log_clear">Clear</string>
+    <string name="build_log_close">Close</string>
     <string name="downloading_dependencies">Downloading dependencies</string>
     <string name="download_progress_file">Downloading: %s</string>
     <string name="code_editor_analyzing_deps">Analyzing project dependencies, please wait...</string>

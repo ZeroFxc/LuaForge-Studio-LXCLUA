@@ -366,6 +366,7 @@ val mavenDependencies = try {
             EventManager.fireEvent(PluginEvents.ON_BUILD_ERROR, projectPath, errorResult, "project")
             errorResult
         }
+        }
     } finally {
         // 清除日志监听器
         LogCatcher.setLogListener(null)

@@ -2450,16 +2450,10 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
 #if LUA_USE_JUMPTABLE
 #include "ljumptab.h"
 #endif
-  /* 调试计数器：每执行这么多条指令打印一次心跳 */
-  static volatile int vm_heartbeat = 0;
-  int local_counter = 0;
  startfunc:
   trap = L->hookmask;
- returning:  /* trap already set - return path from tailcall/async-resume */
-  /* 进入函数时打印日志 */
+ returning:  /* trap already set */
   cl = ci_func(ci);
-  LUA_LOGD("[VM] ENTER func=%p proto=%p nupvalues=%d nparams=%d isC=%d",
-          (void*)ci, (void*)cl->p, cl->p->sizeupvalues, cl->p->numparams, cl->p->is_vararg & 4);
   {
     Proto *p = cl->p;
     (void)p;
@@ -2488,7 +2482,6 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
     }
   }
   
-  LUA_LOGD("[VM] 进入解释器主循环 @ %s (非VMP路径)", cl->p->source ? getstr(cl->p->source) : "?");
   k = cl->p->k;
   pc = ci->u.l.savedpc;
   if (l_unlikely(trap))
@@ -2498,15 +2491,6 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
     Instruction i;  /* instruction being executed */
     vmfetch();
     lvm_vmp_hook_point();
-    /* 每10万条指令打一次心跳 */
-    if (++local_counter >= 100000) {
-      local_counter = 0;
-      int hb = __atomic_add_fetch(&vm_heartbeat, 1, __ATOMIC_RELAXED);
-      if (hb % 100 == 0) {
-        LUA_LOGD("[VM] heartbeat #%d, pc=%p func=%p ci=%p last_opcode=%d",
-                hb, (void*)pc, (void*)ci->func.p, (void*)ci, GET_OPCODE(i));
-      }
-    }
     lua_assert(base == ci->func.p + 1);
     lua_assert(base <= L->top.p && L->top.p <= L->stack_last.p);
     /* invalidate top for instructions not expecting it */
@@ -3647,9 +3631,6 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
           }
         }
        ret:  /* return from a Lua function */
-       if (ci->callstatus & CIST_FRESH) {
-         LUA_LOGD("[VM] EXIT (CIST_FRESH) ci=%p ci->previous=%p", (void*)ci, (void*)ci->previous);
-       }
        #ifdef VMOB_LOG
         fprintf(stderr, "[LVM] ret: ci=%p, ci->callstatus=%d, CIST_FRESH=%d, ci->previous=%p, L->ci=%p\n",
                 (void*)ci, ci->callstatus, CIST_FRESH, (void*)ci->previous, (void*)L->ci);
@@ -3863,12 +3844,11 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         ** Format: OP_NEWCLASS A Bx
         ** Function: R[A] := create new class with name K[Bx]
         */
-        TString *classname = tsvalue(&k[GETARG_Bx(i)]);
-        LUA_LOGD("[VM] OP_NEWCLASS A=%d Bx=%d classname='%s'", GETARG_A(i), GETARG_Bx(i), getstr(classname));
         while (L->top.p < base + cl->p->maxstacksize)
              setnilvalue(s2v(L->top.p++));
         luaD_checkstack(L, 1);
         updatebase(ci);
+        TString *classname = tsvalue(&k[GETARG_Bx(i)]);
         
         /* Manually save state */
         savepc(L);
