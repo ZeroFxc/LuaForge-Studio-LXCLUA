@@ -1,0 +1,513 @@
+preExecute mColorMode=0
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:0
+ NoSuchMethodException 
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.MainActivity@2c5529a hasOnBackInvokedCallBackEnabled
+initPredictiveBackConfig for com.luaforge.studio.lxclua.MainActivity@2c5529a initPredictiveBackConfig mShouldInterceptKeyEvent false
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.MainActivity@2c5529a hasOnBackInvokedCallBackEnabled
+[SD卡] 配置已加载: /storage/emulated/0/LXC-LUA/config/ai_config.json
+[setConfig] 配置已更新, mcpServers: 2 个, 服务列表: [f37e5b2f-9406-4f34-8371-53440102829a, plugin_service_editor_service]
+[loadConfig] 从 SD 卡加载完成, mcpServers: 2 个
+[refreshBroadcast] 开始: 总服务器=2, 广播条目=1, ids=[plugin_service_editor_service]
+[startServer] 开始: entry.id=plugin_service_editor_service, name=编辑器操作, portLocked=false, broadcastPort=39811
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+[registerService] editor_service: enabled=true, tools=16, 持久化工具状态=0
+[registerService] 插件 [editor_mcp] 注册服务: editor_service (编辑器操作), 工具数: 16
+[addServiceToConfig] 添加服务到配置: editor_service (编辑器操作)
+[addServiceToConfig] 完成, 当前 mcpServers 数量: 2
+[editor_mcp] 已注册 MCP 服务 [editor_service]，包含 16 个工具
+[editor_mcp] 全部 16 个工具注册成功
+[editor_mcp] 服务状态: enabled=true, toolCount=16
+[editor_mcp] 编辑器 MCP 服务插件已加载
+[autoConnect] 没有已启用的远程 MCP 服务器
+ComponentInfo{com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity} checkFinished=false 2
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:0
+Add to mViews: com.android.internal.policy.DecorView{937c750 I.E...... R.....ID 0,0-0,0 alpha=1.0 viewInfo = }[MainActivity],pkg= com.luaforge.studio.lxclua
+setRusSupported enable 1
+onDisplayChanged -1 for VRI android.view.ViewRootImpl@3e2d36f
+onFocusEvent false
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:0
+[OplusViewMirrorManager] updateHostViewRootIfNeeded, not support android.view.ViewRootImpl@3e2d36f
+kotlin-logging: initializing... active logger factory: Slf4jLoggerFactory
+MCP 本地服务器已启动: http://0.0.0.0:40781/mcp
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.MainActivity@2c5529a hasOnBackInvokedCallBackEnabled
+wrapConfigInfoIntoFlags rotation=0, smallestScreenWidthDp=0, isAutolayoutSwdpModified=false, residentWS=false, scenario=0, bounds=Rect(0, 0 - 1264, 2780), isFirstDraw=true, relayoutAsync=false, flags=0, newFlags=-689963008, title=com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity
+relayoutWindow result, sizeChanged:true, surfaceControlChanged:true, transformHintChanged:false, mSurfaceSize:Point(1264, 2780), mLastSurfaceSize:Point(0, 0), mWidth:-1, mHeight:-1, requestedWidth:1264, requestedHeight:2780, transformHint:0, installOrientation:0, displayRotation:0, isSurfaceValid:true, attr.flag:-2122252032, tmpFrames:ClientWindowFrames{frame=[0,0][1264,2780] display=[0,0][1264,2780] parentFrame=[0,0][0,0]}, relayoutResult:3, relayoutAsync:false, mSyncSeqId:0
+updateBlastSurfaceIfNeeded, surfaceSize:Point(1264, 2780), lastSurfaceSize:Point(0, 0), format:-1, blastBufferQueue:null
+[](id:42b100000001,api:0,p:-1,c:17073) connect: controlledByApp=false
+[VRI[MainActivity]#1(BLAST Consumer)1](id:42b100000001,api:0,p:-1,c:17073) setMaxAcquiredBufferCount: 2
+[VRI[MainActivity]#1(BLAST Consumer)1](id:42b100000001,api:1,p:17073,c:17073) connect: api=1 producerControlledByApp=true
+ setExtendedRangeBrightness sc=Surface(name=com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity)/@0xf9b2133,currentBufferRatio=1.0,desiredRatio=1.0
+[VRI[MainActivity]#1](f:0,a:1) acquireNextBufferLocked size=1264x2780 mFrameNumber=1 applyTransaction=true mTimestamp=930559098127257(auto) mPendingTransactions.size=0 graphicBufferId=73327976644615 transform=0
+Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true syncBuffer=false
+draw finished. seqId=0
+[SD卡] 设置已加载: /storage/emulated/0/LXC-LUA/config/app_settings.json
+设置已从 SD 卡重新加载
+handleResized, msg:, frameChanged:false, configChanged:false, displayChanged:false, attachedFrameChanged:false, compatScaleChanged:false, pendingDragResizing=false
+Received frameCommittedCallback lastAttemptedDrawFrameNum=3 didProduceBuffer=true syncBuffer=false
+draw finished. seqId=0
+onFocusEvent true
+hide(ime(), fromIme=false)
+com.luaforge.studio.lxclua:aa89e0aa: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+GrGpu::writePixels takes 2
+dispatchAppVisibility visible:false mUpcomingWindowFocus:false
+HeapTask is not gc_task
+_Desupression native alloc gc_urgency: 171872 native bytes: 31318668
+visibilityChanged oldVisibility=true newVisibility=false
+setWindowStopped stopped:true
+sendCancelIfRunning: isInProgress=false callback=android.app.Activity$2@738d762
+com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivityDefault,window dying
+com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivityDefault,unregisterSystemUIBroadcastReceiver 
+com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivityDefault, unregisterSystemUIBroadcastReceiver failed java.lang.IllegalArgumentException: Receiver not registered: android.view.OplusScrollToTopManager$2@5338529
+removeViewRootInfo: ViewRootAnimationInfos have been removed, viewRoot-android.view.ViewRootImpl@56d962d, activity-com.luaforge.studio.lxclua.MainActivityDefault
+RenderProxy::destroy: this=0xb400006f124a0d00, mContext=0xb400006db6396640
+SkiaVulkanPipeline::setSurface: this=0xb400006eb909a500, surface=NULL
+[VRI[MainActivityDefault]#0(BLAST Consumer)0](id:42b100000000,api:1,p:17073,c:17073) disconnect: api 1
+[VRI[MainActivityDefault]#0](f:0,a:1) destructor()
+[VRI[MainActivityDefault]#0(BLAST Consumer)0](id:42b100000000,api:0,p:-1,c:17073) disconnect
+Skipping stats log for color mode
+Compiler allocated 11MB to compile void com.luaforge.studio.lxclua.ProjectCardKt.LargeCardModeContent-zMtO01s(com.luaforge.studio.lxclua.ProjectItem, com.luaforge.studio.lxclua.ManifestInfo, boolean, boolean, boolean, com.luaforge.studio.lxclua.plugin.PluginManager$BadgeInfo, java.util.List, boolean, java.io.File, boolean, kotlin.jvm.functions.Function1, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, java.util.List, androidx.compose.material3.ColorScheme, java.text.SimpleDateFormat, float, float, float, float, androidx.compose.ui.text.TextStyle, androidx.compose.ui.text.TextStyle, androidx.compose.ui.text.font.FontWeight, java.lang.String, boolean, boolean, androidx.compose.foundation.shape.RoundedCornerShape, long, boolean, kotlin.jvm.functions.Function0, boolean, long, long, androidx.compose.runtime.Composer, int, int, int, int, int, int)
+Background concurrent mark compact GC freed 90MB AllocSpace bytes, 79(2452KB) LOS objects, 39% free,146MB(145MB_0B_1788KB)/242MB, paused 1.249ms,2.007ms total 470.626ms
+type=1400 audit(0.0:4089989): avc:  denied  { getopt } for  path="/dev/socket/usap_pool_primary" scontext=u:r:untrusted_app:s0:c154,c258,c512,c768 tcontext=u:r:zygote:s0 tclass=unix_stream_socket permissive=1 app=com.luaforge.studio.lxclua
+Loaded baseMap.dat successfully, outerSize=22568, took 1618ms
+从文件加载 baseMap 成功，大小: 22568
+baseMap 加载完成，大小: 22568，耗时: 1621ms
+初始化成功，准备通知 0 个监听器
+所有监听器通知完成
+com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity,This com.android.internal.policy.DecorView{937c750 V.E...... R....... 0,0-1264,2780 aid=1 alpha=1.0 viewInfo = }[MainActivity] change focus to true
+HeapTask is not gc_task
+Installing profile for com.luaforge.studio.lxclua
+HeapTask is not gc_task
+HeapTask is not gc_task
+[OplusViewExtractManager] OplusViewExtractManager init com.luaforge.studio.lxclua
+get inputMethodManager extension: com.android.internal.view.IInputMethodManager$Stub$Proxy@5234a96
+the up motion event handled by client, just return
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.MainActivity@2c5529a hasOnBackInvokedCallBackEnabled
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.MainActivity@2c5529a hasOnBackInvokedCallBackEnabled
+the up motion event handled by client, just return
+hiddenapi: Accessing hidden method Landroid/view/ViewTreeObserver;->dispatchOnScrollChanged()V (runtime_flags=0, domain=platform, api=unsupported) from Landroidx/compose/ui/platform/AndroidComposeView$Companion; (domain=app) using reflection: allowed
+the up motion event handled by client, just return
+the up motion event handled by client, just return
+the up motion event handled by client, just return
+the up motion event handled by client, just return
+the up motion event handled by client, just return
+the up motion event handled by client, just return
+[getBroadcastAddresses] serverId=plugin_service_editor_service, port=40781, fromCache=false
+the up motion event handled by client, just return
+onFocusEvent false
+---------------------------- PROCESS ENDED (17073) for package com.luaforge.studio.lxclua ----------------------------
+notifyStartActivity intent:Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10200000 xflg=0x4 cmp=com.luaforge.studio.lxclua/.MainActivityDefault bnds=[754,782][992,1049] (has extras) }
+notifyActivityStart get launchedFromUid failed through AppManager! launchedFromPackage: com.android.launcher, pkg: com.luaforge.studio.lxclua
+Error getting package info: com.luaforge.studio.lxclua
+---------------------------- PROCESS STARTED (17587) for package com.luaforge.studio.lxclua ----------------------------
+Odex status:io-error-no-oat filter:run-from-apk reason:unknown location:/data/app/~~5C3unFH_qTOJlJplxe56Iw==/com.luaforge.studio.lxclua-D-FmGhd_E2Pj5km7bjHIJg==/base.apk cost:421
+Configuring clns-9 for other apk /data/app/~~5C3unFH_qTOJlJplxe56Iw==/com.luaforge.studio.lxclua-D-FmGhd_E2Pj5km7bjHIJg==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~5C3unFH_qTOJlJplxe56Iw==/com.luaforge.studio.lxclua-D-FmGhd_E2Pj5km7bjHIJg==/lib/arm64:/data/app/~~5C3unFH_qTOJlJplxe56Iw==/com.luaforge.studio.lxclua-D-FmGhd_E2Pj5km7bjHIJg==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.luaforge.studio.lxclua
+AssetManager2(0xb400006f124a0428) locale list changing from [] to [zh]
+Currently set values for:
+  angle_gl_driver_selection_pkgs=[]
+  angle_gl_driver_selection_values=[]
+com.luaforge.studio.lxclua is not listed in per-application setting
+ANGLE allowlist from config: 
+com.luaforge.studio.lxclua is not listed in ANGLE allowlist or settings, returning default
+Updatable production driver is not supported on the device.
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:-1
+preCreateSurfaceSyncGroupTimerThread
+OplusGraphicsEventListener create now!
+addEventListener success!
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+ThrowNoClassDefFoundError when open swordfish
+Compat change id reported: 279646685; UID 10666; state: ENABLED
+Compat change id reported: 312399441; UID 10666; state: ENABLED
+get AMS extension: android.os.BinderProxy@3726d7e
+SupportApps size 0
+createInstance(64bit) : createExtendedFactory
+Opened libSchedAssistExtImpl.so
+createInstance(64bit) : createExtendedFactory
+Opened libSchedAssistExtImpl.so
+Choreographer implicitly registered for the refresh rate.
+AssetManager2(0xb400006f124a0a28) locale list changing from [] to [zh]
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:0
+searching for layers in '/data/app/~~5C3unFH_qTOJlJplxe56Iw==/com.luaforge.studio.lxclua-D-FmGhd_E2Pj5km7bjHIJg==/lib/arm64'
+searching for layers in '/data/app/~~5C3unFH_qTOJlJplxe56Iw==/com.luaforge.studio.lxclua-D-FmGhd_E2Pj5km7bjHIJg==/base.apk!/lib/arm64-v8a'
+Pinning is deprecated since Android Q. Please use trim or other methods.
+ NoSuchMethodException 
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.SplashWelcome@3ca91cf hasOnBackInvokedCallBackEnabled
+initPredictiveBackConfig for com.luaforge.studio.lxclua.SplashWelcome@3ca91cf initPredictiveBackConfig mShouldInterceptKeyEvent false
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.SplashWelcome@3ca91cf hasOnBackInvokedCallBackEnabled
+IMPORTANT WARNING! You already have an UncaughtExceptionHandler, are you sure this is correct? If you use ACRA, Crashlytics or similar libraries, you must initialize them AFTER crashmanager! Installing anyway, but your original handler will not be called.
+crashmanager has been installed.
+I can't find colorx layer , let's enumerate colorx layers first.
+===== BEGIN DUMP OF OVERRIDDEN SETTINGS =====
+===== END DUMP OF OVERRIDDEN SETTINGS =====
+Fetching IMapper5 from QtiMapper5
+开始初始化日志系统...
+日志系统配置已更新 - 启用: true, 路径: /storage/emulated/0/LXC-LUA/luaforge.log
+日志系统初始化完成，日志文件已清空并重新开始记录
+Graphics lib is available
+Unknow feature:IOplusTextViewRTLUtilForUG
+已清空日志文件: /storage/emulated/0/LXC-LUA/luaforge.log
+Using previously loaded IMapper library.
+Compat change id reported: 309578419; UID 10666; state: ENABLED
+Toggle override initialized to: OVERRIDE_UNSET
+QUALCOMM build          : 3967b80d3b, Ica4ce9bea6
+Build Date              : 02/12/26
+Shader Compiler Version : E031.47.18.49
+Local Branch            : 
+Remote Branch           : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.15.4.0.11.00.00.1088.862
+Remote Branch           : NONE
+Reconstruct Branch      : NOTHING
+Build Config            : S P 18.0.0 AArch64
+Driver Path             : /vendor/lib64/hw/vulkan.adreno.so
+Driver Version          : 0800.72
+PFP                     : 0x01500081
+ME                      : 0x01500022
+Application Name    : android framework
+Process Name        : com.luaforge.studio.lxclua
+Application Version : 0x00000000
+Engine Name         : android framework
+Engine Version      : 0x00000000
+Api Version         : 0x00401000
+createInstance(64bit) : createExtendedFactory
+Opened libeglextimpl.so
+[IPreCacheRus]loadRUSConfigs#102 failed to transact: -22 prc:com.luaforge.studio.lxclua
+[SD卡] 设置已加载: /storage/emulated/0/LXC-LUA/config/app_settings.json
+ComponentInfo{com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivityDefault} checkFinished=false 2
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:0
+Compat change id reported: 352594277; UID 10666; state: ENABLED
+init sDebug to false, init sDebugIme to false, init sAlwaysOn to false
+updateDebugToClass InputMethodManager.DEBUG = false
+updateDebugToClass ImeFocusController.DEBUG = false
+updateDebugToClass OnBackInvokedDispatcher.DEBUG = false
+updateDebugToClass InsetsController.DEBUG = false
+updateDebugToClass BaseInputConnection.DEBUG = false
+Compat change id reported: 349153669; UID 10666; state: ENABLED
+Add to mViews: com.android.internal.policy.DecorView{632bf1 I.E...... R.....ID 0,0-0,0 alpha=1.0 viewInfo = }[MainActivityDefault],pkg= com.luaforge.studio.lxclua
+createInstance(64bit) : createExtendedFactory
+Opened libhwuiextimpl.so
+setRusSupported enable 1
+monitor disabled
+onDisplayChanged -1 for VRI android.view.ViewRootImpl@738d762
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:0
+[OplusViewMirrorManager] updateHostViewRootIfNeeded, not support android.view.ViewRootImpl@738d762
+updatePixelSize: sPixelSize has been updated, process = com.luaforge.studio.lxclua
+hiddenapi: Accessing hidden method Landroid/os/SystemProperties;->addChangeCallback(Ljava/lang/Runnable;)V (runtime_flags=0, domain=platform, api=unsupported) from Landroidx/compose/ui/platform/AndroidComposeView$Companion; (domain=app) using reflection: allowed
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.SplashWelcome@3ca91cf hasOnBackInvokedCallBackEnabled
+wrapConfigInfoIntoFlags rotation=0, smallestScreenWidthDp=0, isAutolayoutSwdpModified=false, residentWS=false, scenario=0, bounds=Rect(0, 0 - 1264, 2780), isFirstDraw=true, relayoutAsync=false, flags=0, newFlags=-689963008, title=com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivityDefault
+relayoutWindow result, sizeChanged:true, surfaceControlChanged:true, transformHintChanged:false, mSurfaceSize:Point(1264, 2780), mLastSurfaceSize:Point(0, 0), mWidth:-1, mHeight:-1, requestedWidth:1264, requestedHeight:2780, transformHint:0, installOrientation:0, displayRotation:0, isSurfaceValid:true, attr.flag:-2122252032, tmpFrames:ClientWindowFrames{frame=[0,0][1264,2780] display=[0,0][1264,2780] parentFrame=[0,0][0,0]}, relayoutResult:3, relayoutAsync:false, mSyncSeqId:0
+updateBlastSurfaceIfNeeded, surfaceSize:Point(1264, 2780), lastSurfaceSize:Point(0, 0), format:-1, blastBufferQueue:null
+[](id:44b300000000,api:0,p:-1,c:17587) connect: controlledByApp=false
+[VRI[MainActivityDefault]#0(BLAST Consumer)0](id:44b300000000,api:0,p:-1,c:17587) setMaxAcquiredBufferCount: 2
+[VRI[MainActivityDefault]#0(BLAST Consumer)0](id:44b300000000,api:1,p:17587,c:17587) connect: api=1 producerControlledByApp=true
+ setExtendedRangeBrightness sc=Surface(name=com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivityDefault)/@0x19c882e,currentBufferRatio=1.0,desiredRatio=1.0
+<ReadGpuID:366>: Reading chip ID through GSL
+[VRI[MainActivityDefault]#0](f:0,a:1) acquireNextBufferLocked size=1264x2780 mFrameNumber=1 applyTransaction=true mTimestamp=930584045845008(auto) mPendingTransactions.size=0 graphicBufferId=75535589834755 transform=0
+Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true syncBuffer=false
+createInstance(64bit) : createExtendedFactory
+Opened libSchedAssistExtImpl.so
+draw finished. seqId=0
+Compat change id reported: 270674727; UID 10666; state: ENABLED
+handleResized, msg:, frameChanged:false, configChanged:false, displayChanged:false, attachedFrameChanged:false, compatScaleChanged:false, pendingDragResizing=false
+initFrameRateConfig: 
+	levelsFor120hz: [120, 90, 72, 60]
+	thresholdsFor120hz: [1080, 300, 200]
+	levelsFor90hz: [90]
+	thresholdsFor90hz: []
+FRTCConfigManager: FRTC_CAPABILITY = 360, package name = com.luaforge.studio.lxclua, WINDOW_ANIMATION_SPEED_RATE = 10, SCROLL_ANIMATION_SPEED_RATE = 20, PACKAGE_ENABLE = false
+init info: mPackageName = com.luaforge.studio.lxclua, mIsEnabled = false
+[SD卡] 设置已加载
+开始初始化补全数据，准备启动协程
+协程已启动
+步骤1: 加载 classMap - 开始
+onFocusEvent true
+Loading classMap.dat from /storage/emulated/0/Android/data/com.luaforge.studio.lxclua/cache/classMap.dat, size=3029461 bytes
+加载回收站索引完成，共0个项目
+Received frameCommittedCallback lastAttemptedDrawFrameNum=3 didProduceBuffer=true syncBuffer=false
+draw finished. seqId=0
+Compiler allocated 7254KB to compile void android.view.ViewRootImpl.performTraversals()
+Load /data/app/~~5C3unFH_qTOJlJplxe56Iw==/com.luaforge.studio.lxclua-D-FmGhd_E2Pj5km7bjHIJg==/lib/arm64/libLXCLuaCore.so using class loader ns clns-9 (caller=/data/app/~~5C3unFH_qTOJlJplxe56Iw==/com.luaforge.studio.lxclua-D-FmGhd_E2Pj5km7bjHIJg==/base.apk!classes11.dex): ok
+JNI_OnLoad() called
+JNI版本: 65542
+初始化Lua状态机
+Lua状态机初始化完成
+[setAndroidContext] density=3.5, orientation=1
+inject 开始, LuaState=129445452, bridge=65146517
+[inject] BridgeEngine 已初始化: LuaJavaBridgeEngine
+========== 开始注入 Compose API ==========
+[inject] 注册插件...
+注册插件 [foundation] FoundationPlugin, 组件: []
+注册插件 [material3] Material3Plugin, 组件: []
+注册插件 [layout] LayoutComponents, 组件: [Column, Row, Box, LazyColumn, LazyRow, LazyVerticalGrid, LazyHorizontalGrid]
+注册插件 [display] DisplayComponents, 组件: [Text]
+注册插件 [input] InputComponents, 组件: [Button, TextButton, OutlinedButton, IconButton, TextField, OutlinedTextField, Checkbox, Switch, Slider, RadioButton]
+注册插件 [container] ContainerComponents, 组件: [Card, Surface, Scaffold, Spacer, Divider, VerticalDivider]
+注册插件 [layout] BoxWithConstraintsComponent, 组件: [BoxWithConstraints]
+注册插件 [display] IconComponent, 组件: [Icon]
+注册插件 [animation] AnimationPlugin, 组件: [AnimatedVisibility, AnimatedContent, Crossfade, InfiniteTransition, SharedTransitionLayout]
+注册插件 [draw] CanvasPlugin, 组件: [Canvas]
+注册插件 [effect] EffectPlugin, 组件: [LaunchedEffect, key, DisposableEffect]
+注册插件 [navigation3] Navigation3Plugin, 组件: [NavDisplay]
+注册插件 [viewinterop] AndroidViewComponent, 组件: [AndroidView]
+注册插件 [complement] ComplementComponents, 组件: [FloatingActionButton, SmallFloatingActionButton, LargeFloatingActionButton, ExtendedFloatingActionButton, AssistChip, FilterChip, InputChip, SuggestionChip, TabRow, Tab, ScrollableTabRow, ModalNavigationDrawer, DismissibleNavigationDrawer, ModalDrawerSheet, PermanentNavigationDrawer, SearchBar, DockedSearchBar, DatePicker, DatePickerDialog, TimePicker, LinearProgressIndicator, CircularProgressIndicator, Badge, BadgedBox, DropdownMenu, ModalBottomSheet, SnackbarHost, ExposedDropdownMenuBox, PullToRefreshBox, HorizontalPager, VerticalPager, AlertDialog, NavigationBar, SwipeToDismissBox, SingleChoiceSegmentedButtonRow, MultiChoiceSegmentedButtonRow, Popup]
+注册插件 [display] BackHandlerComponent, 组件: [BackHandler]
+开始注入 15 个插件的组件...
+  layout: 7 个组件
+  display: 1 个组件
+  input: 10 个组件
+  container: 6 个组件
+  layout: 1 个组件
+  display: 1 个组件
+  animation: 5 个组件
+  draw: 1 个组件
+  effect: 3 个组件
+  navigation3: 1 个组件
+  viewinterop: 1 个组件
+  complement: 37 个组件
+  display: 1 个组件
+插件注入完成，ComponentRegistry 共 75 个组件
+[inject] 组件渲染器注册完成，共 75 个
+[inject] KSP 生成的组件不存在（首次编译可能未生成），回退到 DynamicRenderer
+[create] prefix=androidx.compose, 初始栈顶=2
+[create] 创建命名空间表, idx=3, 栈顶=3
+[create] 创建元表, idx=4, 栈顶=4
+[create] pushLuaIndexWrapper 后, 栈顶=5
+[create] setField __index 后, 栈顶=4
+[create] 元表 __index 存在=true, type=function
+[create] setMetaTable(idx=3) 返回=1, 栈顶 4 → 3
+[create] getMetaTable(idx=3) 返回=1, type=table
+[create] 完成, 最终栈顶=3
+[inject] 注入插件全局 API...
+开始注入 15 个插件的全局 API...
+  foundation: injectGlobals 完成
+  material3: injectGlobals 完成
+  layout: injectGlobals 完成
+  display: injectGlobals 完成
+  input: injectGlobals 完成
+  container: injectGlobals 完成
+  layout: injectGlobals 完成
+  display: injectGlobals 完成
+  animation: injectGlobals 完成
+  draw: injectGlobals 完成
+  effect: injectGlobals 完成
+  navigation3: injectGlobals 完成
+  viewinterop: injectGlobals 完成
+  complement: injectGlobals 完成
+  display: injectGlobals 完成
+插件全局 API 注入完成
+[inject] 注入桥接 API...
+[inject] 开始注入导航 API
+[inject] 导航 API 注入完成
+[inject] compose metatable __index 存在=true
+[inject] Lua验证: compose metatable 正常
+========== Compose API 注入完成 ==========
+Loaded classMap.dat successfully, size=32059, took 197ms
+从文件加载 classMap 成功，大小: 32059
+classMap 加载完成，大小: 32059，耗时: 199ms
+步骤2: 提取 androidClasses - 开始
+提取出 34019 个类名
+androidClasses 提取完成，大小: 34019，耗时: 30ms
+步骤3: 加载 baseMap - 开始
+Loading baseMap.dat from /storage/emulated/0/Android/data/com.luaforge.studio.lxclua/cache/baseMap.dat, size=44680773 bytes
+Failed to find provider info for com.google.android.gms.fonts
+activity finished by caller: android.app.Activity.finish:7647 android.app.Activity.finish:7664 com.luaforge.studio.lxclua.SplashWelcome.startMainActivity:200 com.luaforge.studio.lxclua.SplashWelcome.access$startMainActivity:76 com.luaforge.studio.lxclua.SplashWelcome$startLoadingWithProgress$1$2.invokeSuspend:315 kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith:34 kotlinx.coroutines.DispatchedTask.run:100 android.os.Handler.handleCallback:1001 android.os.Handler.dispatchMessage:109 android.os.Looper.loopOnce:306 
+preExecute mColorMode=0
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:0
+ NoSuchMethodException 
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.MainActivity@f803fbc hasOnBackInvokedCallBackEnabled
+initPredictiveBackConfig for com.luaforge.studio.lxclua.MainActivity@f803fbc initPredictiveBackConfig mShouldInterceptKeyEvent false
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.MainActivity@f803fbc hasOnBackInvokedCallBackEnabled
+[SD卡] 配置已加载: /storage/emulated/0/LXC-LUA/config/ai_config.json
+[setConfig] 配置已更新, mcpServers: 2 个, 服务列表: [f37e5b2f-9406-4f34-8371-53440102829a, plugin_service_editor_service]
+[loadConfig] 从 SD 卡加载完成, mcpServers: 2 个
+[refreshBroadcast] 开始: 总服务器=2, 广播条目=1, ids=[plugin_service_editor_service]
+[startServer] 开始: entry.id=plugin_service_editor_service, name=编辑器操作, portLocked=false, broadcastPort=39811
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+[registerService] editor_service: enabled=true, tools=16, 持久化工具状态=0
+[registerService] 插件 [editor_mcp] 注册服务: editor_service (编辑器操作), 工具数: 16
+[addServiceToConfig] 添加服务到配置: editor_service (编辑器操作)
+[addServiceToConfig] 完成, 当前 mcpServers 数量: 2
+[editor_mcp] 已注册 MCP 服务 [editor_service]，包含 16 个工具
+[editor_mcp] 全部 16 个工具注册成功
+[editor_mcp] 服务状态: enabled=true, toolCount=16
+[editor_mcp] 编辑器 MCP 服务插件已加载
+[autoConnect] 没有已启用的远程 MCP 服务器
+ComponentInfo{com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity} checkFinished=false 2
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:0
+Add to mViews: com.android.internal.policy.DecorView{93b1c02 I.E...... R.....ID 0,0-0,0 alpha=1.0 viewInfo = }[MainActivity],pkg= com.luaforge.studio.lxclua
+setRusSupported enable 1
+onDisplayChanged -1 for VRI android.view.ViewRootImpl@35a6d49
+onFocusEvent false
+applyConfigurationToAppResourcesLocked app.getDisplayId() return callback.displayId:0
+[OplusViewMirrorManager] updateHostViewRootIfNeeded, not support android.view.ViewRootImpl@35a6d49
+kotlin-logging: initializing... active logger factory: Slf4jLoggerFactory
+MCP 本地服务器已启动: http://0.0.0.0:42171/mcp
+should not HookOnBackInvokedCallbackEnabled for application com.luaforge.studio.lxclua.MainActivity@f803fbc hasOnBackInvokedCallBackEnabled
+wrapConfigInfoIntoFlags rotation=0, smallestScreenWidthDp=0, isAutolayoutSwdpModified=false, residentWS=false, scenario=0, bounds=Rect(0, 0 - 1264, 2780), isFirstDraw=true, relayoutAsync=false, flags=0, newFlags=-689963008, title=com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity
+relayoutWindow result, sizeChanged:true, surfaceControlChanged:true, transformHintChanged:false, mSurfaceSize:Point(1264, 2780), mLastSurfaceSize:Point(0, 0), mWidth:-1, mHeight:-1, requestedWidth:1264, requestedHeight:2780, transformHint:0, installOrientation:0, displayRotation:0, isSurfaceValid:true, attr.flag:-2122252032, tmpFrames:ClientWindowFrames{frame=[0,0][1264,2780] display=[0,0][1264,2780] parentFrame=[0,0][0,0]}, relayoutResult:3, relayoutAsync:false, mSyncSeqId:0
+updateBlastSurfaceIfNeeded, surfaceSize:Point(1264, 2780), lastSurfaceSize:Point(0, 0), format:-1, blastBufferQueue:null
+[](id:44b300000001,api:0,p:-1,c:17587) connect: controlledByApp=false
+[VRI[MainActivity]#1(BLAST Consumer)1](id:44b300000001,api:0,p:-1,c:17587) setMaxAcquiredBufferCount: 2
+[VRI[MainActivity]#1(BLAST Consumer)1](id:44b300000001,api:1,p:17587,c:17587) connect: api=1 producerControlledByApp=true
+ setExtendedRangeBrightness sc=Surface(name=com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity)/@0x6876c6d,currentBufferRatio=1.0,desiredRatio=1.0
+[VRI[MainActivity]#1](f:0,a:1) acquireNextBufferLocked size=1264x2780 mFrameNumber=1 applyTransaction=true mTimestamp=930585002894591(auto) mPendingTransactions.size=0 graphicBufferId=75535589834759 transform=0
+Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true syncBuffer=false
+draw finished. seqId=0
+[SD卡] 设置已加载: /storage/emulated/0/LXC-LUA/config/app_settings.json
+设置已从 SD 卡重新加载
+handleResized, msg:, frameChanged:false, configChanged:false, displayChanged:false, attachedFrameChanged:false, compatScaleChanged:false, pendingDragResizing=false
+Received frameCommittedCallback lastAttemptedDrawFrameNum=3 didProduceBuffer=true syncBuffer=false
+draw finished. seqId=0
+onFocusEvent true
+hide(ime(), fromIme=false)
+com.luaforge.studio.lxclua:684b30ef: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+GrGpu::writePixels takes 1
+dispatchAppVisibility visible:false mUpcomingWindowFocus:false
+visibilityChanged oldVisibility=true newVisibility=false
+setWindowStopped stopped:true
+sendCancelIfRunning: isInProgress=false callback=android.app.Activity$2@c9fc0f3
+com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivityDefault,window dying
+com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivityDefault,unregisterSystemUIBroadcastReceiver 
+com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivityDefault, unregisterSystemUIBroadcastReceiver failed java.lang.IllegalArgumentException: Receiver not registered: android.view.OplusScrollToTopManager$2@7b88b2e
+removeViewRootInfo: ViewRootAnimationInfos have been removed, viewRoot-android.view.ViewRootImpl@738d762, activity-com.luaforge.studio.lxclua.MainActivityDefault
+RenderProxy::destroy: this=0xb400006f124a0d00, mContext=0xb400006e4419d040
+SkiaVulkanPipeline::setSurface: this=0xb400006eb18eaf80, surface=NULL
+[VRI[MainActivityDefault]#0(BLAST Consumer)0](id:44b300000000,api:1,p:17587,c:17587) disconnect: api 1
+[VRI[MainActivityDefault]#0](f:0,a:1) destructor()
+[VRI[MainActivityDefault]#0(BLAST Consumer)0](id:44b300000000,api:0,p:-1,c:17587) disconnect
+Skipping stats log for color mode
+HeapTask is not gc_task
+_Desupression native alloc gc_urgency: 174885 native bytes: 30702068
+Compiler allocated 11MB to compile void com.luaforge.studio.lxclua.ProjectCardKt.LargeCardModeContent-zMtO01s(com.luaforge.studio.lxclua.ProjectItem, com.luaforge.studio.lxclua.ManifestInfo, boolean, boolean, boolean, com.luaforge.studio.lxclua.plugin.PluginManager$BadgeInfo, java.util.List, boolean, java.io.File, boolean, kotlin.jvm.functions.Function1, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function0, java.util.List, androidx.compose.material3.ColorScheme, java.text.SimpleDateFormat, float, float, float, float, androidx.compose.ui.text.TextStyle, androidx.compose.ui.text.TextStyle, androidx.compose.ui.text.font.FontWeight, java.lang.String, boolean, boolean, androidx.compose.foundation.shape.RoundedCornerShape, long, boolean, kotlin.jvm.functions.Function0, boolean, long, long, androidx.compose.runtime.Composer, int, int, int, int, int, int)
+Background concurrent mark compact GC freed 93MB AllocSpace bytes, 80(2472KB) LOS objects, 39% free,146MB(144MB_0B_1768KB)/242MB, paused 1.748ms,2.166ms total 450.696ms
+SkiaVulkanPipeline::setSurface: this=0xb400006eb18eaf80, surface=NULL
+type=1400 audit(0.0:4089995): avc:  denied  { getopt } for  path="/dev/socket/usap_pool_primary" scontext=u:r:untrusted_app:s0:c154,c258,c512,c768 tcontext=u:r:zygote:s0 tclass=unix_stream_socket permissive=1 app=com.luaforge.studio.lxclua
+Loaded baseMap.dat successfully, outerSize=22568, took 1614ms
+从文件加载 baseMap 成功，大小: 22568
+baseMap 加载完成，大小: 22568，耗时: 1615ms
+初始化成功，准备通知 0 个监听器
+所有监听器通知完成
+com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity,This com.android.internal.policy.DecorView{93b1c02 V.E...... R....... 0,0-1264,2780 aid=1 alpha=1.0 viewInfo = }[MainActivity] change focus to true
+HeapTask is not gc_task
+Installing profile for com.luaforge.studio.lxclua
+HeapTask is not gc_task
+HeapTask is not gc_task
+HeapTask is not gc_task
+---------------------------- PROCESS ENDED (17587) for package com.luaforge.studio.lxclua ----------------------------
+onFocusEvent false
+handleResized abandoned!
+com.luaforge.studio.lxclua/com.luaforge.studio.lxclua.MainActivity,This com.android.internal.policy.DecorView{93b1c02 V.E...... R....... 0,0-1264,2780 aid=1 alpha=1.0 viewInfo = }[MainActivity] change focus to false
+保活服务已创建
+保活服务启动
+Shutting down VM
+FATAL EXCEPTION: main
+Process: com.luaforge.studio.lxclua, PID: 17587
+java.lang.RuntimeException: Unable to start service com.luaforge.studio.lxclua.mcp.KeepAliveService@3053bca with Intent { xflg=0x4 cmp=com.luaforge.studio.lxclua/.mcp.KeepAliveService mCallingUid=10666 }: java.lang.SecurityException: Starting FGS with type dataSync callerApp=ProcessRecord{870f9d1 17587:com.luaforge.studio.lxclua/u0a666} targetSDK=35 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_DATA_SYNC] 
+	at android.app.ActivityThread.handleServiceArgs(ActivityThread.java:5910)
+	at android.app.ActivityThread.-$$Nest$mhandleServiceArgs(Unknown Source:0)
+	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:2942)
+	at android.os.Handler.dispatchMessage(Handler.java:116)
+	at android.os.Looper.loopOnce(Looper.java:306)
+	at android.os.Looper.loop(Looper.java:416)
+	at android.app.ActivityThread.main(ActivityThread.java:9999)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:613)
+	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1074)
+Caused by: java.lang.SecurityException: Starting FGS with type dataSync callerApp=ProcessRecord{870f9d1 17587:com.luaforge.studio.lxclua/u0a666} targetSDK=35 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_DATA_SYNC] 
+	at android.os.Parcel.createExceptionOrNull(Parcel.java:3369)
+	at android.os.Parcel.createException(Parcel.java:3353)
+	at android.os.Parcel.readException(Parcel.java:3336)
+	at android.os.Parcel.readException(Parcel.java:3278)
+	at android.app.IActivityManager$Stub$Proxy.setServiceForeground(IActivityManager.java:7298)
+	at android.app.Service.startForeground(Service.java:776)
+	at com.luaforge.studio.lxclua.mcp.KeepAliveService.onStartCommand(KeepAliveService.kt:60)
+	at android.app.ActivityThread.handleServiceArgs(ActivityThread.java:5887)
+	... 9 more
+Caused by: android.os.RemoteException: Remote stack trace:
+	at com.android.server.am.ActiveServices.validateForegroundServiceType(ActiveServices.java:3050)
+	at com.android.server.am.ActiveServices.setServiceForegroundInnerLocked(ActiveServices.java:2719)
+	at com.android.server.am.ActiveServices.setServiceForegroundLocked(ActiveServices.java:1959)
+	at com.android.server.am.ActivityManagerService.setServiceForeground(ActivityManagerService.java:15109)
+	at android.app.IActivityManager$Stub.onTransact(IActivityManager.java:3648)
+
+[OPLUS]FATAL EXCEPTION: main
+Process: com.luaforge.studio.lxclua, PID: 17587
+java.lang.RuntimeException: Unable to start service com.luaforge.studio.lxclua.mcp.KeepAliveService@3053bca with Intent { xflg=0x4 cmp=com.luaforge.studio.lxclua/.mcp.KeepAliveService mCallingUid=10666 }: java.lang.SecurityException: Starting FGS with type dataSync callerApp=ProcessRecord{870f9d1 17587:com.luaforge.studio.lxclua/u0a666} targetSDK=35 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_DATA_SYNC] 
+	at android.app.ActivityThread.handleServiceArgs(ActivityThread.java:5910)
+	at android.app.ActivityThread.-$$Nest$mhandleServiceArgs(Unknown Source:0)
+	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:2942)
+	at android.os.Handler.dispatchMessage(Handler.java:116)
+	at android.os.Looper.loopOnce(Looper.java:306)
+	at android.os.Looper.loop(Looper.java:416)
+	at android.app.ActivityThread.main(ActivityThread.java:9999)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:613)
+	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1074)
+Caused by: java.lang.SecurityException: Starting FGS with type dataSync callerApp=ProcessRecord{870f9d1 17587:com.luaforge.studio.lxclua/u0a666} targetSDK=35 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_DATA_SYNC] 
+	at android.os.Parcel.createExceptionOrNull(Parcel.java:3369)
+	at android.os.Parcel.createException(Parcel.java:3353)
+	at android.os.Parcel.readException(Parcel.java:3336)
+	at android.os.Parcel.readException(Parcel.java:3278)
+	at android.app.IActivityManager$Stub$Proxy.setServiceForeground(IActivityManager.java:7298)
+	at android.app.Service.startForeground(Service.java:776)
+	at com.luaforge.studio.lxclua.mcp.KeepAliveService.onStartCommand(KeepAliveService.kt:60)
+	at android.app.ActivityThread.handleServiceArgs(ActivityThread.java:5887)
+	... 9 more
+Caused by: android.os.RemoteException: Remote stack trace:
+	at com.android.server.am.ActiveServices.validateForegroundServiceType(ActiveServices.java:3050)
+	at com.android.server.am.ActiveServices.setServiceForegroundInnerLocked(ActiveServices.java:2719)
+	at com.android.server.am.ActiveServices.setServiceForegroundLocked(ActiveServices.java:1959)
+	at com.android.server.am.ActivityManagerService.setServiceForeground(ActivityManagerService.java:15109)
+	at android.app.IActivityManager$Stub.onTransact(IActivityManager.java:3648)
+
+App has crashed, executing crashmanager's UncaughtExceptionHandler
+java.lang.RuntimeException: Unable to start service com.luaforge.studio.lxclua.mcp.KeepAliveService@3053bca with Intent { xflg=0x4 cmp=com.luaforge.studio.lxclua/.mcp.KeepAliveService mCallingUid=10666 }: java.lang.SecurityException: Starting FGS with type dataSync callerApp=ProcessRecord{870f9d1 17587:com.luaforge.studio.lxclua/u0a666} targetSDK=35 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_DATA_SYNC] 
+	at android.app.ActivityThread.handleServiceArgs(ActivityThread.java:5910)
+	at android.app.ActivityThread.-$$Nest$mhandleServiceArgs(Unknown Source:0)
+	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:2942)
+	at android.os.Handler.dispatchMessage(Handler.java:116)
+	at android.os.Looper.loopOnce(Looper.java:306)
+	at android.os.Looper.loop(Looper.java:416)
+	at android.app.ActivityThread.main(ActivityThread.java:9999)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:613)
+	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1074)
+Caused by: java.lang.SecurityException: Starting FGS with type dataSync callerApp=ProcessRecord{870f9d1 17587:com.luaforge.studio.lxclua/u0a666} targetSDK=35 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_DATA_SYNC] 
+	at android.os.Parcel.createExceptionOrNull(Parcel.java:3369)
+	at android.os.Parcel.createException(Parcel.java:3353)
+	at android.os.Parcel.readException(Parcel.java:3336)
+	at android.os.Parcel.readException(Parcel.java:3278)
+	at android.app.IActivityManager$Stub$Proxy.setServiceForeground(IActivityManager.java:7298)
+	at android.app.Service.startForeground(Service.java:776)
+	at com.luaforge.studio.lxclua.mcp.KeepAliveService.onStartCommand(KeepAliveService.kt:60)
+	at android.app.ActivityThread.handleServiceArgs(ActivityThread.java:5887)
+	... 9 more
+Caused by: android.os.RemoteException: Remote stack trace:
+	at com.android.server.am.ActiveServices.validateForegroundServiceType(ActiveServices.java:3050)
+	at com.android.server.am.ActiveServices.setServiceForegroundInnerLocked(ActiveServices.java:2719)
+	at com.android.server.am.ActiveServices.setServiceForegroundLocked(ActiveServices.java:1959)
+	at com.android.server.am.ActivityManagerService.setServiceForeground(ActivityManagerService.java:15109)
+	at android.app.IActivityManager$Stub.onTransact(IActivityManager.java:3648)
+
+activity finished by caller: android.app.Activity.finish:7647 android.app.Activity.finish:7664 com.luaforge.studio.lxclua.ui.crash.CrashManager.install$lambda$0:101 com.luaforge.studio.lxclua.ui.crash.CrashManager$$ExternalSyntheticLambda0.uncaughtException:0 java.lang.ThreadGroup.uncaughtException:1102 java.lang.ThreadGroup.uncaughtException:1093 com.android.internal.os.RuntimeInitExtImpl.uncaughtExceptionExt:75 com.android.internal.os.RuntimeInit$LoggingHandler.uncaughtException:138 java.lang.Thread.dispatchUncaughtException:2436 <bottom of call stack> 
+Quit itself,  Pid:17587  StackTrace:com.luaforge.studio.lxclua.ui.crash.CrashManager.killCurrentProcess:226 com.luaforge.studio.lxclua.ui.crash.CrashManager.install$lambda$0:104 com.luaforge.studio.lxclua.ui.crash.CrashManager$$ExternalSyntheticLambda0.uncaughtException:0 java.lang.ThreadGroup.uncaughtException:1102 java.lang.ThreadGroup.uncaughtException:1093 com.android.internal.os.RuntimeInitExtImpl.uncaughtExceptionExt:75 com.android.internal.os.RuntimeInit$LoggingHandler.uncaughtException:138 java.lang.Thread.dispatchUncaughtException:2436 <bottom of call stack> <bottom of call stack> 

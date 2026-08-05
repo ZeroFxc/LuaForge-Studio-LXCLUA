@@ -524,6 +524,8 @@ class LuaUtil {
             while (entries.hasMoreElements()) {
                 val entry: ZipEntry = entries.nextElement()
                 val name = entry.getName()
+                // 跳过无效条目（name 为 null 会导致创建 null 文件夹）
+                if (name == null) continue
                 if (!name.startsWith(fileExt)) continue
                 val path = name
                 if (entry.isDirectory()) {

@@ -50,9 +50,8 @@ extern void luaX_pushincludefile(LexState *ls, const char *filename);
 extern void luaX_addalias(LexState *ls, TString *name, Token *tokens, int ntokens);
 
 
-/* maximum number of local variables per function (must be smaller
-   than 250, due to the bytecode format) */
-#define MAXVARS		200
+/* maximum number of local variables per function (LXCLUA: extended registers to 512) */
+#define MAXVARS		512
 
 
 /* because all strings are unified by the scanner, the parser
@@ -84,7 +83,7 @@ static void matchexpr (LexState *ls, expdesc *v);  /* match表达式的前向声
 static void trystat (LexState *ls, int line);     /* try语句的前向声明 */
 static void guardstat (LexState *ls, int line);   /* guard语句的前向声明 */
 static void withstat (LexState *ls, int line);    /* with语句的前向声明 */
-static void classstat (LexState *ls, int line, int class_flags, int isexport);   /* class语句的前向声明 */
+static void classstat (LexState *ls, int line, int class_flags, int isexport, int parent_class_reg);   /* class语句的前向声明 */
 static void namespacestat (LexState *ls, int line);
 static void declaration_stat (LexState *ls, int line);
 static void usingstat (LexState *ls);
@@ -188,11 +187,14 @@ typedef enum {
   SKW_ABSTRACT,
   SKW_FINAL,
   SKW_SEALED,    /* 密封类修饰符 */
+  SKW_SINGLETON,  /* singleton 单例修饰符 */
   /* array */
   SKW_ARRAY,     /* 数组关键字 */
   /* getter/setter */
   SKW_GET,       /* getter 属性访问器 */
   SKW_SET,       /* setter 属性访问器 */
+  SKW_OVERRIDE,    /* override 修饰符 */
+  SKW_AS,         /* as 安全类型转换 */
   /* 表达式相关 */
   SKW_NEW,
   SKW_SUPER,
@@ -224,8 +226,10 @@ typedef struct {
 static SoftKWDef soft_keywords[] = {
   /* abstract - 语句开头（abstract class）或类体内（abstract function）*/
   {"abstract",   SKW_ABSTRACT,   SOFTKW_CTX_STMT_BEGIN | SOFTKW_CTX_CLASS_BODY,    {TK_FUNCTION, TK_NAME, 0}, {'=', 0}, 0},
+  /* as - 安全类型转换运算符 */
+  {"as",         SKW_AS,         SOFTKW_CTX_EXPR,          {TK_NAME, 0}, {'=', 0}, 0},
   /* class - 语句开头，后面必须跟类名 */
-  {"class",      SKW_CLASS,      SOFTKW_CTX_STMT_BEGIN,    {TK_NAME, 0}, {'=', 0}, 0},
+  {"class",      SKW_CLASS,      SOFTKW_CTX_STMT_BEGIN | SOFTKW_CTX_CLASS_BODY,    {TK_NAME, 0}, {'=', 0}, 0},
   /* extends - 类继承上下文，后面必须跟类名 */
   {"extends",    SKW_EXTENDS,    SOFTKW_CTX_CLASS_INHERIT, {TK_NAME, 0}, {'=', 0}, 0},
   /* final - 语句开头（final class）或类体内（final function）*/
@@ -240,6 +244,8 @@ static SoftKWDef soft_keywords[] = {
   {"new",        SKW_NEW,        SOFTKW_CTX_EXPR,          {TK_NAME, 0}, {'=', 0}, 0},
   /* super - 表达式中，后面必须跟.或:或( */
   {"super",      SKW_SUPER,      SOFTKW_CTX_EXPR,          {'.', ':', '(', 0}, {'=', 0}, 0},
+  /* override - 类体内，后面跟function */
+  {"override",   SKW_OVERRIDE,   SOFTKW_CTX_CLASS_BODY,    {TK_FUNCTION, 0}, {'=', 0}, 0},
   /* private - 类体内，后面跟function或标识符名 */
   {"private",    SKW_PRIVATE,    SOFTKW_CTX_CLASS_BODY,    {TK_FUNCTION, TK_NAME, 0}, {'=', 0}, 0},
   /* protected - 类体内，后面跟function或标识符名 */
@@ -250,6 +256,8 @@ static SoftKWDef soft_keywords[] = {
   {"sealed",     SKW_SEALED,     SOFTKW_CTX_STMT_BEGIN,    {TK_NAME, 0}, {'=', 0}, 0},
   /* set - 类体内，setter属性访问器 */
   {"set",        SKW_SET,        SOFTKW_CTX_CLASS_BODY,    {TK_NAME, 0}, {'=', 0}, 0},
+  /* singleton - 语句开头（singleton class）单例类 */
+  {"singleton",  SKW_SINGLETON,  SOFTKW_CTX_STMT_BEGIN,    {TK_NAME, 0}, {'=', 0}, 0},
   /* static - 类体内，后面跟function或标识符名 */
   {"static",     SKW_STATIC,     SOFTKW_CTX_CLASS_BODY,    {TK_FUNCTION, TK_NAME, 0}, {'=', 0}, 0},
   /* trait - 语句开头，后面必须跟trait名 */
@@ -296,24 +304,38 @@ static unsigned int softkw_hash (const char *s) {
 */
 static void softkw_init (void) {
   if (softkw_initialized) return;
+  LUA_LOGD("[SOFTKW] softkw_init ENTRY");
   
   /* 清空哈希表 */
   for (int i = 0; i < SOFTKW_HASH_SIZE; i++) {
     softkw_hashtable[i] = NULL;
   }
-  
+  LUA_LOGD("[SOFTKW] softkw_init: hashtable cleared");
+
   /* 计算每个软关键字的哈希值并插入哈希表 */
-  for (int i = 0; soft_keywords[i].name != NULL; i++) {
+  int i;
+  for (i = 0; soft_keywords[i].name != NULL; i++) {
+    LUA_LOGD("[SOFTKW] softkw_init: [%d] BEFORE hash, name='%s'", i, soft_keywords[i].name);
     soft_keywords[i].hash = softkw_hash(soft_keywords[i].name);
+    LUA_LOGD("[SOFTKW] softkw_init: [%d] AFTER hash=%u, BEFORE hashtable insert", i, soft_keywords[i].hash);
     /* 使用开放寻址法处理冲突 */
     unsigned int idx = soft_keywords[i].hash % SOFTKW_HASH_SIZE;
+    int probe_count = 0;
     while (softkw_hashtable[idx] != NULL) {
       idx = (idx + 1) % SOFTKW_HASH_SIZE;
+      probe_count++;
+      if (probe_count > SOFTKW_HASH_SIZE) {
+        LUA_LOGD("[SOFTKW] softkw_init: [%d] FATAL: hashtable full, infinite probe loop!", i);
+        break;
+      }
     }
+    LUA_LOGD("[SOFTKW] softkw_init: [%d] AFTER hashtable insert at bucket[%d] (probes=%d)", i, idx, probe_count);
     softkw_hashtable[idx] = &soft_keywords[i];
   }
-  
+  LUA_LOGD("[SOFTKW] softkw_init: all keywords added (%d entries), checking soft_keywords[%d].name...", i, i);
+
   softkw_initialized = 1;
+  LUA_LOGD("[SOFTKW] softkw_init END");
 }
 
 
@@ -325,22 +347,27 @@ static void softkw_init (void) {
 **   软关键字定义指针，未找到返回 NULL
 */
 static SoftKWDef* softkw_find (const char *name) {
+  LUA_LOGD("[SOFTKW] softkw_find ENTRY name='%s' initialized=%d", name, softkw_initialized);
   if (!softkw_initialized) softkw_init();
   
   unsigned int h = softkw_hash(name);
   unsigned int idx = h % SOFTKW_HASH_SIZE;
   int count = 0;
+  LUA_LOGD("[SOFTKW] softkw_find: hash=%u idx=%u", h, idx);
   
   /* 开放寻址法查找 */
   while (softkw_hashtable[idx] != NULL && count < SOFTKW_HASH_SIZE) {
-    if (softkw_hashtable[idx]->hash == h && 
-        strcmp(softkw_hashtable[idx]->name, name) == 0) {
+    LUA_LOGD("[SOFTKW] softkw_find: bucket[%d] has '%s', comparing with '%s'", idx, softkw_hashtable[idx]->name, name);
+        if (softkw_hashtable[idx]->hash == h &&
+            strcmp(softkw_hashtable[idx]->name, name) == 0) {
+      LUA_LOGD("[SOFTKW] softkw_find: MATCH at bucket[%d]", idx);
       return softkw_hashtable[idx];
     }
     idx = (idx + 1) % SOFTKW_HASH_SIZE;
     count++;
   }
   
+  LUA_LOGD("[SOFTKW] softkw_find: NOT FOUND");
   return NULL;
 }
 
@@ -353,14 +380,22 @@ static SoftKWDef* softkw_find (const char *name) {
 **   软关键字定义指针，未找到返回 NULL
 */
 static SoftKWDef* softkw_findbyid (SoftKWID id) {
-  if (!softkw_initialized) softkw_init();
+  LUA_LOGD("[SOFTKW] softkw_findbyid ENTRY id=%d initialized=%d", id, softkw_initialized);
+  if (!softkw_initialized) {
+    LUA_LOGD("[SOFTKW] softkw_findbyid: calling softkw_init()");
+    softkw_init();
+    LUA_LOGD("[SOFTKW] softkw_findbyid: softkw_init returned");
+  }
   
   /* ID查找使用线性搜索（通常用于验证，不频繁调用） */
   for (int i = 0; soft_keywords[i].name != NULL; i++) {
+    LUA_LOGD("[SOFTKW] softkw_findbyid: checking[%d] id=%d name='%s'", i, soft_keywords[i].id, soft_keywords[i].name);
     if (soft_keywords[i].id == id) {
+      LUA_LOGD("[SOFTKW] softkw_findbyid: FOUND id=%d at index %d", id, i);
       return &soft_keywords[i];
     }
   }
+  LUA_LOGD("[SOFTKW] softkw_findbyid: NOT FOUND id=%d", id);
   return NULL;
 }
 
@@ -412,6 +447,7 @@ static int softkw_in_exclude (int lookahead, const int *tokens) {
 ** 返回值：
 **   软关键字 ID，不匹配返回 SKW_NONE
 */
+__attribute__((noinline))
 static SoftKWID softkw_check (LexState *ls, unsigned int context) {
   if (ls->t.token != TK_NAME) {
     return SKW_NONE;
@@ -436,6 +472,9 @@ static SoftKWID softkw_check (LexState *ls, unsigned int context) {
   } else {
     lookahead = luaX_lookahead(ls);
   }
+  
+  /* DEBUG */
+  { FILE* dbg = fopen("E:/debug_parser.log", "a"); if(dbg){ fprintf(dbg, "[DEBUG softkw_check] name='%s' id=%d context=0x%x lookahead=%d\n", name, def->id, context, lookahead); fclose(dbg); } }
   
   /* 检查排除列表 */
   if (softkw_in_exclude(lookahead, def->exclude_tokens)) {
@@ -479,16 +518,32 @@ static SoftKWID softkw_checknext (LexState *ls, unsigned int context) {
 **   0 - 不是
 */
 static int softkw_test (LexState *ls, SoftKWID id, unsigned int context) {
+  LUA_LOGD("[PARSER] softkw_test ENTRY id=%d context=%d token=%d ts=%p", id, context, ls->t.token, (void*)ls->t.seminfo.ts);
   if (ls->t.token != TK_NAME) {
     return 0;
   }
   
   SoftKWDef *def = softkw_findbyid(id);
-  if (def == NULL) {
+  LUA_LOGD("[PARSER] softkw_test: id=%d def=%p name='%s'", id, (void*)def, def ? def->name : "(null)");
+  if (!def || !def->name) {
+    return 0;
+  }
+  
+  /* 检查 ls->t.seminfo.ts 是否有效 - 避免 ARM64 strcmp 因为未对齐访问而崩溃 */
+  if (!ls->t.seminfo.ts) {
+    LUA_LOGD("[PARSER] softkw_test: ts is NULL, skip");
     return 0;
   }
   
   const char *name = getstr(ls->t.seminfo.ts);
+  if (!name) {
+    LUA_LOGD("[PARSER] softkw_test: name is NULL, skip");
+    return 0;
+  }
+  
+  LUA_LOGD("[PARSER] softkw_test: comparing name='%s' vs def='%s'", name, def->name);
+
+  /* 使用 ARM64-safe 逐字节 strcmp 替代 strcmp (通过 lprefix.h 宏劫持) */
   if (strcmp(name, def->name) != 0) {
     return 0;
   }
@@ -498,12 +553,15 @@ static int softkw_test (LexState *ls, SoftKWID id, unsigned int context) {
     return 0;
   }
   
-  /* 获取前瞻token（优先使用已缓存的lookahead，避免重复调用luaX_lookahead） */
+  /* 获取前瞻token */
   int lookahead;
   if (ls->lookahead.token != TK_EOS) {
     lookahead = ls->lookahead.token;
+    LUA_LOGD("[PARSER] softkw_test: cached lookahead=%d", lookahead);
   } else {
+    LUA_LOGD("[PARSER] softkw_test: calling luaX_lookahead");
     lookahead = luaX_lookahead(ls);
+    LUA_LOGD("[PARSER] softkw_test: luaX_lookahead returned %d", lookahead);
   }
   
   /* 检查排除列表 */
@@ -542,9 +600,19 @@ static int softkw_testnext (LexState *ls, SoftKWID id, unsigned int context) {
 /*
 ** Check that next token is 'c'.
 */
+__attribute__((noinline))
 static void check (LexState *ls, int c) {
-  if (ls->t.token != c)
+  if (ls->t.token != c) {
+    FILE *f = fopen("debug_check.txt", "a");
+    if (f) {
+      fprintf(f, "[DEBUG check] expected=%d('%c') got=%d('%c') line=%d\n",
+        c, (c >= 32 && c < 127) ? c : '?',
+        ls->t.token, (ls->t.token >= 32 && ls->t.token < 127) ? ls->t.token : '?',
+        ls->linenumber);
+      fclose(f);
+    }
     error_expected(ls, c);
+  }
 }
 
 
@@ -584,6 +652,7 @@ static int is_nametoken(int token);
 
 static TString *str_checkname (LexState *ls) {
   TString *ts;
+  LUA_LOGD("[PARSER] str_checkname: token=%d", ls->t.token);
   if (is_nametoken(ls->t.token)) {
      ts = ls->t.seminfo.ts;
      luaX_next(ls);
@@ -971,7 +1040,7 @@ static int newupvalue (FuncState *fs, TString *name, expdesc *v) {
   }
   else {
     up->instack = 0;
-    up->idx = cast_byte(v->u.info);
+    up->idx = (unsigned short)v->u.info;
     up->kind = prev->f->upvalues[v->u.info].kind;
     lua_assert(eqstr(name, prev->f->upvalues[v->u.info].name));
   }
@@ -1090,9 +1159,12 @@ static void singlevaraux (FuncState *fs, TString *n, expdesc *var, int base) {
 ** too.
 */
 static void singlevar (LexState *ls, expdesc *var) {
+  LUA_LOGD("[PARSER] singlevar ENTRY");
   TString *varname = str_checkname(ls);
+  LUA_LOGD("[PARSER] singlevar name='%s'", getstr(varname));
   FuncState *fs = ls->fs;
   singlevaraux(fs, varname, var, 1);
+  LUA_LOGD("[PARSER] singlevar aux DONE, v->k=%d", var->k);
   if (var->k == VVOID) {  /* global name? */
     expdesc key;
     singlevaraux(fs, ls->envn, var, 1);  /* get environment variable */
@@ -1139,7 +1211,7 @@ static void adjust_assign (LexState *ls, int nvars, int nexps, expdesc *e) {
   if (needed > 0)
     luaK_reserveregs(fs, needed);  /* registers for extra values */
   else  /* adding 'needed' is actually a subtraction */
-    fs->freereg = cast_byte(fs->freereg + needed);  /* remove extra values */
+    fs->freereg = (fs->freereg + needed);  /* remove extra values */
 }
 
 
@@ -1579,6 +1651,7 @@ void statlist (LexState *ls) {
 
 static void fieldsel (LexState *ls, expdesc *v) {
   /* fieldsel -> ['.' | ':' | '::'] NAME */
+  LUA_LOGD("[PARSER] fieldsel: token=%d", ls->t.token);
   FuncState *fs = ls->fs;
   expdesc key;
   luaK_exp2anyregup(fs, v);
@@ -2467,7 +2540,7 @@ void parlist (LexState *ls, TString **varargname) {
     } while (!isvararg && testnext(ls, ','));
   }
   /* 参数已在循环中逐个激活，此处只需设置 numparams 和 vararg 标记 */
-  f->numparams = cast_byte(fs->nactvar);
+  f->numparams = fs->nactvar;
   if (isvararg)
     setvararg(fs, f->numparams);  /* declared vararg */
 }
@@ -2523,6 +2596,7 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
 
   checknext(ls, '(');
 
+  int method_added_self = 0;
   if (ismethod) {
       int has_self = 0;
       if (ls->t.token == TK_NAME) {
@@ -2533,12 +2607,26 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
         new_localvarliteral(ls, "self");
         adjustlocalvars(ls, 1);
         luaK_reserveregs(&new_fs, 1);  /* 为self参数分配寄存器 */
+        method_added_self = 1;
       }
   }
   
   TString *varargname = NULL;
   parlist(ls, &varargname);
   checknext(ls, ')');
+
+  /* 修复：如果自动添加了self参数，确保numparams包含self */
+  if (method_added_self) {
+      /* parlist 在末尾设置了 f->numparams = fs->nactvar，
+         但如果由于某种原因 self 没有被计入，手动修正。
+         这里我们强制确保第一个局部变量是 self 且计入 numparams。
+         实际上 fs->nactvar 应该已经包含 self，所以 numparams 应该已经正确。
+         但保险起见我们验证一下，不一致时修正。 */
+      int expected = new_fs.nactvar;
+      if ((int)new_fs.f->numparams < expected) {
+          new_fs.f->numparams = cast_byte(expected);
+      }
+  }
 
   {
      int i;
@@ -2889,7 +2977,7 @@ static void lambda_parlist(LexState *ls, TString **varargname) {
         } while (!f->is_vararg && testnext(ls, ','));
     }
     /* 参数已在循环中逐个激活 */
-    f->numparams = cast_byte(fs->nactvar);
+    f->numparams = fs->nactvar;
 }
 
 
@@ -2930,12 +3018,15 @@ static void lambda_body(LexState *ls, expdesc *e, int line) {
 static int explist (LexState *ls, expdesc *v) {
   /* explist -> expr { ',' expr } */
   int n = 1;  /* at least one expression */
+  LUA_LOGD("[PARSER] explist START");
   expr(ls, v);
+  LUA_LOGD("[PARSER] explist: first expr done");
   while (testnext(ls, ',')) {
     luaK_exp2nextreg(ls->fs, v);
     expr(ls, v);
     n++;
   }
+  LUA_LOGD("[PARSER] explist END, n=%d", n);
   return n;
 }
 
@@ -3197,6 +3288,15 @@ static void parse_generic_arrow_body(LexState *ls, FuncState *factory_fs, expdes
 
 static void primaryexp (LexState *ls, expdesc *v) {
   /* primaryexp -> NAME | '(' expr ')' | STRING | constructor | NEW | SUPER */
+  LUA_LOGD("[PARSER] primaryexp entry token=%d line=%d", ls->t.token, ls->linenumber);
+  {
+    FILE *fl = fopen("C:\\lex_trace_primary.txt", "a");
+    if (fl) {
+      fprintf(fl, "[PRIMARYEXP] entry token=%d TK_ASTPARSER=%d TK_NAME=%d TK_RAWSTRING=%d\n",
+        ls->t.token, (int)TK_ASTPARSER, (int)TK_NAME, (int)TK_RAWSTRING);
+      fflush(fl); fclose(fl);
+    }
+  }
   switch (ls->t.token) {
     case '(': {
       int line = ls->linenumber;
@@ -3252,7 +3352,7 @@ static void primaryexp (LexState *ls, expdesc *v) {
          }
 
          adjustlocalvars(ls, nparams);
-         new_fs.f->numparams = cast_byte(new_fs.nactvar);
+         new_fs.f->numparams = new_fs.nactvar;
          if (new_fs.f->is_vararg)
             setvararg(&new_fs, new_fs.f->numparams);
          luaK_reserveregs(&new_fs, new_fs.nactvar);
@@ -3384,31 +3484,44 @@ static void primaryexp (LexState *ls, expdesc *v) {
     }
     case TK_NAME: {
       /* 使用软关键字系统检查 match 表达式 */
-      if (softkw_test(ls, SKW_MATCH, SOFTKW_CTX_EXPR)) {
+      LUA_LOGD("[PARSER] primaryexp TK_NAME: name='%s'", getstr(ls->t.seminfo.ts));
+    LUA_LOGD("[PARSER] primaryexp: calling softkw_test MATCH");
+    if (softkw_test(ls, SKW_MATCH, SOFTKW_CTX_EXPR)) {
+        LUA_LOGD("[PARSER] primaryexp: softkw MATCH");
         matchexpr(ls, v);
         return;
       }
-      /* 使用软关键字系统检查 new */
-      if (softkw_test(ls, SKW_NEW, SOFTKW_CTX_EXPR)) {
+      LUA_LOGD("[PARSER] primaryexp: softkw_test MATCH returned 0");
+    /* 使用软关键字系统检查 new */
+    LUA_LOGD("[PARSER] primaryexp: calling softkw_test NEW");
+    if (softkw_test(ls, SKW_NEW, SOFTKW_CTX_EXPR)) {
         /* onew ClassName(args...) - 创建类实例 */
+        LUA_LOGD("[PARSER] primaryexp: softkw NEW");
         newexpr(ls, v);
         return;
       }
-      /* 使用软关键字系统检查 osuper（需要前瞻 . 或 :） */
-      if (softkw_test(ls, SKW_SUPER, SOFTKW_CTX_EXPR)) {
+      LUA_LOGD("[PARSER] primaryexp: softkw_test NEW returned 0");
+    /* 使用软关键字系统检查 osuper（需要前瞻 . 或 :） */
+    LUA_LOGD("[PARSER] primaryexp: calling softkw_test SUPER");
+    if (softkw_test(ls, SKW_SUPER, SOFTKW_CTX_EXPR)) {
         /* osuper.method 或 osuper:method - 调用父类方法 */
+        LUA_LOGD("[PARSER] primaryexp: softkw SUPER");
         /* Check if 'self' exists in scope before treating as keyword */
         expdesc self_exp;
         TString *self_name = luaS_newliteral(ls->L, "self");
         singlevaraux(ls->fs, self_name, &self_exp, 1);
+        LUA_LOGD("[PARSER] primaryexp: SUPER self checked, k=%d", self_exp.k);
 
         if (self_exp.k != VVOID) {
            superexpr(ls, v);
            return;
         }
       }
-      /* 普通标识符 */
-      singlevar(ls, v);
+      LUA_LOGD("[PARSER] primaryexp: softkw_test SUPER returned 0");
+    /* 普通标识符 */
+    LUA_LOGD("[PARSER] primaryexp: calling singlevar for name='%s'", getstr(ls->t.seminfo.ts));
+    singlevar(ls, v);
+      LUA_LOGD("[PARSER] primaryexp: singlevar DONE, v->k=%d", v->k);
       return;
     }
     case TK_TYPE_INT:
@@ -3714,7 +3827,7 @@ static void primaryexp (LexState *ls, expdesc *v) {
       }
 
       adjustlocalvars(ls, nparams);
-      new_fs.f->numparams = cast_byte(new_fs.nactvar);
+      new_fs.f->numparams = new_fs.nactvar;
       if (new_fs.f->is_vararg)
         setvararg(&new_fs, new_fs.f->numparams);
       luaK_reserveregs(&new_fs, new_fs.nactvar);
@@ -3810,7 +3923,9 @@ static void suffixedexp (LexState *ls, expdesc *v) {
   int line = ls->linenumber;
   int opt_jumps = NO_JUMP;
   primaryexp(ls, v);
+  LUA_LOGD("[PARSER] suffixedexp: primaryexp DONE, v->k=%d token=%d", v->k, ls->t.token);
   for (;;) {
+    LUA_LOGD("[PARSER] suffixedexp LOOP: token=%d line=%d", ls->t.token, ls->linenumber);
     switch (ls->t.token) {
       case TK_OPTCHAIN: {  /* '?.' 可选链字段访问 */
         expdesc key;
@@ -4293,9 +4408,26 @@ static void parse_test_value (LexState *ls, expdesc *v, int line, int allow_or) 
 static void simpleexp (LexState *ls, expdesc *v) {
   /* simpleexp -> FLT | INT | NIL | TRUE | FALSE | ... |
                   constructor | FUNCTION body | suffixedexp */
+  LUA_LOGD("[PARSER] simpleexp entry token=%d line=%d", ls->t.token, ls->linenumber);
+  {
+    FILE *fl = fopen("C:\\lex_trace_simple.txt", "a");
+    if (fl) {
+      fprintf(fl, "[SIMPLEEXP] entry token=%d TK_ASTPARSER=%d TK_NAME=%d TK_RAWSTRING=%d\n",
+        ls->t.token, (int)TK_ASTPARSER, (int)TK_NAME, (int)TK_RAWSTRING);
+      fflush(fl); fclose(fl);
+    }
+  }
   switch (ls->t.token) {
     case TK_IF: {
       ifexpr(ls, v);
+      return;
+    }
+    case TK_ASTPARSER: {
+      /* astparser(...) expression: 必须走 primaryexp 的 TK_ASTPARSER case
+       * （在 primaryexp 中会调 astparserstat 解析源码字符串并返回闭包）。
+       * 不能落 default→suffixedexp 这条路径，因为某些上下文（如 localstat
+       * 的 expr 解析入口）可能绕过 suffixedexp/primaryexp，导致无法命中。 */
+      suffixedexp(ls, v);
       return;
     }
     case TK_FLT: {
@@ -5269,6 +5401,7 @@ static const struct {
    {3, 3}, {3, 3}, {3, 3},   /* ~=, >, >= */
    {3, 3},                   /* <=> (spaceship) */
    {3, 3},                   /* is */
+   {3, 3},                   /* as */
    {3, 3},                   /* in */
    {2, 2}, {1, 1},           /* and, or */
    {1, 1},                   /* ?? (null coalescing, right associative) */
@@ -5326,6 +5459,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   BinOpr op;
   UnOpr uop;
   enterlevel(ls);
+  LUA_LOGD("[PARSER] subexpr ENTRY limit=%d token=%d line=%d", limit, ls->t.token, ls->linenumber);
 
   if (ls->t.token == '#' && luaX_lookahead(ls) == TK_NAME && strcmp(getstr(ls->lookahead.seminfo.ts), "embed") == 0) {
       luaX_next(ls); /* skip '#' */
@@ -5431,6 +5565,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   /* 保存表达式起始行号，用于防止跨行中缀检测（必须在 simpleexp/前缀之前保存） */
   int expr_line = ls->linenumber;
   uop = getunopr(ls->t.token);
+  LUA_LOGD("[PARSER] subexpr: uop=%d expr_line=%d", uop, expr_line);
   if (uop != OPR_NOUNOPR) {  /* prefix (unary) operator? */
     int line = ls->linenumber;
     luaX_next(ls);  /* skip operator */
@@ -5458,9 +5593,17 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   }
   else {
     simpleexp(ls, v);
+    LUA_LOGD("[PARSER] subexpr: simpleexp DONE, v->k=%d token=%d line=%d", v->k, ls->t.token, ls->linenumber);
   }
   /* expand while operators have priorities higher than 'limit' */
   op = getbinopr(ls->t.token);
+  LUA_LOGD("[PARSER] subexpr: first op=%d limit=%d token=%d", op, limit, ls->t.token);
+  /* 检测 as 安全类型转换运算符（必须在 infix 检测之前，避免被误识别为 infix 调用） */
+  if (op == OPR_NOBINOPR && ls->t.token == TK_NAME &&
+      strcmp(getstr(ls->t.seminfo.ts), "as") == 0 &&
+      luaX_lookahead(ls) == TK_NAME) {
+    op = OPR_AS;
+  }
   /* 检测中缀函数调用: expr NAME expr => expr:NAME(expr)
      要求方法名与表达式起始在同一行，防止跨行误检测
      且要求expression不是已完成的函数调用(VCALL) */
@@ -5487,6 +5630,12 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
         ls->fs->freereg = base + 1;
         /* 重新检测后续运算符（仅在同一行内继续链） */
         op = getbinopr(ls->t.token);
+        /* 检测 as 安全类型转换（必须在 infix 检测之前） */
+        if (op == OPR_NOBINOPR && ls->t.token == TK_NAME &&
+            strcmp(getstr(ls->t.seminfo.ts), "as") == 0 &&
+            luaX_lookahead(ls) == TK_NAME) {
+          op = OPR_AS;
+        }
         if (op == OPR_NOBINOPR && ls->t.token == TK_NAME && ls->t.linenumber == line &&
             is_infix_expr_start(luaX_lookahead(ls)) && is_same_line_infix(ls)) {
           op = OPR_INFIX;
@@ -5498,6 +5647,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     expdesc v2;
     BinOpr nextop;
     int line = ls->linenumber;
+    LUA_LOGD("[PARSER] subexpr LOOP op=%d prio_left=%d limit=%d token=%d line=%d", op, priority[op].left, limit, ls->t.token, ls->linenumber);
     if (op == OPR_INFIX) {
       /* 中缀函数调用: receiver NAME argument => receiver:NAME(argument) */
       TString *method = ls->t.seminfo.ts;
@@ -5562,8 +5712,16 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
         luaK_posfix(ls->fs, op, v, &v2, line);
       } else {
         luaK_infix(ls->fs, op, v);
-        /* read sub-expression with higher priority */
-        nextop = subexpr(ls, &v2, priority[op].right);
+        /* is 运算符特殊处理：区分类型关键字和类名 */
+        if (op == OPR_IS && is_type_token(ls->t.token) && ls->t.token != TK_NAME) {
+          /* 类型关键字：int/float/bool/void/char/long → 字符串常量 → OP_IS */
+          TString *ts = str_checkname(ls);
+          codestring(&v2, ts);
+          nextop = getbinopr(ls->t.token);
+        } else {
+          /* read sub-expression with higher priority */
+          nextop = subexpr(ls, &v2, priority[op].right);
+        }
         luaK_posfix(ls->fs, op, v, &v2, line);
       }
       op = nextop;
@@ -5578,13 +5736,16 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
       }
     }
   }
+  LUA_LOGD("[PARSER] subexpr EXIT limit=%d nextop=%d token=%d", limit, op, ls->t.token);
   leavelevel(ls);
   return op;  /* return first untreated operator */
 }
 
 
 void expr (LexState *ls, expdesc *v) {
+  LUA_LOGD("[PARSER] expr START, token=%d line=%d", ls->t.token, ls->linenumber);
   subexpr(ls, v, 0);
+  LUA_LOGD("[PARSER] expr END, token=%d", ls->t.token);
   if (ls->t.token == '?') {
     /* printf("DEBUG: Ternary found at line %d\n", ls->linenumber); */
     int escape = NO_JUMP;
@@ -5822,6 +5983,12 @@ static BinOpr cond_subexpr (LexState *ls, expdesc *v, int limit) {
   else cond_simpleexp(ls, v);
   /* expand while operators have priorities higher than 'limit' */
   op = getbinopr(ls->t.token);
+  /* 检测 as 安全类型转换运算符（必须在 infix 检测之前） */
+  if (op == OPR_NOBINOPR && ls->t.token == TK_NAME &&
+      strcmp(getstr(ls->t.seminfo.ts), "as") == 0 &&
+      luaX_lookahead(ls) == TK_NAME) {
+    op = OPR_AS;
+  }
   /* 检测中缀函数调用 */
   if (op == OPR_NOBINOPR && ls->t.token == TK_NAME &&
       ls->t.linenumber == cond_expr_line) {
@@ -6743,38 +6910,39 @@ static void parse_pattern(LexState *ls, expdesc *ctrl, int *next_check_jump, int
     else if (ls->t.token == TK_NAME && luaX_lookahead(ls) != '=') {
        TString *name = str_checkname(ls);
        int reg = luaY_nvarstack(fs);  /* actual register */
-       printf("[DBG] parse_pattern var_bind: name=%s nactvar=%d freereg=%d reg=%d ctrl->u.info=%d\n",
-              getstr(name), fs->nactvar, fs->freereg, reg, ctrl->u.info);
        /* 使用 insert_localvar 在 nactvar 位置插入变量，确保 actvar/nactvar 对齐 */
        int vidx = insert_localvar(ls, name, reg);
-       { FILE *dbg = fopen("E:/Soft/Proje/LXCLUA-NCore/lua/debug_match.log", "a");
-         fprintf(dbg, "[DEBUG parse_pattern] after insert_localvar: nactvar=%d freereg=%d\n",
-                fs->nactvar, fs->freereg);
-         fclose(dbg); }
        if (fs->freereg < fs->nactvar) fs->freereg = fs->nactvar;
        if (reg != ctrl->u.info) {
-          { FILE *dbg = fopen("E:/Soft/Proje/LXCLUA-NCore/lua/debug_match.log", "a");
-            fprintf(dbg, "[DEBUG parse_pattern] generating MOVE %d %d\n", reg, ctrl->u.info);
-            fclose(dbg); }
           luaK_codeABC(fs, OP_MOVE, reg, ctrl->u.info, 0);
-       } else {
-          { FILE *dbg = fopen("E:/Soft/Proje/LXCLUA-NCore/lua/debug_match.log", "a");
-            fprintf(dbg, "[DEBUG parse_pattern] no MOVE needed (reg == ctrl->u.info)\n");
-            fclose(dbg); }
        }
        /* 变量绑定总是匹配成功，跳转到分支体（如果提供了success_jump） */
        if (success_jump != NULL)
          luaK_concat(fs, success_jump, luaK_jump(fs));
     }
-    /* --- 类型模式：is TypeName --- */
+    /* --- 类型模式：is TypeName 或 is ClassName --- */
     else if (ls->t.token == TK_IS) {
        luaX_next(ls); /* skip 'is' */
-       TString *type_name = str_checkname(ls);
-       int type_k = luaK_stringK(fs, type_name);
-       /* OP_IS: 检查 R[ctrl] 的类型是否等于 K[type_k] */
-       /* k=0 表示：类型匹配时跳过下一条指令（JMP），不匹配时执行JMP跳转到next_check */
-       luaK_codeABCk(fs, OP_IS, ctrl->u.info, type_k, 0, 0);
-       luaK_concat(fs, &current_false_jump, luaK_jump(fs));
+       /* 区分类型关键字和类名 */
+       if (is_type_token(ls->t.token) && ls->t.token != TK_NAME) {
+         /* 类型关键字：int/float/bool/void/char/long → 使用 OP_IS */
+         TString *type_name = str_checkname(ls);
+         int type_k = luaK_stringK(fs, type_name);
+         /* OP_IS: 检查 R[ctrl] 的类型是否等于 K[type_k] */
+         /* k=0 表示：类型匹配时跳过下一条指令（JMP），不匹配时执行JMP跳转到next_check */
+         luaK_codeABCk(fs, OP_IS, ctrl->u.info, type_k, 0, 0);
+         luaK_concat(fs, &current_false_jump, luaK_jump(fs));
+       }
+       else {
+         /* 类名：解析为表达式，使用 OP_INSTANCEOF */
+         expdesc class_exp;
+         expr(ls, &class_exp);
+         int class_reg = luaK_exp2anyreg(fs, &class_exp);
+         /* OP_INSTANCEOF: 检查 R[ctrl] instanceof R[class_reg] */
+         /* k=0 表示：匹配时跳过下一条指令（JMP），不匹配时执行JMP跳转到next_check */
+         luaK_codeABCk(fs, OP_INSTANCEOF, ctrl->u.info, class_reg, 0, 0);
+         luaK_concat(fs, &current_false_jump, luaK_jump(fs));
+       }
        /* 类型匹配成功后跳转到分支体（如果提供了success_jump） */
        if (success_jump != NULL)
          luaK_concat(fs, success_jump, luaK_jump(fs));
@@ -6922,9 +7090,6 @@ static void match_body (LexState *ls, expdesc *v, int is_expr) {
   int result_reg = -1;
   int line = ls->linenumber;  /* 记录 match 关键字所在行号 */
 
-  printf("[DBG] match_body ENTER is_expr=%d nactvar=%d freereg=%d\n",
-         is_expr, fs->nactvar, fs->freereg);
-
   luaX_next(ls);  /* skip MATCH */
 
   enterblock(fs, &bl, 1); /* isloop=1 to support break */
@@ -6938,8 +7103,6 @@ static void match_body (LexState *ls, expdesc *v, int is_expr) {
   if (is_expr) {
     result_reg = fs->freereg;
     luaK_reserveregs(fs, 1);
-    printf("[DBG] match_body result_reg=%d freereg=%d nactvar=%d\n",
-           result_reg, fs->freereg, fs->nactvar);
   }
 
   if(!testnext(ls, TK_DO)){
@@ -6973,10 +7136,8 @@ static void match_body (LexState *ls, expdesc *v, int is_expr) {
 
       /* 可选守卫条件 */
       if (testnext(ls, TK_IF)) {
-         printf("[DBG] match_body guard condition: nactvar=%d freereg=%d\n", fs->nactvar, fs->freereg);
          expdesc cond;
          expr(ls, &cond);
-         printf("[DBG] match_body guard cond: k=%d u.info=%d t=%d f=%d\n", cond.k, cond.u.info, cond.t, cond.f);
          luaK_goiftrue(fs, &cond);
          luaK_concat(fs, &next_check_jump, cond.f);
       }
@@ -6985,11 +7146,8 @@ static void match_body (LexState *ls, expdesc *v, int is_expr) {
       if (testnext(ls, TK_ARROW)) {
          expdesc e;
          expr(ls, &e);
-         printf("[DBG] match_body body expr: k=%d u.info=%d t=%d f=%d result_reg=%d freereg=%d\n",
-                e.k, e.u.info, e.t, e.f, result_reg, fs->freereg);
          if (is_expr) {
            /* 表达式模式：将结果存入结果寄存器 */
-           printf("[DBG] match_body calling luaK_exp2reg with reg=%d\n", result_reg);
            luaK_exp2reg(fs, &e, result_reg);
          } else {
            /* 语句模式：评估表达式（副作用），不返回 */
@@ -7038,21 +7196,16 @@ static void match_body (LexState *ls, expdesc *v, int is_expr) {
 
   leaveblock(fs);
 
-  printf("[DBG] match_body after leaveblock: nactvar=%d freereg=%d result_reg=%d\n",
-         fs->nactvar, fs->freereg, result_reg);
-
   /* 表达式模式：设置返回值 */
   if (is_expr) {
     /* 离开块后 nactvar 恢复到外部块的状态，需要将结果移动到外部块的变量基址，
     ** 以便后续 local 赋值等操作能正确获取结果 */
     int target_reg = fs->nactvar;
-    printf("[DBG] match_body result: target_reg=%d result_reg=%d\n",
-           target_reg, result_reg);
     if (result_reg != target_reg) {
       luaK_codeABC(fs, OP_MOVE, target_reg, result_reg, 0);
     }
     init_exp(v, VNONRELOC, target_reg);
-    fs->freereg = cast_byte(target_reg + 1);
+    fs->freereg = (target_reg + 1);
   }
 }
 
@@ -8374,6 +8527,7 @@ static void arraydestructuring (LexState *ls) {
 }
 
 static void localstat (LexState *ls, int isexport) {
+  LUA_LOGD("[PARSER] localstat START, isexport=%d", isexport);
   if (ls->t.token == '{') {
     destructuring(ls);
     return;
@@ -8397,6 +8551,7 @@ static void localstat (LexState *ls, int isexport) {
   
   do {
     TString *varname = str_checkname(ls);
+    LUA_LOGD("[PARSER] localstat: varname='%s' nvars=%d", getstr(varname), nvars);
     /* 检查变量是否已经存在 */
     if (isconst) {
       /* 对于const声明，检查变量是否已经存在于当前作用域 */
@@ -8427,8 +8582,11 @@ static void localstat (LexState *ls, int isexport) {
     }
     nvars++;
   } while (testnext(ls, ','));
+  LUA_LOGD("[PARSER] localstat: after varlist, nvars=%d, current token=%d", nvars, ls->t.token);
   if (testnext(ls, '=')) {
+    LUA_LOGD("[PARSER] localstat: parsing RHS expression");
     nexps = explist(ls, &e);
+    LUA_LOGD("[PARSER] localstat: RHS done, nexps=%d", nexps);
     if (nvars == nexps) {
        Vardesc *lastvar = getlocalvardesc(fs, vidx);
        check_type_compatibility(ls, lastvar->vd.hint, &e);
@@ -8454,6 +8612,7 @@ static void localstat (LexState *ls, int isexport) {
     adjustlocalvars(ls, nvars);
   }
   checktoclose(fs, toclose);
+  LUA_LOGD("[PARSER] localstat END, nvars=%d", nvars);
 }
 
 
@@ -8522,7 +8681,7 @@ static void globalnames (LexState *ls, lu_byte defkind) {
   } while (testnext(ls, ','));
   if (testnext(ls, '='))  /* initialization? */
     initglobal(ls, nvars, lastidx - nvars + 1, 0, ls->linenumber);
-  fs->nactvar = cast_short(fs->nactvar + nvars);  /* activate declaration */
+  fs->nactvar = (fs->nactvar + nvars);  /* activate declaration */
 }
 
 
@@ -9492,6 +9651,14 @@ static void asm_parse_body (LexState *ls, FuncState *fs, AsmContext *ctx, int li
 ** 语法: astparser( Lua代码 )
 */
 
+/* sentinel marker: 标记 string-mode astparser CClosure 的 upvalue2 为"延迟模式"
+ * （与原路径 inputmode=ast 产生的 CClosure (upvalue2=NULL) 区分）
+ * 声明为全局，last_parse.c 的延迟模式也需引用同一地址作为 sentinel。
+ * 放在 astparser_runner 之前以便可见。 */
+/* AstChunk* 与 sentinel 比较时，避免不同指针类型比较告警：
+ * AstChunk chunk; sentinel 用 char[]，比较时 cast 到 const void* */
+char astparser_string_mode_sentinel[1];  /* 地址作为 sentinel，值无意义 */
+
 
 /*
 ** astparser_runner - C 闭包回调函数
@@ -9504,11 +9671,175 @@ static void asm_parse_body (LexState *ls, FuncState *fs, AsmContext *ctx, int li
 ** 返回值：
 **   返回 Lua 闭包执行的结果数量
 */
+
+/*
+** 设置 AST Lua table 的 metatable（使 tbl:unparse() 等方法可用）
+** 与 lastlib.c parse_src_to_ast_table 保持一致：
+**   meta.__index = ast 模块表（registry["ASTLIB_MODULE_TABLE"]）
+** metatable 缓存于 registry["ASTLIB_META_AST_TABLE"]，避免每次重建
+*/
+static void set_ast_metatable(lua_State *L, int tbl_idx) {
+  tbl_idx = lua_absindex(L, tbl_idx);
+  /* 尝试从缓存取 metatable */
+  lua_getfield(L, LUA_REGISTRYINDEX, "ASTLIB_META_AST_TABLE");
+  if (!lua_istable(L, -1)) {
+    lua_pop(L, 1);  /* 弹 nil */
+    lua_newtable(L);  /* 新 meta */
+    lua_getfield(L, LUA_REGISTRYINDEX, "ASTLIB_MODULE_TABLE");
+    if (lua_istable(L, -1)) {
+      lua_setfield(L, -2, "__index");  /* meta.__index = astmod */
+    } else {
+      lua_pop(L, 1);  /* astmod 未注册：不设 __index，用户仍可用 ast.xxx(tbl) 形式 */
+    }
+    lua_pushvalue(L, -1);
+    lua_setfield(L, LUA_REGISTRYINDEX, "ASTLIB_META_AST_TABLE");  /* 缓存 */
+  }
+  /* -1: metatable */
+  lua_setmetatable(L, tbl_idx);
+}
+
 int astparser_runner (lua_State *L) {
   Proto *p = (Proto *)lua_touserdata(L, lua_upvalueindex(1));
   AstChunk *chunk = (AstChunk *)lua_touserdata(L, lua_upvalueindex(2));
   StkId func = L->ci->func.p;
   int nargs = cast_int(L->top.p - (func + 1));
+
+  /* ============================================================
+   * 延迟模式（string-mode astparser("source") / astparser([[src]]) 路径）：
+   * upvalue[2] == &astparser_string_mode_sentinel 表示延迟模式，
+   * upvalue[1] 是 registry 中 serialized_ast_table 的整数引用。
+   * 这种模式下 parse-time 只做 parse+serialize，codegen 放到运行时，确保 codegen 路径
+   * 与 inputmode=ast 完全一致（避免 stack-local Dyndata 导致的 UB 与反序列化 bug）。
+   * ============================================================ */
+  if ((const void*)chunk == (const void*)astparser_string_mode_sentinel) {
+    int ast_ref = (int)(uintptr_t)p;
+
+    /* 检测选项 */
+    int want_ast = 0;
+    int inputmode_ast = 0;
+    if (nargs >= 1 && lua_istable(L, 1)) {
+      lua_getfield(L, 1, "ast");
+      want_ast = lua_toboolean(L, -1);
+      lua_pop(L, 1);
+      lua_getfield(L, 1, "inputmode");
+      if (lua_isstring(L, -1) && strcmp(lua_tostring(L, -1), "ast") == 0) {
+        inputmode_ast = 1;
+      }
+      lua_pop(L, 1);
+    }
+
+    /* 从 registry 取出 serialized AST table */
+    lua_rawgeti(L, LUA_REGISTRYINDEX, ast_ref);
+    if (!lua_istable(L, -1)) {
+      lua_pop(L, 1);
+      return luaL_error(L, "astparser: serialized AST not found in registry");
+    }
+
+    /* {ast=true} → 直接返回序列化的 AST table（与原路径一致） */
+    if (want_ast || inputmode_ast) {
+      /* inputmode=ast 语义要求先"执行 inner→得到 AST table"，我们直接把它 push 到返回位置 */
+      if (inputmode_ast) {
+        /* 先返回 AST table，再走 ast→closure 的变换：把 table 留在栈顶供后续 codegen */
+        /* inputmode_ast 会在下面继续复用现有 codegen 逻辑 */
+      } else {
+        /* want_ast: 直接返回 table（1 返回值），从 registry 取出的 table 在栈顶，留在那里 */
+        set_ast_metatable(L, -1);
+        luaL_unref(L, LUA_REGISTRYINDEX, ast_ref);  /* 用完释放引用 */
+        /* 将当前 CClosure upvalue 改为 (NULL,NULL)，防止后续调用再访问已释放的 ast_ref */
+        {
+          CClosure *cc = clCvalue(s2v(func));
+          /* upvalue 是 lightuserdata（非 collectable），无需 write barrier */
+          setpvalue(&cc->upvalue[0], NULL);
+          setpvalue(&cc->upvalue[1], NULL);
+        }
+        return 1;
+      }
+    }
+
+    /* codegen：复用 inputmode=ast 路径的核心逻辑（已验证无问题） */
+    if (!inputmode_ast) {
+      /* 默认模式：从 AST table 反序列化+codegen，返回最终运行闭包 */
+    }
+    /* 不管是 inputmode=ast 还是默认模式，现在栈顶都是 serialized AST table，直接走同一套 codegen */
+    {
+      AstChunk *new_chunk = ast_deserialize_from_lua(L, -1);
+      new_chunk->main_func->is_vararg = 1;
+      Dyndata temp_dyd;
+      memset(&temp_dyd, 0, sizeof(temp_dyd));
+      Proto *new_p = luaY_codegen_chunk(L, new_chunk, &temp_dyd);
+      ast_pool_free(new_chunk->pool);
+      luaM_free(L, new_chunk->pool);
+      lua_pop(L, 1);  /* 弹出 AST table */
+
+      /* ============================================================
+       * 缓存已 codegen 的结果，避免同一 CClosure 反复调用时反复 deserialize/codegen。
+       * 将当前 CClosure 的两个 upvalue 改写成：
+       *   upvalue[0] = new_p (Proto*)  [lightuserdata]
+       *   upvalue[1] = NULL            [标记非 delay 模式]
+       * 这样下次调用同一 CClosure 时，chunk != sentinel，会走下方「原路径」分支，
+       * 直接用 new_p 生成 LuaClosure 执行，不再访问 registry ast_ref。
+       * 改写完成后立即 luaL_unref(ast_ref)，避免泄漏 registry 引用。
+       *
+       * inputmode_ast 分支：同样改写 upvalue（当前 CClosure 用完即弃，改为 NULL），
+       * 但返回的是新包装的 CClosure(new_p,NULL)，不是当前这个。
+       * ============================================================ */
+      {
+        CClosure *cc = clCvalue(s2v(func));
+        if (inputmode_ast) {
+          setpvalue(&cc->upvalue[0], NULL);
+          setpvalue(&cc->upvalue[1], NULL);
+        } else {
+          setpvalue(&cc->upvalue[0], new_p);
+          setpvalue(&cc->upvalue[1], NULL);
+        }
+      }
+      luaL_unref(L, LUA_REGISTRYINDEX, ast_ref);
+
+      /* inputmode="ast"：和原路径一致，返回包装了新 Proto 的 CClosure(runner)
+       * （不立即执行；用户语义：parser({inputmode="ast"}) 得到新可执行 chunk） */
+      if (inputmode_ast) {
+        lua_pushlightuserdata(L, new_p);
+        lua_pushlightuserdata(L, NULL);
+        lua_pushcclosure(L, astparser_runner, 2);
+        return 1;
+      }
+
+      /* ============================================================
+       * 默认模式：通过 lua_pcall 执行 inner Lua Closure（安全可重入，支持 pcall 嵌套）。
+       *
+       * 栈布局修复：必须把 inner LuaClosure 和参数从 CClosure 的参数起始槽 func+1 开始写入
+       * （覆盖原参数区），而不是 push 到新栈顶。否则 lua_pcall 结果会放在新栈顶，
+       * 用 L->top - (L->ci.func + 1) 计数会错误地把中间槽也算入返回值（比如
+       * add_kw(100,7) 会算成 4 个返回值而不是 1 个）。
+       * ============================================================ */
+      {
+        LClosure *cl = luaF_newLclosure(L, new_p->sizeupvalues);
+        cl->p = new_p;
+        luaF_initupvals(L, cl);
+        if (cl->nupvalues > 0) {
+          lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+          setobj(L, cl->upvals[0]->v.p, s2v(L->top.p - 1));
+          L->top.p--;
+        }
+        /* 必须先把参数从 (func+1..func+nargs) 搬到 (base+1..base+nargs)，
+         * 再把 LuaClosure 写到 base=func+1：否则 i=0 读 func+1 时会读到刚写的 LuaClosure，
+         * 参数被覆盖成函数值（比如 real_add(100,7) 的 x 会变成 LuaClosure，算术报错）。 */
+        StkId base = func + 1;
+        int i;
+        for (i = nargs - 1; i >= 0; i--) {
+          setobj2s(L, base + 1 + i, s2v(func + 1 + i));
+        }
+        setclLvalue(L, s2v(base), cl);  /* 最后写 LuaClosure，避免覆盖参数源 */
+        L->top.p = base + 1 + nargs;
+        if (lua_pcall(L, nargs, LUA_MULTRET, 0) != LUA_OK) lua_error(L);
+        return cast_int(L->top.p - base);
+      }
+      /* （原 inputmode_ast 分支在新的代码结构里不会到达 — 因为 lua_pcall 分支直接 return） */
+      (void)inputmode_ast;
+    }
+  }
+
+  /* 以下为原路径（char-mode astparser( char stream )） */
   
   /* 检测 {ast=true} 选项 */
   if (nargs >= 1 && lua_istable(L, 1)) {
@@ -9517,6 +9848,7 @@ int astparser_runner (lua_State *L) {
       lua_pop(L, 1);
       /* 序列化 AST 并返回 */
       ast_serialize_to_lua(L, chunk);
+      set_ast_metatable(L, -1);
       /* 释放 AST 内存 */
       ast_pool_free(chunk->pool);
       luaM_free(L, chunk->pool);
@@ -9547,24 +9879,27 @@ int astparser_runner (lua_State *L) {
     L->top.p--;
   }
   
-  /* 将 Lua 闭包推入栈顶 */
-  setclLvalue(L, s2v(L->top.p), cl);
-  api_incr_top(L);
-  
-  /* 将 Lua 闭包移到 func 位置（替换 C 闭包），参数保持在 func+1 之后 */
-  {
-    /* 直接将 Lua 闭包从栈顶移到 func 位置，参数无需移动 */
-    setobj2s(L, func, s2v(L->top.p - 1));
-    L->top.p--;  /* 弹出栈顶的 Lua 闭包 */
-  }
-  
-  /* {inputmode="ast"} 模式：执行 inner 闭包获取 AST table，反序列化并编译 */
+  /* {inputmode="ast"} 模式：先 lua_pcall 执行 inner Lua Closure 获取 AST table，
+   * 反序列化后 codegen 生成新 Proto，再包装 CClosure 返回。
+   * 栈布局与 delay 路径保持一致：LuaClosure+参数覆盖写入 func+1..func+1+nargs，
+   * lua_pcall(nargs, 1, 0) 结果（AST table）在 func+1，之后在原地继续 codegen + push CClosure。 */
   if (inputmode_ast) {
-    luaD_call(L, func, 1);  /* 期望返回 1 个结果（AST table） */
+    StkId base2 = func + 1;
+    int i;
+    /* 先倒序搬参数：func+1+i → base2+1+i，防止 i=0 时写 base2+1 覆盖 func+1（同一槽）
+     * 虽然 nargs>0 时 base2+1 = func+2，不会和 func+1 相同，但统一写法更安全。 */
+    for (i = nargs - 1; i >= 0; i--) {
+      setobj2s(L, base2 + 1 + i, s2v(func + 1 + i));
+    }
+    setclLvalue(L, s2v(base2), cl);  /* 最后写 LuaClosure，避免覆盖参数源 */
+    L->top.p = base2 + 1 + nargs;
+    if (lua_pcall(L, nargs, 1, 0) != LUA_OK) lua_error(L);
     if (!lua_istable(L, -1)) {
       luaG_runerror(L, "astparser: inputmode='ast' expects inner function to return an AST table");
     }
     AstChunk *new_chunk = ast_deserialize_from_lua(L, -1);
+    /* 主函数必须是 vararg（和原解析路径保持一致） */
+    new_chunk->main_func->is_vararg = 1;
     /* 编译：需要临时 Dyndata */
     Dyndata temp_dyd;
     memset(&temp_dyd, 0, sizeof(temp_dyd));
@@ -9572,16 +9907,41 @@ int astparser_runner (lua_State *L) {
     /* 释放反序列化的 AST */
     ast_pool_free(new_chunk->pool);
     luaM_free(L, new_chunk->pool);
-    /* 创建新的 C 闭包 */
+    lua_pop(L, 1);  /* 弹出 AST table（lua_pcall 结果已在 func+1，pop 后 L->top = func+1） */
+    /* 创建新的 C 闭包：push 到当前栈顶 func+1，即 astparser_runner 的返回值 */
     lua_pushlightuserdata(L, new_p);
     lua_pushlightuserdata(L, NULL);  /* chunk=NULL 表示无 AST */
     lua_pushcclosure(L, astparser_runner, 2);
     return 1;
   }
   
-  /* 调用 Lua 闭包（现在在 func 位置） */
-  luaD_call(L, func, LUA_MULTRET);
-  return cast_int(L->top.p - func);
+  /* ============================================================
+   * 默认模式：通过 lua_pcall 执行 Lua Closure（p），安全可重入。
+   * 用户语义：local f = astparser("return 5"); local r = f();
+   *           f() 返回 5（和 luaL_loadstring + 立即调用相同）。
+   *
+   * 栈布局注意事项：
+   * - CClosure(func) 位于 L->ci->func.p，参数从 func+1 开始。
+   * - lua_pcall 执行完后结果必须放在 func+1..func+nrets（C 函数返回值约定），
+   *   所以不能把 inner LuaClosure 压到新的栈顶（会让结果跑飞），
+   *   正确做法：把 LuaClosure 写到 func+1（覆盖原参数区起始），
+   *   参数搬到 func+2..func+1+nargs，再 lua_pcall(nargs, LUA_MULTRET)。
+   *   这样 lua_pcall 自动把结果覆盖写在 func+1 起始，最终 L->top - (func+1) 即实际结果数。
+   * ============================================================ */
+  {
+    StkId base = func + 1;  /* CClosure 参数/返回值起始槽（lua_pcall 结果也必须放这） */
+    int i;
+    /* 先倒序搬参数：func+1+i → base+1+i，防止 i=0 时覆盖源参数（与 delay/inputmode_ast 两条路径保持一致）。
+     * 正序搬运 bug：i=0 写 base+1(=func+2) 后，i=1 再读 func+2 时会读到刚被覆盖的值。 */
+    for (i = nargs - 1; i >= 0; i--) {
+      setobj2s(L, base + 1 + i, s2v(func + 1 + i));
+    }
+    setclLvalue(L, s2v(base), cl);  /* 最后写 LuaClosure，避免覆盖参数源 */
+    L->top.p = base + 1 + nargs;  /* 校正栈顶 */
+    if (lua_pcall(L, nargs, LUA_MULTRET, 0) != LUA_OK) lua_error(L);
+    /* lua_pcall 成功后 base+1..base+nrets 已经是返回值序列 */
+    return cast_int(L->top.p - base);
+  }
 }
 
 
@@ -9639,6 +9999,13 @@ static void asmstat (LexState *ls, int line) {
 }
 
 
+/* dummy reader for in-memory ZIO: always returns EOF */
+static const char *astparser_zreader_dummy (lua_State *L, void *data, size_t *size) {
+  (void)L; (void)data;
+  *size = 0;
+  return NULL;
+}
+
 /*
 ** astparser 语法块：块内使用 AST 解析器解析正常 Lua 代码
 ** 语法: astparser( Lua代码 )
@@ -9660,8 +10027,112 @@ static int astparserstat (LexState *ls, int line) {
   (void)line;
   
   luaX_next(ls);  /* 跳过 'astparser' */
-  checknext(ls, '(');  /* 消费 '(' */
-  
+  checknext(ls, '(');  /* 消费 '(' —— 此时 ls->t.token == '(' 后第一个 token */
+
+  /* ============================================================
+   * 模式 A：astparser("源代码字符串") / astparser([[长字符串]])
+   * 直接读取 lexer 给出的字符串字面量的 TString 内容作源码。
+   * 这样Lua层不再需要考虑括号深度平衡、长括号包装等hack。
+   * ============================================================ */
+  if (ls->t.token == TK_STRING || ls->t.token == TK_RAWSTRING ||
+      ls->t.token == TK_INTERPSTRING) {
+    TString *src_ts = ls->t.seminfo.ts;
+    const char *src_ptr = getstr(src_ts);
+    size_t src_len = tsslen(src_ts);
+
+    /* 正常消费流程：
+     * 1. 消费字符串 token → ls->t.token = ')'
+     * 2. checknext 消费 ')' → ls->t.token = ')' 之后第一个源码 token
+     * （这与 char mode 读完括号字符流后 checknext(')') 的最终 token 状态完全一致） */
+    luaX_next(ls);  /* 消费字符串 token → ls->t.token = ')' */
+    checknext(ls, ')');  /* 消费 ')' → ls->t.token = 源码后续 token */
+
+    /* 拷贝一份到可写 buf（因为 luaY_parse_ast 里的 buf 可能被追加 '\0'） */
+    size_t buf_len_A = src_len;
+    size_t buf_cap_A = buf_len_A + 16;
+    char *buf_A = luaM_newvector(L, buf_cap_A, char);
+    memcpy(buf_A, src_ptr, buf_len_A);
+    buf_A[buf_len_A] = '\0';  /* NUL 终止（与原字符流路径一致） */
+
+    /* 创建 ZIO 用于 AST 解析：firstchar 取 buf[0]，ZIO 从 buf+1 开始读剩余部分
+     * （这与原字符流路径完全对称） */
+    int firstchar_val = (buf_len_A > 0) ? (unsigned char)buf_A[0] : '\n';
+    ZIO ast_z;
+    memset(&ast_z, 0, sizeof(ast_z));
+    ast_z.L = L;
+    ast_z.p = (buf_len_A > 0) ? buf_A + 1 : buf_A;
+    ast_z.n = (buf_len_A > 0) ? buf_len_A - 1 : 0;
+    ast_z.reader = astparser_zreader_dummy;
+
+    /* AST 解析用的 Mbuffer */
+    Mbuffer ast_buff;
+    luaZ_initbuffer(L, &ast_buff);
+
+    /* 创建 Dyndata */
+    Dyndata ast_dyd;
+    memset(&ast_dyd, 0, sizeof(ast_dyd));
+
+    /* 暂停 GC */
+    int old_gc = lua_gc(L, LUA_GCISRUNNING, 0);
+    lua_gc(L, LUA_GCSTOP, 0);
+
+    /* AST 解析（完全等价于原路径） */
+    AstChunk *orig_chunk = luaY_parse_ast(L, &ast_z, &ast_buff, &ast_dyd, "astparser",
+                                    firstchar_val);
+    if (orig_chunk == NULL) {
+      if (old_gc) lua_gc(L, LUA_GCRESTART, 0);
+      luaZ_freebuffer(L, &ast_buff);
+      luaM_free(L, buf_A);
+      luaX_syntaxerror(ls, "AST parse failed (string mode)");
+    }
+
+    /* 序列化原始 AST → Lua table（已验证正确，与 parser({ast=true}) 结果一致） */
+    ast_serialize_to_lua(L, orig_chunk);
+
+    /* 释放原始 chunk（不再需要，之后完全靠 serialized table） */
+    ast_pool_free(orig_chunk->pool);
+    luaM_free(L, orig_chunk->pool);
+    orig_chunk = NULL;
+
+    /* 恢复 GC */
+    if (old_gc) lua_gc(L, LUA_GCRESTART, 0);
+
+    /* 将 serialized AST table 存入 registry，得到整数引用 */
+    int ast_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    /* ============================================================
+     * 创建 parser CClosure（延迟 codegen 模式）：
+     * upvalue[1] = ast_ref 整数（lightuserdata cast）
+     * upvalue[2] = &astparser_string_mode_sentinel（sentinel 标记，区别于 NULL）
+     * astparser_runner 调用时从 registry 取出 table，复用已验证的 inputmode=ast 路径：
+     *   反序列化 → codegen → 再返回一个新的 CClosure（持有真实 Proto）
+     * 这保证所有 3 种调用模式（默认/AST模式/延迟模式）的 codegen 逻辑完全一致。
+     * ============================================================ */
+    lua_pushlightuserdata(L, (void*)(uintptr_t)ast_ref);
+    lua_pushlightuserdata(L, (void*)astparser_string_mode_sentinel);  /* sentinel 标记延迟模式 */
+    lua_pushcclosure(L, astparser_runner, 2);
+    (void)ast_dyd;  /* 未使用（codegen 移到 astparser_runner） */
+
+    /* 将栈顶的 C 闭包添加到常量表，生成指令把它加载到寄存器 */
+    {
+      int kidx = luaK_closureK(fs, s2v(L->top.p - 1));
+      L->top.p--;  /* 弹出 C 闭包（常量表已持有引用） */
+      int pc = luaK_codeABx(fs, OP_LOADK, 0, kidx);
+      init_exp(&v, VRELOC, pc);
+      luaK_exp2nextreg(fs, &v);
+    }
+
+    /* 释放源码缓冲区 */
+    luaZ_freebuffer(L, &ast_buff);
+    luaM_free(L, buf_A);
+
+    return v.u.info;  /* 返回结果寄存器编号 */
+  }
+
+  /* ============================================================
+   * 模式 B：原有 astparser( 源代码字符流 ) 路径
+   *   保持完整向后兼容（括号深度计数扫源代码）
+   * ============================================================ */
   /* 从 ZIO 读取原始源码，跟踪嵌套括号，跳过字符串和注释 */
   size_t buf_len = 0, buf_cap = 256;
   char *buf = luaM_newvector(L, buf_cap, char);
@@ -9876,11 +10347,14 @@ static int astparserstat (LexState *ls, int line) {
   buf[buf_len] = '\0';
   
   /* 创建 ZIO 用于 AST 解析 */
+  /* firstchar 从 buf[0] 读取，ZIO 从 buf+1 开始，避免重复读取 */
+  int firstchar_val = (buf_len > 0) ? (unsigned char)buf[0] : '\n';
   ZIO ast_z;
   memset(&ast_z, 0, sizeof(ast_z));
   ast_z.L = L;
-  ast_z.p = buf;
-  ast_z.n = buf_len;
+  ast_z.p = (buf_len > 0) ? buf + 1 : buf;
+  ast_z.n = (buf_len > 0) ? buf_len - 1 : 0;
+  ast_z.reader = astparser_zreader_dummy;  /* 设置 reader，避免 zgetc 耗尽缓冲后空指针崩溃 */
   
   /* AST 解析用的 Mbuffer */
   Mbuffer ast_buff;
@@ -9896,7 +10370,7 @@ static int astparserstat (LexState *ls, int line) {
   
   /* AST 解析 + 代码生成 */
   AstChunk *chunk = luaY_parse_ast(L, &ast_z, &ast_buff, &ast_dyd, "astparser",
-    buf_len > 0 ? (unsigned char)buf[0] : '\n');
+    firstchar_val);
   chunk->main_func->is_vararg = 1;
   Proto *p = luaY_codegen_chunk(L, chunk, &ast_dyd);
   
@@ -10164,7 +10638,7 @@ static void asm_parse_body (LexState *ls, FuncState *fs, AsmContext *ctx, int li
       if (reg_dest >= fs->freereg) {
         int needed = reg_dest + 1 - fs->freereg;
         luaK_checkstack(fs, needed);
-        fs->freereg = cast_byte(reg_dest + 1);
+        fs->freereg = (reg_dest + 1);
       }
       testnext(ls, ';');
       continue;
@@ -10881,7 +11355,7 @@ static void asm_parse_body (LexState *ls, FuncState *fs, AsmContext *ctx, int li
       if (a >= fs->freereg) {
         int needed = a + 1 - fs->freereg;
         luaK_checkstack(fs, needed);
-        fs->freereg = cast_byte(a + 1);
+        fs->freereg = (a + 1);
       }
     }
     
@@ -11215,10 +11689,11 @@ static void funcstat (LexState *ls, int line, int isasync) {
 **   class_reg - 类表所在的寄存器
 **   is_static - 是否是静态方法
 **   access_level - 访问级别（ACCESS_PUBLIC/PROTECTED/PRIVATE）
+**   is_override - 是否是 override 方法（需校验父类存在同名方法）
 ** 说明：
 **   解析 function methodName(self, ...) ... end 形式的方法定义
 */
-static void class_method(LexState *ls, int class_reg, int is_static, int access_level) {
+static void class_method(LexState *ls, int class_reg, int is_static, int access_level, int is_override) {
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
   expdesc method_exp, key_exp;
@@ -11262,7 +11737,18 @@ static void class_method(LexState *ls, int class_reg, int is_static, int access_
   
   /* 使用SETFIELD指令设置方法 */
   int key_k = luaK_stringK(fs, method_name);
-  luaK_codeABC(fs, OP_SETMETHOD, class_reg, key_k, method_exp.u.info);
+  
+  /* 如果是 override 方法，生成 OP_CHECKOVERRIDE 校验父类存在同名方法 */
+  if (is_override) {
+    luaK_codeABC(fs, OP_CHECKOVERRIDE, class_reg, key_k, 0);
+  }
+  
+  /* 根据静态性使用不同的操作码 */
+  if (is_static) {
+    luaK_codeABC(fs, OP_SETSTATIC, class_reg, key_k, method_exp.u.info);
+  } else {
+    luaK_codeABC(fs, OP_SETMETHOD, class_reg, key_k, method_exp.u.info);
+  }
   
   fs->freereg = class_reg + 1;  /* 释放临时寄存器 */
 }
@@ -11577,13 +12063,13 @@ static void class_final_method(LexState *ls, int class_reg, int is_static, int a
 ** 参数：
 **   ls - 词法状态
 **   line - 起始行号
-**   class_flags - 类修饰符标志（CLASS_FLAG_ABSTRACT、CLASS_FLAG_FINAL、CLASS_FLAG_SEALED）
+**   class_flags - 类修饰符标志（CLASS_FLAG_ABSTRACT、CLASS_FLAG_FINAL、CLASS_FLAG_SEALED、CLASS_FLAG_SINGLETON）
 ** 语法：
-**   [abstract|final|sealed] class ClassName [extends ParentClass] [implements Interface, ...]
+**   [abstract|final|sealed|singleton] class ClassName [extends ParentClass] [implements Interface, ...]
 **     成员定义...
 **   end
 */
-static void classstat(LexState *ls, int line, int class_flags, int isexport) {
+static void classstat(LexState *ls, int line, int class_flags, int isexport, int parent_class_reg) {
   FuncState *fs = ls->fs;
   expdesc class_exp, parent_exp, v;
   TString *classname;
@@ -11594,6 +12080,22 @@ static void classstat(LexState *ls, int line, int class_flags, int isexport) {
   
   /* 获取类名 */
   classname = str_checkname(ls);
+  
+  /* 检查泛型参数 <T1, T2, ...> */
+  int has_typeparams = 0;
+  TString *type_params[8];  /* 最多 8 个类型参数 */
+  int num_params = 0;
+  if (ls->t.token == '<') {
+    has_typeparams = 1;
+    luaX_next(ls);  /* 跳过 '<' */
+    
+    /* 收集类型参数名 */
+    do {
+      type_params[num_params++] = str_checkname(ls);
+    } while (testnext(ls, ',') && num_params < 8);
+    
+    checknext(ls, '>');
+  }
   
   /* 创建类表 - 使用OP_NEWCLASS操作码 */
   class_reg = fs->freereg;
@@ -11626,16 +12128,68 @@ static void classstat(LexState *ls, int line, int class_flags, int isexport) {
     fs->freereg = class_reg + 1;  /* 释放临时寄存器 */
   }
   
-  /* 检查是否有继承（软关键字 extends） */
+  /* 如果有泛型参数，创建类型参数表并存储到类的 __typeparams */
+  if (has_typeparams) {
+    int typeparams_reg = fs->freereg;
+    luaK_reserveregs(fs, 1);
+    int pc = luaK_codeABC(fs, OP_NEWTABLE, typeparams_reg, 0, 0);
+    luaK_code(fs, 0);  /* extra arg */
+    
+    for (int i = 0; i < num_params; i++) {
+      int name_k = luaK_stringK(fs, type_params[i]);
+      luaK_codeABx(fs, OP_LOADK, fs->freereg, name_k);
+      luaK_reserveregs(fs, 1);
+      luaK_codeABC(fs, OP_SETI, typeparams_reg, i + 1, fs->freereg - 1);
+      fs->freereg = typeparams_reg + 2;
+    }
+    
+    /* 存储类型参数到类元数据 */
+    TString *tp_key = luaS_newliteral(ls->L, "__typeparams");
+    int tp_key_k = luaK_stringK(fs, tp_key);
+    luaK_codeABC(fs, OP_SETFIELD, class_reg, tp_key_k, typeparams_reg);
+    fs->freereg = class_reg + 1;
+  }
+  
+  /* 检查是否有继承（软关键字 extends），支持单继承和多继承（逗号分隔） */
   if (softkw_testnext(ls, SKW_EXTENDS, SOFTKW_CTX_CLASS_INHERIT)) {
     has_parent = 1;
-    /* 解析父类表达式 */
+    /* 解析第一个父类表达式 */
     expr(ls, &parent_exp);
     luaK_exp2nextreg(fs, &parent_exp);
-    
-    /* 生成 INHERIT 指令: R[class_reg].__parent = R[parent_reg] */
-    luaK_codeABC(fs, OP_INHERIT, class_reg, parent_exp.u.info, 0);
-    fs->freereg--;  /* 释放父类寄存器 */
+    int first_parent_reg = parent_exp.u.info;
+
+    if (testnext(ls, ',')) {
+      /* 多继承：创建父类列表table，收集所有父类 */
+      int parents_reg = fs->freereg;
+      luaK_reserveregs(fs, 1);
+      int table_pc = luaK_codeABC(fs, OP_NEWTABLE, parents_reg, 0, 0);
+      /* 预分配数组空间，先按2个预估，后面动态增长 */
+      luaK_settablesize(fs, table_pc, parents_reg, 4, 0);
+      fs->pc++;
+
+      /* 添加第一个父类到列表 */
+      luaK_codeABC(fs, OP_SETI, parents_reg, 1, first_parent_reg);
+      fs->freereg--;
+      int parent_count = 1;
+
+      /* 解析后续父类 */
+      do {
+        expdesc next_parent;
+        expr(ls, &next_parent);
+        luaK_exp2nextreg(fs, &next_parent);
+        parent_count++;
+        luaK_codeABC(fs, OP_SETI, parents_reg, parent_count, next_parent.u.info);
+        fs->freereg--;
+      } while (testnext(ls, ','));
+
+      /* OP_MULTIINHERIT: 继承父类列表中的所有类并计算MRO */
+      luaK_codeABC(fs, OP_MULTIINHERIT, class_reg, parents_reg, 0);
+      fs->freereg = class_reg + 1;  /* 释放父类列表寄存器 */
+    } else {
+      /* 单继承：直接使用OP_INHERIT */
+      luaK_codeABC(fs, OP_INHERIT, class_reg, first_parent_reg, 0);
+      fs->freereg--;  /* 释放父类寄存器 */
+    }
   }
   
   /* 检查是否实现接口（软关键字 implements） */
@@ -11683,6 +12237,7 @@ static void classstat(LexState *ls, int line, int class_flags, int isexport) {
     int is_static = 0;
     int is_abstract = 0;
     int is_final = 0;
+    int is_override = 0;
     int has_access_modifier = 0;  /* 是否已经设置过访问修饰符 */
     
     /* 循环检查所有修饰符，支持任意顺序 */
@@ -11743,6 +12298,14 @@ static void classstat(LexState *ls, int line, int class_flags, int isexport) {
           softkw_checknext(ls, SOFTKW_CTX_CLASS_BODY);
           found_modifier = 1;
           break;
+        case SKW_OVERRIDE:
+          if (is_override) {
+            luaX_syntaxerror(ls, "duplicate 'override' modifier");
+          }
+          is_override = 1;
+          softkw_checknext(ls, SOFTKW_CTX_CLASS_BODY);
+          found_modifier = 1;
+          break;
         default:
           break;
       }
@@ -11756,6 +12319,16 @@ static void classstat(LexState *ls, int line, int class_flags, int isexport) {
     /* static 和 abstract 互斥（静态方法不能被重写，因此不能是抽象的） */
     if (is_static && is_abstract) {
       luaX_syntaxerror(ls, "static method cannot be 'abstract'");
+    }
+    
+    /* static 和 override 互斥（静态方法不参与继承链，无需重写） */
+    if (is_static && is_override) {
+      luaX_syntaxerror(ls, "static method cannot be 'override'");
+    }
+    
+    /* abstract 和 override 互斥 */
+    if (is_abstract && is_override) {
+      luaX_syntaxerror(ls, "method cannot be both 'abstract' and 'override'");
     }
     
     /* 检查是否是 getter/setter */
@@ -11781,9 +12354,31 @@ static void classstat(LexState *ls, int line, int class_flags, int isexport) {
     }
     else if (ls->t.token == TK_FUNCTION) {
       /* 普通方法定义 */
-      class_method(ls, class_reg, is_static, access_level);
+      /* 前瞻方法名，检查是否是静态构造函数 static function init */
+      int is_static_init = 0;
+      if (is_static) {
+        int la = luaX_lookahead(ls);
+        if (la == TK_NAME) {
+          /* 需要进一步检查方法名是否是 init。这里先标记，在 class_method 后处理 */
+          is_static_init = 1;
+        }
+      }
+      class_method(ls, class_reg, is_static, access_level, is_override);
+      /* 静态构造函数：在方法存储后，发射 OP_STATICINIT 调用静态 init 函数 */
+      if (is_static_init) {
+        /* OP_STATICINIT A B: 调用类的静态构造函数
+           A = class_reg（类表寄存器）
+           B = 0（VM 层从 class.__statics.init 查找并调用） */
+        luaK_codeABC(fs, OP_STATICINIT, class_reg, 0, 0);
+      }
     }
     else if (ls->t.token == TK_NAME) {
+      /* 检查是否是嵌套类定义 */
+      if (softkw_test(ls, SKW_CLASS, SOFTKW_CTX_CLASS_BODY)) {
+        /* 嵌套类：递归解析，存储到父类的 __statics 表 */
+        classstat(ls, ls->linenumber, 0, 0, class_reg);
+        continue;
+      }
       /* 属性定义 */
       class_property(ls, class_reg, is_static, access_level);
     }
@@ -11801,8 +12396,13 @@ static void classstat(LexState *ls, int line, int class_flags, int isexport) {
   }
   
   /* 将类存储到变量中 */
+  if (parent_class_reg >= 0) {
+    /* 嵌套类：存储到父类的 __statics 表 */
+    int name_k = luaK_stringK(fs, classname);
+    luaK_codeABC(fs, OP_SETSTATIC, parent_class_reg, name_k, class_reg);
+  }
   /* 检查是在全局还是局部作用域 */
-  if (isexport) {
+  else if (isexport) {
      new_localvar(ls, classname);
      add_export(ls, classname);
      adjustlocalvars(ls, 1);
@@ -11810,9 +12410,11 @@ static void classstat(LexState *ls, int line, int class_flags, int isexport) {
   } else {
      buildglobal(ls, classname, &v);
   }
-  init_exp(&class_exp, VNONRELOC, class_reg);
-  apply_decorators_inline(ls, &v, &class_exp);
-  luaK_storevar(fs, &v, &class_exp);
+  if (parent_class_reg < 0) {
+    init_exp(&class_exp, VNONRELOC, class_reg);
+    apply_decorators_inline(ls, &v, &class_exp);
+    luaK_storevar(fs, &v, &class_exp);
+  }
   
   luaK_fixline(fs, line);
 }
@@ -11967,6 +12569,19 @@ static void interfacestat(LexState *ls, int line, int isexport) {
   
   /* 设置接口标志 */
   luaK_codeABC(fs, OP_SETIFACEFLAG, iface_reg, 0, 0);
+  
+  /* 检查接口继承（软关键字 extends） */
+  /* 接口可以继承多个父接口，以逗号分隔 */
+  if (softkw_testnext(ls, SKW_EXTENDS, SOFTKW_CTX_CLASS_INHERIT)) {
+    do {
+      expdesc parent_iface_exp;
+      expr(ls, &parent_iface_exp);
+      luaK_exp2nextreg(fs, &parent_iface_exp);
+      /* 生成 OP_EXTENDIFACE 指令: R[iface_reg].__parent := R[parent_reg] */
+      luaK_codeABC(fs, OP_EXTENDIFACE, iface_reg, parent_iface_exp.u.info, 0);
+      fs->freereg--;
+    } while (testnext(ls, ','));
+  }
   
   /* 解析接口体 - 只允许方法声明 */
   while (!testnext(ls, TK_END)) {
@@ -12133,7 +12748,7 @@ static void structstat (LexState *ls, int line, int isexport) {
       checknext(ls, ')');
 
       adjustlocalvars(ls, nparams);
-      factory_fs.f->numparams = cast_byte(factory_fs.nactvar);
+      factory_fs.f->numparams = factory_fs.nactvar;
       luaK_reserveregs(&factory_fs, factory_fs.nactvar);
 
       fs = &factory_fs;
@@ -12594,8 +13209,8 @@ static void superexpr(LexState *ls, expdesc *v) {
     int base_reg = fs->freereg;
     luaK_reserveregs(fs, 2);  /* 为 method 和 self 预留 */
 
-    /* 生成 GETSUPER: base_reg = 父类 __init__ 方法 */
-    TString *init_name = luaS_newliteral(ls->L, "__init__");
+    /* 生成 GETSUPER: base_reg = 父类 init 方法 */
+    TString *init_name = luaS_newliteral(ls->L, "init");
     int method_k = luaK_stringK(fs, init_name);
     luaK_codeABC(fs, OP_GETSUPER, base_reg, self_reg, method_k);
 
@@ -13690,7 +14305,7 @@ static void cpp_parlist (LexState *ls) {
     } while (!isvararg && testnext(ls, ','));
   }
   /* 参数已在循环中逐个激活 */
-  f->numparams = cast_byte(fs->nactvar);
+  f->numparams = fs->nactvar;
   if (isvararg)
     setvararg(fs, f->numparams);
 }
@@ -13925,6 +14540,7 @@ static void usingstat(LexState *ls) {
 
 void statement (LexState *ls) {
   int line = ls->linenumber;  /* may be needed for error messages */
+  LUA_LOGD("[PARSER] statement: line=%d token=%d", line, ls->t.token);
   enterlevel(ls);
   switch (ls->t.token) {
         case '@': {
@@ -14026,8 +14642,10 @@ void statement (LexState *ls) {
       asmstat(ls, line);
       break;
     }
-    case TK_ASTPARSER: {  /* stat -> astparserstat */
-      astparserstat(ls, line);
+    case TK_ASTPARSER: {  /* stat -> astparserstat (0 args call the compiled closure) */
+      int reg = astparserstat(ls, line);
+      /* OP_CALL A B C: B-1 args (B=1→0 args), C-1 returns (C=1→0 returns discard) */
+      luaK_codeABC(ls->fs, OP_CALL, reg, 1, 1);
       break;
     }
     case TK_ASYNC: {  /* stat -> async function */
@@ -14097,28 +14715,35 @@ void statement (LexState *ls) {
       else {
         SoftKWID skw = softkw_check(ls, SOFTKW_CTX_STMT_BEGIN);
         if (skw == SKW_CLASS) {
-          classstat(ls, line, 0, 1);
+          classstat(ls, line, 0, 1, -1);
         }
         else if (skw == SKW_ABSTRACT) {
           luaX_next(ls);
           if (softkw_check(ls, SOFTKW_CTX_STMT_BEGIN) == SKW_CLASS)
-             classstat(ls, line, CLASS_FLAG_ABSTRACT, 1);
+             classstat(ls, line, CLASS_FLAG_ABSTRACT, 1, -1);
           else
              luaX_syntaxerror(ls, "'abstract' export must be followed by 'class'");
         }
         else if (skw == SKW_FINAL) {
           luaX_next(ls);
           if (softkw_check(ls, SOFTKW_CTX_STMT_BEGIN) == SKW_CLASS)
-             classstat(ls, line, CLASS_FLAG_FINAL, 1);
+             classstat(ls, line, CLASS_FLAG_FINAL, 1, -1);
           else
              luaX_syntaxerror(ls, "'final' export must be followed by 'class'");
         }
         else if (skw == SKW_SEALED) {
           luaX_next(ls);
           if (softkw_check(ls, SOFTKW_CTX_STMT_BEGIN) == SKW_CLASS)
-             classstat(ls, line, CLASS_FLAG_SEALED, 1);
+             classstat(ls, line, CLASS_FLAG_SEALED, 1, -1);
           else
              luaX_syntaxerror(ls, "'sealed' export must be followed by 'class'");
+        }
+        else if (skw == SKW_SINGLETON) {
+          luaX_next(ls);
+          if (softkw_check(ls, SOFTKW_CTX_STMT_BEGIN) == SKW_CLASS)
+             classstat(ls, line, CLASS_FLAG_SINGLETON, 1, -1);
+          else
+             luaX_syntaxerror(ls, "'singleton' export must be followed by 'class'");
         }
         else if (skw == SKW_INTERFACE) {
           /* interface export */
@@ -14230,13 +14855,14 @@ void statement (LexState *ls) {
     case TK_NAME: {
       /* 使用软关键字系统检查语句开头的软关键字 */
       SoftKWID skw = softkw_check(ls, SOFTKW_CTX_STMT_BEGIN);
+      { FILE* dbg = fopen("E:/debug_parser.log", "a"); if(dbg){ fprintf(dbg, "[DEBUG statement] skw=%d name='%s'\n", skw, getstr(ls->t.seminfo.ts)); fclose(dbg); } }
       if (skw == SKW_MATCH) {
         matchstat(ls, line);
         break;
       }
       else if (skw == SKW_CLASS) {
         /* class 作为软关键字，触发类定义解析 */
-        classstat(ls, line, 0, 0);  /* 无修饰符 */
+        classstat(ls, line, 0, 0, -1);  /* 无修饰符 */
         break;
       }
       else if (skw == SKW_INTERFACE) {
@@ -14254,7 +14880,7 @@ void statement (LexState *ls) {
         luaX_next(ls);  /* 跳过 'abstract' */
         SoftKWID next_skw = softkw_check(ls, SOFTKW_CTX_STMT_BEGIN);
         if (next_skw == SKW_CLASS) {
-          classstat(ls, line, CLASS_FLAG_ABSTRACT, 0);
+          classstat(ls, line, CLASS_FLAG_ABSTRACT, 0, -1);
         } else {
           luaX_syntaxerror(ls, "'class' expected after 'abstract'");
         }
@@ -14265,7 +14891,7 @@ void statement (LexState *ls) {
         luaX_next(ls);  /* 跳过 'final' */
         SoftKWID next_skw = softkw_check(ls, SOFTKW_CTX_STMT_BEGIN);
         if (next_skw == SKW_CLASS) {
-          classstat(ls, line, CLASS_FLAG_FINAL, 0);
+          classstat(ls, line, CLASS_FLAG_FINAL, 0, -1);
         } else {
           luaX_syntaxerror(ls, "'class' expected after 'final'");
         }
@@ -14276,9 +14902,20 @@ void statement (LexState *ls) {
         luaX_next(ls);  /* 跳过 'sealed' */
         SoftKWID next_skw = softkw_check(ls, SOFTKW_CTX_STMT_BEGIN);
         if (next_skw == SKW_CLASS) {
-          classstat(ls, line, CLASS_FLAG_SEALED, 0);
+          classstat(ls, line, CLASS_FLAG_SEALED, 0, -1);
         } else {
           luaX_syntaxerror(ls, "'class' expected after 'sealed'");
+        }
+        break;
+      }
+      else if (skw == SKW_SINGLETON) {
+        /* singleton class 语法 */
+        luaX_next(ls);  /* 跳过 'singleton' */
+        SoftKWID next_skw = softkw_check(ls, SOFTKW_CTX_STMT_BEGIN);
+        if (next_skw == SKW_CLASS) {
+          classstat(ls, line, CLASS_FLAG_SINGLETON, 0, -1);
+        } else {
+          luaX_syntaxerror(ls, "'class' expected after 'singleton'");
         }
         break;
       }
@@ -14345,6 +14982,7 @@ static void mainfunc (LexState *ls, FuncState *fs) {
   BlockCnt bl;
   Upvaldesc *env;
   open_func(ls, fs, &bl);
+  LUA_LOGD("[PARSER] mainfunc START, source='%s'", getstr(fs->f->source));
   setvararg(fs, 0);  /* main function is always declared vararg */
   env = allocupvalue(fs);  /* ...set environment upvalue */
   env->instack = 1;
@@ -14353,6 +14991,7 @@ static void mainfunc (LexState *ls, FuncState *fs) {
   env->name = ls->envn;
   luaC_objbarrier(ls->L, fs->f, env->name);
   luaX_next(ls);  /* read first token */
+  LUA_LOGD("[PARSER] first token=%d", ls->t.token);
   if(testtoken(ls,'{'))
     retstat(ls);
   else {
@@ -14360,16 +14999,39 @@ static void mainfunc (LexState *ls, FuncState *fs) {
   }
   check(ls, TK_EOS);
   close_func(ls);
+  LUA_LOGD("[PARSER] mainfunc END, sizecode=%d sizep=%d nups=%d",
+          fs->f->sizecode, fs->f->sizep, fs->f->sizeupvalues);
 }
 
 
 LClosure *luaY_parser (lua_State *L, ZIO *z, Mbuffer *buff,
                        Dyndata *dyd, const char *name, int firstchar) {
- // #ifdef LXCLUA_OLD_PARSER
+#if  0 /* 使用 AST 解析器 (last_parse.c)：正确处理 astparser() 语法 */
+  /* AST-based parser: parse into LAST AST, then codegen to Proto */
+  lparser_vmp_hook_point();
+  LClosure *cl = luaF_newLclosure(L, 1);
+  setclLvalue2s(L, L->top.p, cl);
+  luaD_inctop(L);
+  dyd->actvar.n = dyd->gt.n = dyd->label.n = 0;
+  int old_gc_state = lua_gc(L, LUA_GCISRUNNING, 0);
+  lua_gc(L, LUA_GCSTOP, 0);
+  AstChunk *chunk = luaY_parse_ast(L, z, buff, dyd, name, firstchar);
+  chunk->main_func->is_vararg = 1;
+  Proto *p = luaY_codegen_chunk(L, chunk, dyd);
+  cl->p = p;
+  luaC_objbarrier(L, cl, p);
+  ast_pool_free(chunk->pool);
+  luaM_free(L, chunk->pool);
+  if (old_gc_state) lua_gc(L, LUA_GCRESTART, 0);
+  lua_assert(dyd->actvar.n == 0 && dyd->gt.n == 0 && dyd->label.n == 0);
+  lua_assert(cl->nupvalues == cl->p->sizeupvalues);
+  return cl;
+#else
   /* 旧版解析器：直接解析+codegen，不使用AST中间表示 */
   LexState lexstate;
   FuncState funcstate;
   lparser_vmp_hook_point();
+  LUA_LOGD("[PARSER] luaY_parser START, name='%s', firstchar=0x%x", name, firstchar);
   LClosure *cl = luaF_newLclosure(L, 1);
   setclLvalue2s(L, L->top.p, cl);
   luaD_inctop(L);
@@ -14404,26 +15066,9 @@ LClosure *luaY_parser (lua_State *L, ZIO *z, Mbuffer *buff,
   L->top.p--;
   L->top.p--;
   L->top.p--;
-  return cl;/*
-#else
-  LClosure *cl = luaF_newLclosure(L, 1);
-  setclLvalue2s(L, L->top.p, cl);
-  luaD_inctop(L);
-  dyd->actvar.n = dyd->gt.n = dyd->label.n = 0;
-  int old_gc_state = lua_gc(L, LUA_GCISRUNNING, 0);
-  lua_gc(L, LUA_GCSTOP, 0);
-  AstChunk *chunk = luaY_parse_ast(L, z, buff, dyd, name, firstchar);
-  chunk->main_func->is_vararg = 1;
-  Proto *p = luaY_codegen_chunk(L, chunk, dyd);
-  cl->p = p;
-  luaC_objbarrier(L, cl, p);
-  ast_pool_free(chunk->pool);
-  luaM_free(L, chunk->pool);
-  if (old_gc_state) lua_gc(L, LUA_GCRESTART, 0); 
-  lua_assert(dyd->actvar.n == 0 && dyd->gt.n == 0 && dyd->label.n == 0);
-  lua_assert(cl->nupvalues == cl->p->sizeupvalues);
+  LUA_LOGD("[PARSER] luaY_parser DONE, name='%s', proto=%p sizecode=%d sizep=%d", name, (void*)cl->p, cl->p->sizecode, cl->p->sizep);
   return cl;
-#endif*/
+#endif
 }
 
 

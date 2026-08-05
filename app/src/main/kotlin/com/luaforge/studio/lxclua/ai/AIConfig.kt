@@ -174,7 +174,15 @@ data class AIConfigData(
     /** MCP 服务器列表（多服务器支持） */
     val mcpServers: List<com.luaforge.studio.lxclua.mcp.MCPServerEntry> = emptyList(),
     /** MCP 工具开关状态持久化：serviceName -> (toolName -> enabled) */
-    val mcpToolStates: Map<String, Map<String, Boolean>> = emptyMap()
+    val mcpToolStates: Map<String, Map<String, Boolean>> = emptyMap(),
+    /** MCP 局域网广播端口（所有广播条目共用） */
+    val mcpBroadcastPort: Int = 8765,
+    /** 保活总开关：开启后广播服务器持续运行 */
+    val keepAliveEnabled: Boolean = false,
+    /** 后台保活：应用切到后台时保持广播服务器运行 */
+    val keepAliveInBackground: Boolean = false,
+    /** 通知栏保活：通过前台通知防止系统杀死进程 */
+    val keepAliveNotification: Boolean = false
 ) {
     // ========== 向后兼容的计算属性（委托给活跃提供商） ==========
 
@@ -233,7 +241,11 @@ data class AIConfigData(
                     mcpEndpoint = obj.optString("mcpEndpoint", "http://localhost:8080/mcp"),
                     mcpTransport = obj.optString("mcpTransport", "streamable_http"),
                     mcpServers = com.luaforge.studio.lxclua.mcp.MCPServerEntry.fromJsonList(obj.optString("mcpServers", "")),
-                    mcpToolStates = parseToolStatesJsonStatic(obj.optString("mcpToolStates", ""))
+                    mcpToolStates = parseToolStatesJsonStatic(obj.optString("mcpToolStates", "")),
+                    mcpBroadcastPort = obj.optInt("mcpBroadcastPort", 8765),
+                    keepAliveEnabled = obj.optBoolean("keepAliveEnabled", false),
+                    keepAliveInBackground = obj.optBoolean("keepAliveInBackground", false),
+                    keepAliveNotification = obj.optBoolean("keepAliveNotification", false)
                 )
             } catch (e: Exception) {
                 android.util.Log.e("AIConfigData", "fromJson 解析失败: ${e.message}")
@@ -258,6 +270,10 @@ data class AIConfigData(
                 put("mcpTransport", config.mcpTransport)
                 put("mcpServers", com.luaforge.studio.lxclua.mcp.MCPServerEntry.toJsonList(config.mcpServers))
                 put("mcpToolStates", serializeToolStatesJsonStatic(config.mcpToolStates))
+                put("mcpBroadcastPort", config.mcpBroadcastPort)
+                put("keepAliveEnabled", config.keepAliveEnabled)
+                put("keepAliveInBackground", config.keepAliveInBackground)
+                put("keepAliveNotification", config.keepAliveNotification)
             }
             return obj.toString(2) // 格式化输出，便于阅读
         }
@@ -311,6 +327,10 @@ object AIConfigManager {
         val MCP_TRANSPORT = stringPreferencesKey("mcp_transport")
         val MCP_SERVERS = stringPreferencesKey("mcp_servers_json")
         val MCP_TOOL_STATES = stringPreferencesKey("mcp_tool_states_json")
+        val MCP_BROADCAST_PORT = intPreferencesKey("mcp_broadcast_port")
+        val KEEP_ALIVE_ENABLED = booleanPreferencesKey("keep_alive_enabled")
+        val KEEP_ALIVE_BACKGROUND = booleanPreferencesKey("keep_alive_background")
+        val KEEP_ALIVE_NOTIFICATION = booleanPreferencesKey("keep_alive_notification")
 
         // 旧版字段（用于迁移）
         val OLD_PROVIDER = stringPreferencesKey("ai_provider")
@@ -355,6 +375,10 @@ object AIConfigManager {
                     prefs[Keys.MCP_TRANSPORT] = sdConfig.mcpTransport
                     prefs[Keys.MCP_SERVERS] = com.luaforge.studio.lxclua.mcp.MCPServerEntry.toJsonList(sdConfig.mcpServers)
                     prefs[Keys.MCP_TOOL_STATES] = serializeToolStatesJson(sdConfig.mcpToolStates)
+                    prefs[Keys.MCP_BROADCAST_PORT] = sdConfig.mcpBroadcastPort
+                    prefs[Keys.KEEP_ALIVE_ENABLED] = sdConfig.keepAliveEnabled
+                    prefs[Keys.KEEP_ALIVE_BACKGROUND] = sdConfig.keepAliveInBackground
+                    prefs[Keys.KEEP_ALIVE_NOTIFICATION] = sdConfig.keepAliveNotification
                 }
             } catch (_: Exception) { }
             android.util.Log.i("AIConfigManager", "[loadConfig] 从 SD 卡加载完成, mcpServers: ${_config.mcpServers.size} 个")
@@ -413,7 +437,11 @@ object AIConfigManager {
             mcpEndpoint = prefs[Keys.MCP_ENDPOINT] ?: "http://localhost:8080/mcp",
             mcpTransport = prefs[Keys.MCP_TRANSPORT] ?: "streamable_http",
             mcpServers = com.luaforge.studio.lxclua.mcp.MCPServerEntry.fromJsonList(prefs[Keys.MCP_SERVERS] ?: ""),
-            mcpToolStates = parseToolStatesJson(prefs[Keys.MCP_TOOL_STATES] ?: "")
+            mcpToolStates = parseToolStatesJson(prefs[Keys.MCP_TOOL_STATES] ?: ""),
+            mcpBroadcastPort = prefs[Keys.MCP_BROADCAST_PORT] ?: 8765,
+            keepAliveEnabled = prefs[Keys.KEEP_ALIVE_ENABLED] ?: false,
+            keepAliveInBackground = prefs[Keys.KEEP_ALIVE_BACKGROUND] ?: false,
+            keepAliveNotification = prefs[Keys.KEEP_ALIVE_NOTIFICATION] ?: false
         )
         setConfig(config)
         // 首次从私有目录加载后，同步到 SD 卡（创建备份）
@@ -433,6 +461,10 @@ object AIConfigManager {
             prefs[Keys.MCP_TRANSPORT] = config.mcpTransport
             prefs[Keys.MCP_SERVERS] = com.luaforge.studio.lxclua.mcp.MCPServerEntry.toJsonList(config.mcpServers)
             prefs[Keys.MCP_TOOL_STATES] = serializeToolStatesJson(config.mcpToolStates)
+            prefs[Keys.MCP_BROADCAST_PORT] = config.mcpBroadcastPort
+            prefs[Keys.KEEP_ALIVE_ENABLED] = config.keepAliveEnabled
+            prefs[Keys.KEEP_ALIVE_BACKGROUND] = config.keepAliveInBackground
+            prefs[Keys.KEEP_ALIVE_NOTIFICATION] = config.keepAliveNotification
         }
         // 同步保存到 SD 卡
         saveConfigToSdCard(context, config)

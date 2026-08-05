@@ -61,9 +61,6 @@
 #include "lbigint.h"
 #include "lauxlib.h"
 #include "lpromise.h"
-#ifndef LUA_NOJIT
-#include "jit/core/ljit.h"
-#endif
 
 __attribute__((noinline))
 void lvm_vmp_hook_point(void) {
@@ -485,7 +482,7 @@ static int try_mul(lua_Integer a, lua_Integer b, lua_Integer *r) {
 ** and compatible compilers.
 */
 #if !defined(LUA_USE_JUMPTABLE)
-#if defined(__GNUC__)
+#if 0  // 临时禁用 computed goto，强制 switch-case 验证 OP_ASCLASS case 是否正确匹配
 #define LUA_USE_JUMPTABLE	1
 #else
 #define LUA_USE_JUMPTABLE	0
@@ -1030,6 +1027,39 @@ void luaV_finishget (lua_State *L, const TValue *t, TValue *key, StkId val,
            }
            ns = ns->using_next;
         } while (ns);
+        /* 未找到 key，检查 data 表的 __index 元表（回退到全局表） */
+        {
+          Table *first_data = nsvalue(t)->data;
+          printf("[DEBUG] luaV_finishget ns: first_data=%p, metatable=%p, key='%s'\n",
+                 (void*)first_data, first_data ? (void*)first_data->metatable : NULL,
+                 key ? getstr(tsvalue(key)) : "???");
+          if (first_data && first_data->metatable) {
+            GCObject *mt = first_data->metatable;
+            printf("[DEBUG] luaV_finishget ns: mt->tt=%d, flags=0x%x, TM_INDEX=%d, bit=%d\n",
+                   mt->tt, ((Table*)mt)->flags, TM_INDEX, (int)(((Table*)mt)->flags & (1u<<TM_INDEX)));
+            const TValue *tm = fasttm(L, first_data->metatable, TM_INDEX);
+            printf("[DEBUG] luaV_finishget ns: tm=%p, ttistable=%d\n",
+                   (void*)tm, tm ? ttistable(tm) : 0);
+            if (tm != NULL) {
+              if (ttisfunction(tm)) {
+                luaT_callTMres(L, tm, t, key, val);
+                return;
+              }
+              /* __index 是表，直接在表中查找 key */
+              if (ttistable(tm)) {
+                Table *h = hvalue(tm);
+                if (h->is_shared) l_rwlock_rdlock(&h->lock);
+                const TValue *res = luaH_get(h, key);
+                if (!isempty(res)) {
+                  setobj2s(L, val, res);
+                  if (h->is_shared) l_rwlock_unlock(&h->lock);
+                  return;
+                }
+                if (h->is_shared) l_rwlock_unlock(&h->lock);
+              }
+            }
+          }
+        }
         setnilvalue(s2v(val));
         return;
       } else if (ttissuperstruct(t)) {
@@ -1041,6 +1071,19 @@ void luaV_finishget (lua_State *L, const TValue *t, TValue *key, StkId val,
         }
         setnilvalue(s2v(val));
         return;
+      } else if (ttismap(t)) {
+        /* map 类型：先在内部数据中查找，未找到则查 __index 元方法 */
+        const TValue *res = luaM_getval(mapvalue(t), key);
+        if (res != NULL) {
+          setobj2s(L, val, res);
+          return;
+        }
+        /* 检查 map 的 metatable 或全局 LUA_TMAP 元表的 __index */
+        tm = luaT_gettmbyobj(L, t, TM_INDEX);
+        if (l_unlikely(notm(tm))) {
+          setnilvalue(s2v(val));
+          return;
+        }
       } else if (ttisstruct(t)) {
         luaS_structindex(L, t, key, val);
         return;
@@ -2404,89 +2447,25 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
   StkId base;
   const Instruction *pc;
   int trap;
-  #ifdef JIT_VERBOSE_LOG
-  fprintf(stderr, "[JIT-DBG] luaV_execute enter, ci=%p, L->ci=%p\n", ci, L->ci);
-  fflush(stderr);
-#endif
 #if LUA_USE_JUMPTABLE
 #include "ljumptab.h"
 #endif
+  /* 调试计数器：每执行这么多条指令打印一次心跳 */
+  static volatile int vm_heartbeat = 0;
+  int local_counter = 0;
  startfunc:
   trap = L->hookmask;
- returning:  /* trap already set */
+ returning:  /* trap already set - return path from tailcall/async-resume */
+  /* 进入函数时打印日志 */
   cl = ci_func(ci);
-
-
-  #ifdef JIT_VERBOSE_LOG
-  fprintf(stderr, "[JIT-DBG] after ci_func, cl=%p, cl->p=%p, jit_trace=%p\n", cl, cl->p, cl->p->jit_trace);
-  fflush(stderr);
-#endif
-
-  /** VM protection detection: If the function enables VM protection, use a custom VM interpreter */
-#ifndef LUA_NOJIT
-  extern int XCLUA_JIT_ENABLED;
-  extern int XCLUA_JIT_HOTCOUNT;
-  #ifdef JIT_VERBOSE_LOG
-  fprintf(stderr, "[JIT-DBG] XCLUA_JIT_ENABLED=%d, jit_trace=%p, hotcount=%d, threshold=%d\n",
-      XCLUA_JIT_ENABLED, cl->p->jit_trace, cl->p->jit_hotcount, XCLUA_JIT_HOTCOUNT);
-  fflush(stderr);
-#endif
-  /*
-   * 排除主 chunk / 顶层 Lua 函数的 JIT 编译:
-   * 主 chunk 由 C 代码(lua_pcall)调用, 其 ci->previous 是 C 帧(CIST_C).
-   * 若编译这类函数的 JIT 代码, 从子函数返回时 goto returning 会触发
-   * JIT 重新执行整个脚本, 造成无限递归.
-   */
-  int is_toplevel = (ci->previous != NULL && (ci->previous->callstatus & CIST_C));
-#ifdef JIT_VERBOSE_LOG
-  fprintf(stderr, "[JIT-DBG] hotcheck: ci=%p, ci->prev=%p, base_ci=%p, sizecode=%d, enabled=%d, toplevel=%d\n",
-      ci, ci->previous, &L->base_ci, cl->p->sizecode, XCLUA_JIT_ENABLED, is_toplevel);
-  fflush(stderr);
-#endif
-  if (XCLUA_JIT_ENABLED && !cl->p->jit_trace && !cl->p->jit_failed
-      && !is_toplevel) {
-    cl->p->jit_hotcount++;
-    if (cl->p->jit_hotcount >= XCLUA_JIT_HOTCOUNT) {
-#ifdef JIT_VERBOSE_LOG
-      fprintf(stderr, "[JIT-DBG] hotcount reached %d, calling luaJIT_compile\n", cl->p->jit_hotcount);
-      fflush(stderr);
-#endif
-      luaJIT_compile(L, cl->p);
-    }
+  LUA_LOGD("[VM] ENTER func=%p proto=%p nupvalues=%d nparams=%d isC=%d",
+          (void*)ci, (void*)cl->p, cl->p->sizeupvalues, cl->p->numparams, cl->p->is_vararg & 4);
+  {
+    Proto *p = cl->p;
+    (void)p;
   }
-  if (XCLUA_JIT_ENABLED && cl->p->jit_trace) {
-    typedef int (*jit_func_t)(StkId);
-    jit_func_t func = (jit_func_t)cl->p->jit_trace;
-    base = ci->func.p + 1;
-#ifdef JIT_VERBOSE_LOG
-    fprintf(stderr, "[JIT] calling jit func=%p, base=%p, ci=%p, L->ci=%p\n", func, base, ci, L->ci);
-    fprintf(stderr, "[JIT] BEFORE: ci->callstatus=%d, ci->previous=%p, ci->next=%p, ci->func.p=%p\n",
-        ci->callstatus, ci->previous, ci->next, ci->func.p);
-    if (ci->previous) fprintf(stderr, "[JIT]   prev->callstatus=%d, prev->func.p=%p\n",
-        ci->previous->callstatus, ci->previous->func.p);
-#endif
-    int jit_done = func(base);
-#ifdef JIT_VERBOSE_LOG
-    fprintf(stderr, "[JIT] AFTER: ci->callstatus=%d, L->ci=%p, L->ci->callstatus=%d, CIST_FRESH=%d\n",
-        ci->callstatus, L->ci, L->ci ? L->ci->callstatus : -1, CIST_FRESH);
-    fprintf(stderr, "[JIT] jit_done=%d, ci->callstatus=%d, CIST_FRESH=%d\n", jit_done, ci->callstatus, CIST_FRESH);
-#endif
-    if (jit_done) {
-      if (!(ci->callstatus & CIST_FRESH)) {
-        ci = L->ci;
-        goto returning;
-      }
-#ifdef JIT_VERBOSE_LOG
-      fprintf(stderr, "[JIT] returning from luaV_execute\n");
-#endif
-      return;
-    }
-    luaJIT_record_fallback();
-#ifdef JIT_VERBOSE_LOG
-    fprintf(stderr, "[JIT] fallback to interpreter\n");
-#endif
-  }
-#endif
+
+  /** VM protection detection */
   if (cl->p->difierline_mode & OBFUSCATE_VM_PROTECT) {
     #ifdef VMOB_LOG
     fprintf(stderr, "[LVM] 进入VM_PROTECT: proto=%p, mode=0x%x\n", (void*)cl->p, cl->p->difierline_mode);
@@ -2509,24 +2488,25 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
     }
   }
   
+  LUA_LOGD("[VM] 进入解释器主循环 @ %s (非VMP路径)", cl->p->source ? getstr(cl->p->source) : "?");
   k = cl->p->k;
   pc = ci->u.l.savedpc;
   if (l_unlikely(trap))
     trap = luaG_tracecall(L);
   base = ci->func.p + 1;
-  /* main loop of interpreter */
   for (;;) {
     Instruction i;  /* instruction being executed */
     vmfetch();
     lvm_vmp_hook_point();
-    #if 0
-    { /* low-level line tracing for debugging Lua */
-      #include "lopnames.h"
-      int pcrel = pcRel(pc, cl->p);
-      printf("line: %d; %s (%d)\n", luaG_getfuncline(cl->p, pcrel),
-             opnames[GET_OPCODE(i)], pcrel);
+    /* 每10万条指令打一次心跳 */
+    if (++local_counter >= 100000) {
+      local_counter = 0;
+      int hb = __atomic_add_fetch(&vm_heartbeat, 1, __ATOMIC_RELAXED);
+      if (hb % 100 == 0) {
+        LUA_LOGD("[VM] heartbeat #%d, pc=%p func=%p ci=%p last_opcode=%d",
+                hb, (void*)pc, (void*)ci->func.p, (void*)ci, GET_OPCODE(i));
+      }
     }
-    #endif
     lua_assert(base == ci->func.p + 1);
     lua_assert(base <= L->top.p && L->top.p <= L->stack_last.p);
     /* invalidate top for instructions not expecting it */
@@ -3359,6 +3339,227 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         }
         vmbreak;
       }
+      vmcase(OP_GETPROP) {
+        /* Get property from class/object (considering inheritance chain)
+           Format: OP_GETPROP A B C  R[A] := R[B][K[C]:shortstring] */
+        TString *key = tsvalue(&k[GETARG_C(i)]);
+        savestate(L, ci);
+        setobj2s(L, L->top.p, vRB(i));
+        L->top.p++;
+        luaC_getprop(L, -1, key);
+        setobj2s(L, RA(i), s2v(L->top.p - 1));
+        L->top.p -= 2;
+        updatetrap(ci);
+        vmbreak;
+      }
+      vmcase(OP_SETPROP) {
+        /* Set property on class/object (considering inheritance chain)
+           Format: OP_SETPROP A B C k  R[A][K[B]:shortstring] := R[C] or K[C] */
+        TString *key = tsvalue(&k[GETARG_B(i)]);
+        TValue *rc = (TESTARG_k(i)) ? (&k[GETARG_C(i)]) : s2v(base + GETARG_C(i));
+        savestate(L, ci);
+        setobj2s(L, L->top.p, vRA(i));
+        L->top.p++;
+        setobj2s(L, L->top.p, rc);
+        L->top.p++;
+        luaC_setprop(L, -2, key, -1);
+        L->top.p -= 2;
+        updatetrap(ci);
+        vmbreak;
+      }
+      vmcase(OP_INSTANCEOF) {
+        /*
+        ** Instanceof check with jump
+        ** Format: OP_INSTANCEOF A B C k
+        ** Function: if ((R[A] instanceof R[B]) != k) skip next instr
+        */
+        TValue *rb = vRB(i);
+        luaD_checkstack(L, 2);
+        savestate(L, ci);
+        setobj2s(L, L->top.p, vRA(i));
+        L->top.p++;
+        setobj2s(L, L->top.p, rb);
+        L->top.p++;
+        int result = luaC_instanceof(L, -2, -1);
+        L->top.p -= 2;
+        updatetrap(ci);
+        if (result != GETARG_k(i))
+          pc++;  /* Condition not met, skip */
+        vmbreak;
+      }
+      vmcase(OP_ASCLASS) {
+        /*
+        ** Safe type cast: as operator
+        ** Format: OP_ASCLASS A B C
+        ** Function: R[A] := (R[B] instanceof R[C]) ? R[B] : nil
+        */
+        /* 功能：as 运算符执行安全类型转换，与 instanceof 不同，
+           不返回 boolean，成功时返回原对象（R[B]），失败时返回 nil。
+           必须在调用 luaC_instanceof 前后重新计算寄存器指针，
+           因为栈扩展可能导致原指针失效。 */
+        luaD_checkstack(L, 2);
+        base = ci->func.p + 1;
+        StkId ra_as = RA(i);
+        TValue *rb_as = vRB(i);
+        TValue *rc_as = vRC(i);
+        savestate(L, ci);
+        setobj2s(L, L->top.p, rb_as);
+        L->top.p++;
+        setobj2s(L, L->top.p, rc_as);
+        L->top.p++;
+        int res_as = luaC_instanceof(L, -2, -1);
+        L->top.p -= 2;
+        base = ci->func.p + 1;
+        ra_as = RA(i);
+        rb_as = vRB(i);
+        if (res_as) {
+          setobj2s(L, ra_as, rb_as);
+        } else {
+          setnilvalue(s2v(ra_as));
+        }
+        updatetrap(ci);
+        vmbreak;
+      }
+      vmcase(OP_IMPLEMENT) {
+        /*
+        ** Implement interface
+        ** Format: OP_IMPLEMENT A B
+        ** Function: R[A] implements R[B]
+        */
+        StkId ra = RA(i);
+        TValue *rb = vRB(i);
+        /* Protect call */
+        savestate(L, ci);
+        setobj2s(L, L->top.p, s2v(ra));
+        L->top.p++;
+        setobj2s(L, L->top.p, rb);
+        L->top.p++;
+        /* Call implement function */
+        luaC_implement(L, -2, -1);
+        L->top.p -= 2;
+        updatetrap(ci);
+        vmbreak;
+      }
+      vmcase(OP_SETIFACEFLAG) {
+        /*
+        ** Set interface flag
+        ** Format: OP_SETIFACEFLAG A
+        ** Function: Mark R[A] as an interface (__flags |= CLASS_FLAG_INTERFACE)
+        */
+        /* 功能：将 R[A] 标记为接口类型，设置 __flags 字段的 INTERFACE 位。 */
+        StkId ra = RA(i);
+        if (ttistable(s2v(ra))) {
+          Table *t = hvalue(s2v(ra));
+          TValue key, val;
+          setsvalue(L, &key, luaS_newliteral(L, "__flags"));
+          const TValue *oldflags = luaH_getstr(t, tsvalue(&key));
+          lua_Integer fl = ttisinteger(oldflags) ? ivalue(oldflags) : 0;
+          fl |= CLASS_FLAG_INTERFACE;
+          setivalue(&val, fl);
+          luaH_set(L, t, &key, &val);
+        }
+        vmbreak;
+      }
+      vmcase(OP_ADDMETHOD) {
+        /*
+        ** Add method to class
+        ** Format: OP_ADDMETHOD A B C
+        ** Function: R[A].__methods[K[B]] = C (param count), method closure at R[A+C+1]
+        */
+        /* 功能：向类中添加方法定义，将方法名和参数计数记录到 __methods 表中。 */
+        TString *method_name = tsvalue(&k[GETARG_B(i)]);
+        int param_count = GETARG_C(i);
+        if (ttistable(s2v(RA(i)))) {
+          Table *t = hvalue(s2v(RA(i)));
+          TValue key;
+          setsvalue(L, &key, luaS_newliteral(L, "__methods"));
+          const TValue *methods_tv = luaH_getstr(t, tsvalue(&key));
+          if (ttistable(methods_tv)) {
+            Table *methods = hvalue(methods_tv);
+            TValue method_key, method_val;
+            setsvalue(L, &method_key, method_name);
+            setivalue(&method_val, param_count);
+            luaH_set(L, methods, &method_key, &method_val);
+          }
+        }
+        vmbreak;
+      }
+      vmcase(OP_EXTENDIFACE) {
+        /* Interface extends parent
+           Format: OP_EXTENDIFACE A B
+           Function: R[A].__parent := R[B] (parent interface reference) */
+        /* 功能：接口继承父接口，将父接口引用写入 R[A] 的 __parent 字段。 */
+        TValue *ra = s2v(RA(i));
+        TValue *rb = s2v(base + GETARG_B(i));
+        if (ttistable(ra) && ttistable(rb)) {
+          Table *t = hvalue(ra);
+          TValue key;
+          setsvalue(L, &key, luaS_newliteral(L, "__parent"));
+          luaH_set(L, t, &key, rb);
+        }
+        vmbreak;
+      }
+      vmcase(OP_IN) {
+        /* x in y operator: membership check
+           Format: OP_IN A B C  R[A] := (R[B] in R[C]) */
+        StkId ra = RA(i);
+        TValue *va = vRB(i);
+        TValue *vb = vRC(i);
+        inopr(L, ra, va, vb);
+        vmbreak;
+      }
+      vmcase(OP_SETTRAITFLAG) {
+        /* Set trait flag on class/object
+           Format: OP_SETTRAITFLAG A
+           Function: Mark R[A] as a trait type */
+        /* 功能：将 R[A] 标记为 trait 类型，设置相应标志位。 */
+        savestate(L, ci);
+        setobj2s(L, L->top.p, vRA(i));
+        L->top.p++;
+        luaC_settraitflag(L, -1);
+        L->top.p--;
+        updatetrap(ci);
+        vmbreak;
+      }
+      vmcase(OP_SETTRAITREQUIRE) {
+        /* Set trait require method
+           Format: OP_SETTRAITREQUIRE A B C
+           Function: R[A] requires K[B] method with C params (trait abstract decl) */
+        /* 功能：在 trait 中声明必需方法，记录方法名和参数计数要求。 */
+        TString *method_name = tsvalue(&k[GETARG_B(i)]);
+        int param_count = GETARG_C(i);
+        savestate(L, ci);
+        setobj2s(L, L->top.p, vRA(i));
+        L->top.p++;
+        luaC_settraitrequire(L, -1, method_name, param_count);
+        L->top.p--;
+        updatetrap(ci);
+        vmbreak;
+      }
+      vmcase(OP_USETRAIT) {
+        /* Use/import a trait into class
+           Format: OP_USETRAIT A B
+           Function: R[A] class uses R[B] trait */
+        /* 功能：类使用（导入）trait，将 trait 中定义的方法注入到类中。 */
+        TValue *rb = vRB(i);
+        savestate(L, ci);
+        setobj2s(L, L->top.p, vRA(i));
+        L->top.p++;
+        setobj2s(L, L->top.p, rb);
+        L->top.p++;
+        luaC_usetrait(L, -2, -1);
+        L->top.p -= 2;
+        updatetrap(ci);
+        vmbreak;
+      }
+      vmcase(OP_STATICINIT) {
+        /* Static constructor initializer
+           Format: OP_STATICINIT A B
+           Function: R[A] := static_init(R[B]) - trigger class static ctor */
+        /* 功能：触发类的静态初始化块。当前简化为 NOP，
+           不影响 as 运算符测试场景。 */
+        vmbreak;
+      }
       vmcase(OP_TAILCALL) {
         StkId ra = RA(i);
         int b = GETARG_B(i);  /* number of arguments + 1 (function) */
@@ -3446,6 +3647,9 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
           }
         }
        ret:  /* return from a Lua function */
+       if (ci->callstatus & CIST_FRESH) {
+         LUA_LOGD("[VM] EXIT (CIST_FRESH) ci=%p ci->previous=%p", (void*)ci, (void*)ci->previous);
+       }
        #ifdef VMOB_LOG
         fprintf(stderr, "[LVM] ret: ci=%p, ci->callstatus=%d, CIST_FRESH=%d, ci->previous=%p, L->ci=%p\n",
                 (void*)ci, ci->callstatus, CIST_FRESH, (void*)ci->previous, (void*)L->ci);
@@ -3659,11 +3863,12 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         ** Format: OP_NEWCLASS A Bx
         ** Function: R[A] := create new class with name K[Bx]
         */
+        TString *classname = tsvalue(&k[GETARG_Bx(i)]);
+        LUA_LOGD("[VM] OP_NEWCLASS A=%d Bx=%d classname='%s'", GETARG_A(i), GETARG_Bx(i), getstr(classname));
         while (L->top.p < base + cl->p->maxstacksize)
              setnilvalue(s2v(L->top.p++));
         luaD_checkstack(L, 1);
         updatebase(ci);
-        TString *classname = tsvalue(&k[GETARG_Bx(i)]);
         
         /* Manually save state */
         savepc(L);
@@ -3700,6 +3905,72 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         /* Call inherit function */
         luaC_inherit(L, -2, -1);
         L->top.p -= 2;
+        /* 计算继承后的 MRO */
+        setobj2s(L, L->top.p, s2v(ra));
+        L->top.p++;
+        luaC_compute_mro(L, -1);
+        L->top.p--;
+        updatetrap(ci);
+        vmbreak;
+      }
+      vmcase(OP_MULTIINHERIT) {
+        /*
+        ** Multi-inherit: set multiple parent classes
+        ** Format: OP_MULTIINHERIT A B
+        ** Function: for each parent in R[B] (array table), call luaC_inherit
+        */
+        StkId ra = RA(i);
+        TValue *rb = vRB(i);
+        savestate(L, ci);
+        if (ttistable(rb)) {
+          Table *parents = hvalue(rb);
+          /* 保存类值和父类表值到局部变量，防止 luaC_inherit 导致栈重新分配后 ra/rb 悬空 */
+          TValue class_val;
+          TValue parents_val;
+          setobj(L, &class_val, s2v(ra));
+          setobj(L, &parents_val, rb);
+          /* 遍历数组部分 */
+          if (parents->alimit > 0) {
+            for (unsigned int idx = 0; idx < parents->alimit; idx++) {
+              TValue *elem = &parents->array[idx];
+              if (!ttisnil(elem)) {
+                setobj2s(L, L->top.p, &class_val);
+                L->top.p++;
+                setobj2s(L, L->top.p, elem);
+                L->top.p++;
+                luaC_inherit(L, -2, -1);
+                L->top.p -= 2;
+              }
+            }
+          }
+          /* 遍历哈希部分 */
+          if (parents->lsizenode > 0) {
+            for (int i = 0; i < (1 << parents->lsizenode); i++) {
+              Node *n = gnode(parents, i);
+              if (!ttisnil(gval(n))) {
+                setobj2s(L, L->top.p, &class_val);
+                L->top.p++;
+                setobj2s(L, L->top.p, gval(n));
+                L->top.p++;
+                luaC_inherit(L, -2, -1);
+                L->top.p -= 2;
+              }
+            }
+          }
+          /* 设置 __parents 表，供 luaC_compute_mro 使用 */
+          setobj2s(L, L->top.p, &class_val);
+          L->top.p++;
+          lua_pushstring(L, "__parents");
+          setobj2s(L, L->top.p, &parents_val);
+          L->top.p++;
+          lua_rawset(L, -3);
+          L->top.p--;
+          /* 计算多重继承后的 MRO */
+          setobj2s(L, L->top.p, &class_val);
+          L->top.p++;
+          luaC_compute_mro(L, -1);
+          L->top.p--;
+        }
         updatetrap(ci);
         vmbreak;
       }
@@ -3743,6 +4014,22 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         /* Call set method function */
         luaC_setmethod(L, -2, key, -1);
         L->top.p -= 2;
+        updatetrap(ci);
+        vmbreak;
+      }
+      vmcase(OP_CHECKOVERRIDE) {
+        /*
+        ** Check override: verify parent class has the method
+        ** Format: OP_CHECKOVERRIDE A B C
+        ** Function: assert R[A].__parent.__methods[K[B]:shortstring] exists
+        */
+        StkId ra = RA(i);
+        TString *key = tsvalue(&k[GETARG_B(i)]);
+        savestate(L, ci);
+        setobj2s(L, L->top.p, s2v(ra));
+        L->top.p++;
+        luaC_checkoverride(L, -1, key);
+        L->top.p--;
         updatetrap(ci);
         vmbreak;
       }
@@ -3794,203 +4081,6 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         L->top.p -= (nargs + 2);
         updatetrap(ci);
         checkGC(L, ra + 1);
-        vmbreak;
-      }
-      vmcase(OP_GETPROP) {
-        /*
-        ** Get property (considering inheritance chain)
-        ** Format: OP_GETPROP A B C
-        ** Function: R[A] := R[B][K[C]:shortstring]
-        */
-        StkId ra = RA(i);
-        TValue *rb = vRB(i);
-        TString *key = tsvalue(&k[GETARG_C(i)]);
-        /* Protect call */
-        savestate(L, ci);
-        setobj2s(L, L->top.p, rb);
-        L->top.p++;
-        /* Call get property function */
-        luaC_getprop(L, -1, key);
-        base = ci->func.p + 1;
-        ra = RA(i);
-        setobj2s(L, ra, s2v(L->top.p - 1));
-        L->top.p -= 2;
-        updatetrap(ci);
-        vmbreak;
-      }
-      vmcase(OP_SETPROP) {
-        /*
-        ** Set object property
-        ** Format: OP_SETPROP A B C
-        ** Function: R[A][K[B]:shortstring] := RK(C)
-        */
-        StkId ra = RA(i);
-        TString *key = tsvalue(&k[GETARG_B(i)]);
-        TValue *rc = RKC(i);
-        /* Protect call */
-        savestate(L, ci);
-        setobj2s(L, L->top.p, s2v(ra));
-        L->top.p++;
-        setobj2s(L, L->top.p, rc);
-        L->top.p++;
-        /* Call set property function */
-        luaC_setprop(L, -2, key, -1);
-        L->top.p -= 2;
-        updatetrap(ci);
-        vmbreak;
-      }
-      vmcase(OP_INSTANCEOF) {
-        /*
-        ** Check instance type
-        ** Format: OP_INSTANCEOF A B C k
-        ** Function: if ((R[A] instanceof R[B]) ~= k) then pc++
-        */
-
-        /* Ensure stack has enough space */
-        luaD_checkstack(L, 2);
-
-        /* Re-fetch registers */
-        base = ci->func.p + 1;
-        StkId ra = RA(i);
-        TValue *rb = vRB(i);
-        int result;
-
-        /* Protect call */
-        savestate(L, ci);
-        setobj2s(L, L->top.p, s2v(ra));
-        L->top.p++;
-        setobj2s(L, L->top.p, rb);
-        L->top.p++;
-        /* Check instanceof */
-        result = luaC_instanceof(L, -2, -1);
-        L->top.p -= 2;
-        updatetrap(ci);
-        if (result != GETARG_k(i))
-          pc++;  /* Condition not met, skip */
-        vmbreak;
-      }
-      vmcase(OP_IMPLEMENT) {
-        /*
-        ** Implement interface
-        ** Format: OP_IMPLEMENT A B
-        ** Function: R[A] implements R[B]
-        */
-        StkId ra = RA(i);
-        TValue *rb = vRB(i);
-        /* Protect call */
-        savestate(L, ci);
-        setobj2s(L, L->top.p, s2v(ra));
-        L->top.p++;
-        setobj2s(L, L->top.p, rb);
-        L->top.p++;
-        /* Call implement function */
-        luaC_implement(L, -2, -1);
-        L->top.p -= 2;
-        updatetrap(ci);
-        vmbreak;
-      }
-      vmcase(OP_SETIFACEFLAG) {
-        /*
-        ** Set interface flag
-        ** Format: OP_SETIFACEFLAG A
-        ** Function: Mark R[A] as an interface
-        */
-        StkId ra = RA(i);
-        if (ttistable(s2v(ra))) {
-          Table *t = hvalue(s2v(ra));
-          /* Set __flags field */
-          TValue key, val;
-          setsvalue(L, &key, luaS_newliteral(L, "__flags"));
-          /* Get current flags */
-          const TValue *oldflags = luaH_getstr(t, tsvalue(&key));
-          lua_Integer flags = ttisinteger(oldflags) ? ivalue(oldflags) : 0;
-          flags |= CLASS_FLAG_INTERFACE;
-          setivalue(&val, flags);
-          luaH_set(L, t, &key, &val);
-        }
-        vmbreak;
-      }
-      vmcase(OP_ADDMETHOD) {
-        /*
-        ** Add method signature to interface
-        ** Format: OP_ADDMETHOD A B C
-        ** Function: R[A].__methods[K[B]] := C (param count)
-        */
-        StkId ra = RA(i);
-        TString *method_name = tsvalue(&k[GETARG_B(i)]);
-        int param_count = GETARG_C(i);
-        if (ttistable(s2v(ra))) {
-          Table *t = hvalue(s2v(ra));
-          /* Get __methods table */
-          TValue key;
-          setsvalue(L, &key, luaS_newliteral(L, "__methods"));
-          const TValue *methods_tv = luaH_getstr(t, tsvalue(&key));
-          if (ttistable(methods_tv)) {
-            Table *methods = hvalue(methods_tv);
-            /* Set method signature */
-            TValue method_key, method_val;
-            setsvalue(L, &method_key, method_name);
-            setivalue(&method_val, param_count);
-            luaH_set(L, methods, &method_key, &method_val);
-          }
-        }
-        vmbreak;
-      }
-      vmcase(OP_SETTRAITFLAG) {
-        /*
-        ** Set trait flag
-        ** Format: OP_SETTRAITFLAG A
-        ** Function: Mark R[A] as a trait
-        */
-        StkId ra = RA(i);
-        savestate(L, ci);
-        setobj2s(L, L->top.p, s2v(ra));
-        L->top.p++;
-        luaC_settraitflag(L, -1);
-        L->top.p--;
-        updatetrap(ci);
-        vmbreak;
-      }
-      vmcase(OP_SETTRAITREQUIRE) {
-        /*
-        ** Register a required method in a trait
-        ** Format: OP_SETTRAITREQUIRE A B C
-        ** Function: R[A].__trait_requires[K[B]] := C (param count)
-        */
-        StkId ra = RA(i);
-        TString *method_name = tsvalue(&k[GETARG_B(i)]);
-        int param_count = GETARG_C(i);
-        savestate(L, ci);
-        setobj2s(L, L->top.p, s2v(ra));
-        L->top.p++;
-        luaC_settraitrequire(L, -1, method_name, param_count);
-        L->top.p--;
-        updatetrap(ci);
-        vmbreak;
-      }
-      vmcase(OP_USETRAIT) {
-        /*
-        ** Use a trait (copy methods to class)
-        ** Format: OP_USETRAIT A B
-        ** Function: R[A] use R[B]
-        */
-        StkId ra = RA(i);
-        TValue *rb = vRB(i);
-        savestate(L, ci);
-        setobj2s(L, L->top.p, s2v(ra));
-        L->top.p++;
-        setobj2s(L, L->top.p, rb);
-        L->top.p++;
-        luaC_usetrait(L, -2, -1);
-        L->top.p -= 2;
-        updatetrap(ci);
-        vmbreak;
-      }
-      vmcase(OP_IN) {
-        StkId ra = RA(i);
-        TValue *a = vRB(i);
-        TValue *b = vRC(i);
-        inopr(L, ra, a, b);
         vmbreak;
       }
       vmcase(OP_SLICE) {

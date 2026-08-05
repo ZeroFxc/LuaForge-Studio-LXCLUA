@@ -170,6 +170,8 @@ object ZipUtil {
                 var count: Int
                 //                byte data[] = new byte[BUFFER];
                 val entryName = entry!!.getName()
+                // 跳过无效条目（name 为 null 会导致创建 null 文件夹）
+                if (entryName == null) continue
 
                 val newEntryName = destPath + "/" + entryName
                 println(newEntryName)

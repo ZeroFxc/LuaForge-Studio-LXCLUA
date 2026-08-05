@@ -52,6 +52,7 @@ class LuaLanguage : Language {
             "default",
             "defer",
             "newClass",
+            "override",
             "do",
             "else",
             "elseif",
@@ -459,6 +460,13 @@ class LuaLanguage : Language {
      */
     override fun getAnalyzeManager(): AnalyzeManager {
         return manager
+    }
+
+    /**
+     * 设置是否启用 JNI 语法诊断（仅 .lua / .aly 文件需要）
+     */
+    fun setJniDiagnosticsEnabled(enabled: Boolean) {
+        manager.jniDiagnosticsEnabled = enabled
     }
 
     /**

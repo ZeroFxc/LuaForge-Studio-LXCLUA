@@ -438,49 +438,79 @@ fun SymbolBar(
             title = { Text(stringResource(R.string.select_copy_format)) },
             text = {
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // 选项1: import "全类名"
-                    Surface(
-                        color = Color.Transparent,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                val importStatement = "import \"$fullName\""
-                                clipboardManager.setText(AnnotatedString(importStatement))
-                                toast.showToast(context.getString(R.string.java_api_import_statement_copied))
-                                showFormatDialog = false
-                                pendingFullName = null
-                            }
-                            .padding(12.dp),
+                    OutlinedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            val importStatement = "import \"$fullName\""
+                            clipboardManager.setText(AnnotatedString(importStatement))
+                            toast.showToast(context.getString(R.string.java_api_import_statement_copied))
+                            showFormatDialog = false
+                            pendingFullName = null
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        border = CardDefaults.outlinedCardBorder(),
                     ) {
-                        Text(
-                            text = "import \"$fullName\"",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "import \"$fullName\"",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(R.string.copy_format_import_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
 
                     // 选项2: local 类名 = luajava.bindClass "全类名"
                     val shortName = fullName.substringAfterLast('.')
-                    Surface(
-                        color = Color.Transparent,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                val bindStatement = "local $shortName = luajava.bindClass \"$fullName\""
-                                clipboardManager.setText(AnnotatedString(bindStatement))
-                                toast.showToast(context.getString(R.string.java_api_import_statement_copied))
-                                showFormatDialog = false
-                                pendingFullName = null
-                            }
-                            .padding(12.dp),
+                    OutlinedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            val bindStatement = "local $shortName = luajava.bindClass \"$fullName\""
+                            clipboardManager.setText(AnnotatedString(bindStatement))
+                            toast.showToast(context.getString(R.string.java_api_import_statement_copied))
+                            showFormatDialog = false
+                            pendingFullName = null
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        border = CardDefaults.outlinedCardBorder(),
                     ) {
-                        Text(
-                            text = "local $shortName = luajava.bindClass \"$fullName\"",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "local $shortName = luajava.bindClass \"$fullName\"",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(R.string.copy_format_bind_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             },

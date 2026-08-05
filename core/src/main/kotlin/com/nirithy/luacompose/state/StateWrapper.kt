@@ -4,24 +4,21 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 
 /**
- * 响应式状态包装器（带依赖追踪）
+ * 响应式状态包装器（带依赖追踪 + Scope 依赖失效）
  *
  * 核心机制（移植自 kulipai LuaCompose）：
- * - getValue() 时自动注册当前 buildCycle 为依赖
- * - setValue() 时只触发「在当前 buildCycle 中被读取过」的状态变更
+ * - getValue() 时自动注册当前 buildCycle 为依赖，同时注册活跃 ComposeScope 为依赖方
+ * - setValue() 时触发依赖过滤 + Scope 精准失效
  * - 未在当前树中显示的状态变更被跳过，避免无效的全量刷新
  *
  * 与 kulipai ComposeScope 的对应关系：
  *   kulipai: ComposeState.dependentScopes (WeakHashMap<ComposeScope, Boolean>)
- *   nirithy: StateWrapper.lastReadCycle (记录最后一次被读取的 buildCycle)
+ *   nirithy: StateWrapper.lastReadCycle (buildCycle 过滤) + dependentScopes (Scope 精准失效)
  *
  * buildCycle 是一个全局递增计数器，每次 refreshNodeTree 时 +1。
  * getValue() 将 lastReadCycle 设为当前 buildCycle。
- * setValue() 比较 lastReadCycle == buildCycle，只有匹配时才调用 onChange。
- *
- * - 普通状态：通过 state() 创建，onChange = scheduleRefresh()（全量刷新）
- * - 可变状态：通过 mutableState() 创建，onChange = recomposeTrigger++（轻量重组）
- * - 派生状态：通过 derivedStateOf() 创建，只读
+ * setValue() 比较 lastReadCycle == buildCycle，只有匹配时才触发 onChange。
+ * 同时遍历 dependentScopes 调用 scope.invalidate() 实现精准重组。
  */
 open class StateWrapper<T>(
     initialValue: T,
@@ -39,21 +36,56 @@ open class StateWrapper<T>(
     private var lastReadCycle: Long = -1L
 
     /**
+     * 依赖此状态的 ComposeScope 集合（线程安全）
+     * 参考 LuaCompose-master 的 ComposeState.dependentScopes
+     */
+    private val dependentScopes = java.util.Collections.synchronizedSet(
+        java.util.Collections.newSetFromMap(java.util.WeakHashMap<ComposeScope, Boolean>())
+    )
+
+    /**
+     * 注册依赖方 Scope
+     * 当 Scope 读取此状态时调用，建立依赖关系
+     */
+    fun registerDependency(scope: ComposeScope) {
+        dependentScopes.add(scope)
+    }
+
+    /**
+     * 失效所有依赖方 Scope，触发精准重组
+     */
+    fun invalidateDependents() {
+        synchronized(dependentScopes) {
+            for (scope in dependentScopes) {
+                scope.invalidate()
+            }
+        }
+    }
+
+    /**
      * 读取值，同时注册依赖追踪
      * 如果当前存在活跃的 buildCycle，记录 lastReadCycle
+     * 同时注册当前活跃的 ComposeScope 为依赖方
      */
     open fun getValue(): T {
         // ★ 依赖追踪：记录当前 buildCycle 为最后一次读取周期
         if (currentBuildCycle > 0) {
             lastReadCycle = currentBuildCycle
         }
+        // ★ Scope 依赖注册：自动注册当前活跃 Scope
+        try {
+            val activeScope = com.nirithy.luacompose.bridge.ComposeBridgeInstance.current.currentScope
+            registerDependency(activeScope)
+        } catch (_: Exception) {
+            // 初始化阶段可能尚未初始化 bridge
+        }
         return state.value
     }
 
     /**
-     * 设置值（带类型转换 + 依赖过滤）
+     * 设置值（带类型转换 + 依赖过滤 + Scope 精准失效）
      * 只有 lastReadCycle == currentBuildCycle 时（即此状态在当前树中被读取过）才触发 onChange。
-     * 其他情况表示此状态不在当前 UI 树中，跳过刷新避免无效重建。
+     * 同时遍历 dependentScopes 调用 scope.invalidate() 实现精准重组。
      */
     @Suppress("UNCHECKED_CAST")
     open fun setValue(v: Any?) {
@@ -66,7 +98,10 @@ open class StateWrapper<T>(
         }
         state.value = converted
 
-        // ★ 依赖过滤：只触发在当前 buildCycle 中被读取过的状态
+        // Scope 精准失效：通知所有依赖此状态的 Scope 重组
+        invalidateDependents()
+
+        // 依赖过滤：只触发在当前 buildCycle 中被读取过的状态
         if (lastReadCycle == currentBuildCycle || currentBuildCycle <= 0) {
             onChange?.invoke()
         }

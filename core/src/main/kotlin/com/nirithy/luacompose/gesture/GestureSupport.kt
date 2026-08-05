@@ -25,14 +25,23 @@ data class GestureConfig(
     var onDrag: LuaObject? = null,
     var onDragEnd: LuaObject? = null,
     var onDragCancel: LuaObject? = null,
+    /** pointerInput 稳定 key 列表，由 ModifierChain.pointerInput(key1, key2, callback) 设置 */
+    var pointerInputKeys: List<Any>? = null,
+    /** 手势配置回调块，由 pointerInput 的 callback 参数设置，在 applyGestures 中首先调用 */
+    var gestureBlock: LuaObject? = null,
 ) {
     val hasAny: Boolean get() = onTap != null || onDoubleTap != null || onLongPress != null
             || onDragStart != null || onDrag != null || onDragEnd != null || onDragCancel != null
+            || gestureBlock != null
 }
 
 /**
  * 将手势配置应用到 Modifier
  * 在 Composable 上下文中调用
+ *
+ * 流程：
+ * 1. 先调用 gestureBlock（Lua 的 pointerInput callback），在其中通过 detectDragGestures/detectTapGestures 设置回调
+ * 2. 然后根据 config 中设置的回调注册 Compose 手势检测器
  */
 @Composable
 fun Modifier.applyGestures(config: GestureConfig?): Modifier {
@@ -40,15 +49,35 @@ fun Modifier.applyGestures(config: GestureConfig?): Modifier {
 
     // ★ 使用 remember 创建稳定 key，确保 childrenFunc 重组时 pointerInput 协程不被取消
     val gestureKey = remember { Any() }
+    // 如果 ModifierChain 设置了 pointerInputKeys，使用它们；否则使用默认 gestureKey
+    val keys = config.pointerInputKeys?.toTypedArray() ?: arrayOf(gestureKey)
 
-    return this.pointerInput(gestureKey) {
-        // 拖拽手势
+    return this.pointerInput(*keys) {
+        // Step 1: 调用 gestureBlock 配置手势（Lua 的 detectDragGestures/detectTapGestures 会设置 config 的回调）
+        config.gestureBlock?.let { block ->
+            try {
+                // 设置当前 GestureConfig 引用，供 Lua 的 detectDragGestures/detectTapGestures 使用
+                ComposeBridgeInstance.current.currentGestureConfig = config
+                block.call()
+            } catch (e: Exception) {
+                logE(TAG) { "gestureBlock 执行失败: ${e.message}" }
+            } finally {
+                ComposeBridgeInstance.current.currentGestureConfig = null
+            }
+        }
+
+        // Step 2: 拖拽手势
         if (config.onDrag != null || config.onDragStart != null || config.onDragEnd != null) {
             logD(TAG) { "detectDragGestures 启动" }
             detectDragGestures(
                 onDragStart = { offset ->
                     config.onDragStart?.let { fn ->
-                        try { synchronized(ComposeBridgeInstance.current.luaLock) { fn.call(offset.x.toDouble(), offset.y.toDouble()) } }
+                        try {
+                            synchronized(ComposeBridgeInstance.current.luaLock) {
+                                // 传递 LuaOffset 对象，支持 .x 和 .y 访问
+                                fn.call(com.nirithy.luacompose.graphics.LuaOffset(offset.x.toDouble(), offset.y.toDouble()))
+                            }
+                        }
                         catch (e: Exception) { logE(TAG) { "onDragStart 回调失败: ${e.message}" } }
                     }
                 },
@@ -68,7 +97,11 @@ fun Modifier.applyGestures(config: GestureConfig?): Modifier {
                     config.onDrag?.let { fn ->
                         try {
                             change.consume()
-                            synchronized(ComposeBridgeInstance.current.luaLock) { fn.call(dragAmount.x.toDouble(), dragAmount.y.toDouble()) }
+                            synchronized(ComposeBridgeInstance.current.luaLock) {
+                                // 传递 change 对象（Java）和 dragAmount 作为 LuaOffset 对象
+                                // Lua 侧: function(change, dragAmount) change:consume(); dragAmount.y ... end
+                                fn.call(change, com.nirithy.luacompose.graphics.LuaOffset(dragAmount.x.toDouble(), dragAmount.y.toDouble()))
+                            }
                         } catch (e: Exception) {
                             logE(TAG) { "onDrag 回调失败: ${e.message}" }
                         }
@@ -82,19 +115,31 @@ fun Modifier.applyGestures(config: GestureConfig?): Modifier {
             detectTapGestures(
                 onTap = config.onTap?.let { fn ->
                     { offset ->
-                        try { synchronized(ComposeBridgeInstance.current.luaLock) { fn.call(offset.x.toDouble(), offset.y.toDouble()) } }
+                        try {
+                            synchronized(ComposeBridgeInstance.current.luaLock) {
+                                fn.call(com.nirithy.luacompose.graphics.LuaOffset(offset.x.toDouble(), offset.y.toDouble()))
+                            }
+                        }
                         catch (e: Exception) { logE(TAG) { "onTap 回调失败: ${e.message}" } }
                     }
                 },
                 onDoubleTap = config.onDoubleTap?.let { fn ->
                     { offset ->
-                        try { synchronized(ComposeBridgeInstance.current.luaLock) { fn.call(offset.x.toDouble(), offset.y.toDouble()) } }
+                        try {
+                            synchronized(ComposeBridgeInstance.current.luaLock) {
+                                fn.call(com.nirithy.luacompose.graphics.LuaOffset(offset.x.toDouble(), offset.y.toDouble()))
+                            }
+                        }
                         catch (e: Exception) { logE(TAG) { "onDoubleTap 回调失败: ${e.message}" } }
                     }
                 },
                 onLongPress = config.onLongPress?.let { fn ->
                     { offset ->
-                        try { synchronized(ComposeBridgeInstance.current.luaLock) { fn.call(offset.x.toDouble(), offset.y.toDouble()) } }
+                        try {
+                            synchronized(ComposeBridgeInstance.current.luaLock) {
+                                fn.call(com.nirithy.luacompose.graphics.LuaOffset(offset.x.toDouble(), offset.y.toDouble()))
+                            }
+                        }
                         catch (e: Exception) { logE(TAG) { "onLongPress 回调失败: ${e.message}" } }
                     }
                 }

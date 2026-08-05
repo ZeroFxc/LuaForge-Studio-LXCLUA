@@ -40,6 +40,9 @@ class LuaIncrementalAnalyzeManager :
     
     var highlightHexColorsEnabled: Boolean = false
 
+    /** 是否启用 JNI 语法诊断（仅 .lua / .aly 文件需要） */
+    var jniDiagnosticsEnabled: Boolean = true
+
     companion object {
         private const val STATE_INCOMPLETE_COMMENT = 1
         private const val STATE_INCOMPLETE_LONG_STRING = 2
@@ -134,38 +137,41 @@ class LuaIncrementalAnalyzeManager :
                 return
             }
 
-            val result = LuaParserUtil.parse(text)
-            val json = JSONObject(result)
+            // 仅 .lua / .aly 文件启用 JNI 语法诊断，其他文件类型跳过
+            if (jniDiagnosticsEnabled) {
+                val result = LuaParserUtil.parse(text)
+                val json = JSONObject(result)
 
-            if (!json.optBoolean("status", true)) {
-                // 解析器不可用时跳过诊断（原生模块未加载等），避免误报波浪线
-                val available = json.optBoolean("available", true)
-                if (!available) {
-                    getReceiver()?.setDiagnostics(this, diagnosticsContainer)
-                    return
-                }
+                if (!json.optBoolean("status", true)) {
+                    // 解析器不可用时跳过诊断（原生模块未加载等），避免误报波浪线
+                    val available = json.optBoolean("available", true)
+                    if (!available) {
+                        getReceiver()?.setDiagnostics(this, diagnosticsContainer)
+                        return
+                    }
 
-                val errorLine = json.optInt("line", 1)
-                val errorMessage = json.optString("message", "Syntax error")
+                    val errorLine = json.optInt("line", 1)
+                    val errorMessage = json.optString("message", "Syntax error")
 
-                var lineStart = 0
-                for (i in 0 until (errorLine - 1)) {
+                    var lineStart = 0
+                    for (i in 0 until (errorLine - 1)) {
+                        val nextNL = text.indexOf('\n', lineStart)
+                        if (nextNL == -1) break
+                        lineStart = nextNL + 1
+                    }
                     val nextNL = text.indexOf('\n', lineStart)
-                    if (nextNL == -1) break
-                    lineStart = nextNL + 1
-                }
-                val nextNL = text.indexOf('\n', lineStart)
-                val lineEnd = if (nextNL == -1) text.length else nextNL
+                    val lineEnd = if (nextNL == -1) text.length else nextNL
 
-                val detail = DiagnosticDetail(errorMessage, errorMessage)
-                val region = DiagnosticRegion(
-                    lineStart,
-                    lineEnd,
-                    DiagnosticRegion.SEVERITY_ERROR,
-                    0L,
-                    detail
-                )
-                diagnosticsContainer.addDiagnostic(region)
+                    val detail = DiagnosticDetail(errorMessage, errorMessage)
+                    val region = DiagnosticRegion(
+                        lineStart,
+                        lineEnd,
+                        DiagnosticRegion.SEVERITY_ERROR,
+                        0L,
+                        detail
+                    )
+                    diagnosticsContainer.addDiagnostic(region)
+                }
             }
 
             getReceiver()?.setDiagnostics(this, diagnosticsContainer)
@@ -592,7 +598,7 @@ Tokens.HEX_COLOR -> {
                 Tokens.AS, Tokens.IS, Tokens.INSTANCEOF, Tokens.LET, Tokens.TAKE,
                 Tokens.MATCH, Tokens.WITH, Tokens.EXPORT, Tokens.KEYWORD_KW, Tokens.OPERATOR_KW,
                 Tokens.ABSTRACT, Tokens.CLASS, Tokens.EXTENDS, Tokens.FINAL,
-                Tokens.IMPLEMENTS, Tokens.INTERFACE, Tokens.NEW, Tokens.SUPER,
+                Tokens.IMPLEMENTS, Tokens.INTERFACE, Tokens.NEW, Tokens.OVERRIDE, Tokens.SUPER,
                 Tokens.PRIVATE, Tokens.PROTECTED, Tokens.PUBLIC, Tokens.STATIC,
                 Tokens.ASYNC, Tokens.AWAIT, Tokens.STRUCT, Tokens.SUPERSTRUCT,
                 Tokens.CONCEPT, Tokens.NAMESPACE,Tokens.TRAIT,Tokens.USE, Tokens.USING, Tokens.REQUIRES,

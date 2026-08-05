@@ -50,10 +50,14 @@ class LuaCoroutineScope {
         }
     }
 
-    /** 延迟（毫秒），仅限 Kotlin 协程内部调用，Lua 请使用 launchAfter */
-    @Deprecated("Lua 请使用 scope.launchAfter(ms, block) 代替")
-    suspend fun delay(ms: Long) {
-        kotlinx.coroutines.delay(ms)
+    /**
+     * 延迟（毫秒），在协程内部启动一个延迟任务
+     * Lua: scope.delay(1000) -- 在 scope.launch 的 block 内使用
+     */
+    fun delay(ms: Long): Job {
+        return scope.launch {
+            kotlinx.coroutines.delay(ms)
+        }
     }
 
     fun cancel() {

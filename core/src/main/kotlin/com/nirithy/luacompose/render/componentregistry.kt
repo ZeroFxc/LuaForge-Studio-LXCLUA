@@ -42,5 +42,7 @@ object ComponentRegistry {
 
     fun hasRenderer(type: String): Boolean = renderers.containsKey(type)
     fun componentCount(): Int = renderers.size
+    /** 获取指定类型的渲染器（用于短名称别名注册） */
+    fun getRenderer(type: String): (@Composable (ComposeNode) -> Unit)? = renderers[type]
     fun clear() { renderers.clear() }
 }

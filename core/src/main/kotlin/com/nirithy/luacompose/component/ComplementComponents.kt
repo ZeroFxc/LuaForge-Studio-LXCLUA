@@ -1022,7 +1022,7 @@ object ComplementComponents : ComposePlugin {
 
         if (visible) {
             Popup(
-                alignment = resolvePopupAlignment(node.stringProp("alignment")),
+                alignment = resolvePopupAlignment(node.prop<Any?>("alignment")),
                 offset = androidx.compose.ui.unit.IntOffset(offsetX, offsetY),
                 onDismissRequest = if (dismissOnBackPress) {
                     { synchronized(ComposeBridgeInstance.current.luaLock) { onDismiss?.call() } }
@@ -1037,17 +1037,21 @@ object ComplementComponents : ComposePlugin {
         }
     }
 
-    /** 解析 Popup alignment */
-    private fun resolvePopupAlignment(name: String?): androidx.compose.ui.Alignment = when (name) {
-        "TopStart" -> androidx.compose.ui.Alignment.TopStart
-        "TopCenter" -> androidx.compose.ui.Alignment.TopCenter
-        "TopEnd" -> androidx.compose.ui.Alignment.TopEnd
-        "CenterStart" -> androidx.compose.ui.Alignment.CenterStart
-        "Center" -> androidx.compose.ui.Alignment.Center
-        "CenterEnd" -> androidx.compose.ui.Alignment.CenterEnd
-        "BottomStart" -> androidx.compose.ui.Alignment.BottomStart
-        "BottomCenter" -> androidx.compose.ui.Alignment.BottomCenter
-        "BottomEnd" -> androidx.compose.ui.Alignment.BottomEnd
+    /** 解析 Popup alignment，支持 Java 对象和字符串回退 */
+    private fun resolvePopupAlignment(prop: Any?): androidx.compose.ui.Alignment = when {
+        prop is androidx.compose.ui.Alignment -> prop
+        prop is String -> when (prop) {
+            "TopStart" -> androidx.compose.ui.Alignment.TopStart
+            "TopCenter" -> androidx.compose.ui.Alignment.TopCenter
+            "TopEnd" -> androidx.compose.ui.Alignment.TopEnd
+            "CenterStart" -> androidx.compose.ui.Alignment.CenterStart
+            "Center" -> androidx.compose.ui.Alignment.Center
+            "CenterEnd" -> androidx.compose.ui.Alignment.CenterEnd
+            "BottomStart" -> androidx.compose.ui.Alignment.BottomStart
+            "BottomCenter" -> androidx.compose.ui.Alignment.BottomCenter
+            "BottomEnd" -> androidx.compose.ui.Alignment.BottomEnd
+            else -> androidx.compose.ui.Alignment.TopStart
+        }
         else -> androidx.compose.ui.Alignment.TopStart
     }
 

@@ -134,23 +134,126 @@ object LuaConverter {
     /**
      * 检测特殊类型标记
      *
-     * 支持的标记：
-     * - _javaColor: Lua 颜色表 → Color 对象
-     * - _javaDp: dp 值 → Dp 对象
-     * - _javaOffset: {x, y} → Offset 对象
-     * - _javaRect: {left, top, right, bottom} → Rect 对象
-     * - _javaSize: {width, height} → Size 对象
+     * 支持的标记（参考 LuaCompose-master 的 ComposeBridge.scriptToJava）：
+     * - _isState: Lua 状态表 → javaState 中的 Java 对象
+     * - _javaObj: 通用 Java 对象包装
+     * - _javaColor: Color 对象
+     * - _javaDp: Dp 对象
+     * - _javaSize: Size 对象
+     * - _javaOffset: Offset 对象
+     * - _javaIntOffset: IntOffset 对象
+     * - _javaStroke: Stroke 对象
      */
     private fun detectSpecialType(L: LuaState, absIdx: Int, visited: MutableSet<Int>, depth: Int): Any? {
-        // 检查 _javaColor 标记
+        // 检测 _isState 标记（Lua 状态包装）
+        L.pushString("_isState")
+        L.getTable(absIdx)
+        if (L.isBoolean(-1) && L.toBoolean(-1)) {
+            L.pop(1)
+            // 从 javaState 字段获取 Java 对象
+            L.pushString("javaState")
+            L.getTable(absIdx)
+            if (L.type(-1) == LuaState.LUA_TUSERDATA) {
+                val obj = L.toJavaObject(-1)
+                L.pop(1)
+                return obj
+            }
+            L.pop(1)
+            return null
+        }
+        L.pop(1)
+
+        // 检测 _javaObj 标记
+        L.pushString("_javaObj")
+        L.getTable(absIdx)
+        if (L.type(-1) == LuaState.LUA_TUSERDATA) {
+            val obj = L.toJavaObject(-1)
+            L.pop(1)
+            return obj
+        }
+        L.pop(1)
+
+        // 检测 _javaColor 标记
+        L.pushString("_javaColor")
+        L.getTable(absIdx)
+        if (L.type(-1) == LuaState.LUA_TUSERDATA) {
+            val obj = L.toJavaObject(-1)
+            L.pop(1)
+            return obj
+        }
+        L.pop(1)
+
+        // 检测 _javaDp 标记
+        L.pushString("_javaDp")
+        L.getTable(absIdx)
+        if (L.type(-1) == LuaState.LUA_TUSERDATA) {
+            val obj = L.toJavaObject(-1)
+            L.pop(1)
+            return obj
+        }
+        L.pop(1)
+
+        // 检测 _javaSize 标记
+        L.pushString("_javaSize")
+        L.getTable(absIdx)
+        if (L.type(-1) == LuaState.LUA_TUSERDATA) {
+            val obj = L.toJavaObject(-1)
+            L.pop(1)
+            return obj
+        }
+        L.pop(1)
+
+        // 检测 _javaOffset 标记
+        L.pushString("_javaOffset")
+        L.getTable(absIdx)
+        if (L.type(-1) == LuaState.LUA_TUSERDATA) {
+            val obj = L.toJavaObject(-1)
+            L.pop(1)
+            return obj
+        }
+        L.pop(1)
+
+        // 检测 _javaIntOffset 标记
+        L.pushString("_javaIntOffset")
+        L.getTable(absIdx)
+        if (L.type(-1) == LuaState.LUA_TUSERDATA) {
+            val obj = L.toJavaObject(-1)
+            L.pop(1)
+            return obj
+        }
+        L.pop(1)
+
+        // 检测 _javaStroke 标记
+        L.pushString("_javaStroke")
+        L.getTable(absIdx)
+        if (L.type(-1) == LuaState.LUA_TUSERDATA) {
+            val obj = L.toJavaObject(-1)
+            L.pop(1)
+            return obj
+        }
+        L.pop(1)
+
+        // 检测 _chain 标记（ModifierChain 包装器）
+        // FoundationPlugin 的 Modifier 方法返回 Lua 表包装器，
+        // 内部 _chain 字段持有 ModifierChain 实例
+        L.pushString("_chain")
+        L.getTable(absIdx)
+        if (L.type(-1) == LuaState.LUA_TUSERDATA) {
+            val obj = try { L.toJavaObject(-1) } catch (e: Exception) { null }
+            L.pop(1)
+            if (obj != null) return obj
+        } else {
+            L.pop(1)
+        }
+
+        // 回退：尝试解析旧版 _javaColor 格式（hex 值）
         L.pushString("_javaColor")
         L.getTable(absIdx)
         val hasColor = L.type(-1) != LuaState.LUA_TNIL
         L.pop(1)
 
         if (hasColor) {
-            val color = parseColor(L, absIdx, visited, depth)
-            if (color != null) return color
+            return parseColor(L, absIdx, visited, depth)
         }
 
         return null

@@ -56,6 +56,7 @@ object DisplayComponents : ComposePlugin {
         is Number -> Color(value.toInt()); else -> null
     }
     private fun resolveFontWeight(value: Any?): FontWeight? = when (value) {
+        is FontWeight -> value
         is String -> resolveFontWeightByName(value)
         is Number -> FontWeight(value.toInt())
         else -> null

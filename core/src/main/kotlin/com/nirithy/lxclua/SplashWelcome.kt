@@ -181,7 +181,7 @@ class SplashWelcome : ComponentActivity() {
 
         while (entries.hasMoreElements()) {
             val zipEntry = entries.nextElement()
-            val name = zipEntry.name
+            val name = zipEntry.name ?: continue
             if (!name.startsWith(dir)) continue
             val path = name.substring(i)
             val fp = "$extDir${File.separator}$path"

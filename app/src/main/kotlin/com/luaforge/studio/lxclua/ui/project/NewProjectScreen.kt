@@ -246,7 +246,7 @@ fun NewProjectScreen(
                         globalUtils = selectedGlobalUtils.toList()
                     )
 
-                    ProjectUtil.updateMainLuaFile(projectDir, projectName)
+                    ProjectUtil.updateMainLuaFile(File(projectDir, "main.lua"), projectName)
                 }
 
                 withContext(Dispatchers.Main) {

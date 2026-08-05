@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.luaforge.studio.lxclua.ui.editor.SwipeDirection
 import com.luaforge.studio.lxclua.ui.editor.components.CodeEditorView
+import com.luaforge.studio.lxclua.ui.editor.components.MediaPreviewView
+import com.luaforge.studio.lxclua.ui.editor.components.isMediaFile
 import com.luaforge.studio.lxclua.ui.editor.viewmodel.CodeEditorState
 import com.luaforge.studio.lxclua.ui.editor.viewmodel.EditorViewModel
 
@@ -44,6 +46,15 @@ fun DesignerModeWrapper(
     val isDesignerFile = remember(state.file.name) {
         state.file.name.endsWith(".lua", ignoreCase = true) ||
                 state.file.name.endsWith(".aly", ignoreCase = true)
+    }
+
+    // 媒体文件（图片/视频）直接预览
+    if (isMediaFile(state.file.name)) {
+        MediaPreviewView(
+            file = state.file,
+            modifier = modifier.fillMaxSize()
+        )
+        return
     }
 
     if (!isDesignerFile) {

@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import com.luajava.LuaObject
 
 /**
  * UI 图形首类对象 — Color / Offset / Size / Rect
@@ -32,6 +33,22 @@ class LuaColor(private val argb: Long) {
         return LuaColor((argb and 0x00FFFFFF) or (a shl 24))
     }
 
+    /** 从 table 中读取 alpha 字段来复制颜色，支持 Lua 调用 color.copy({ alpha = 0.5 }) */
+    fun copy(params: LuaObject): LuaColor {
+        return try {
+            val alphaField = params.getField("alpha")
+            val alpha = if (!alphaField.isNil() && alphaField.isNumber()) {
+                alphaField.getNumber()
+            } else {
+                1.0
+            }
+            val a = (alpha * 255).toInt().coerceIn(0, 255).toLong()
+            LuaColor((argb and 0x00FFFFFF) or (a shl 24))
+        } catch (e: Exception) {
+            this
+        }
+    }
+
     /** 获取 R/G/B 分量 */
     fun getRed(): Int = ((argb shr 16) and 0xFF).toInt()
     fun getGreen(): Int = ((argb shr 8) and 0xFF).toInt()
@@ -45,6 +62,20 @@ class LuaColor(private val argb: Long) {
 /** Lua 可用的 Offset 对象 */
 class LuaOffset(val x: Double, val y: Double) {
     fun toComposeOffset(): Offset = Offset(x.toFloat(), y.toFloat())
+
+    /** 从 table 中读取 x/y 字段来复制偏移量，支持 Lua 调用 offset.copy({ x = ..., y = ... }) */
+    fun copy(params: LuaObject): LuaOffset {
+        return try {
+            val xField = params.getField("x")
+            val yField = params.getField("y")
+            val newX = if (!xField.isNil() && xField.isNumber()) xField.getNumber() else this.x
+            val newY = if (!yField.isNil() && yField.isNumber()) yField.getNumber() else this.y
+            LuaOffset(newX, newY)
+        } catch (e: Exception) {
+            this
+        }
+    }
+
     override fun toString(): String = "Offset($x, $y)"
 }
 

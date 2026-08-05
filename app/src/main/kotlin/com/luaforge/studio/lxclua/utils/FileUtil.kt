@@ -152,6 +152,10 @@ object FileUtil {
         return try {
             ZipFile(zipFile).use { zip ->
                 zip.entries().asSequence().forEach { entry ->
+                    // 跳过无效条目（entry.name 为 null 或空会导致创建 null 文件夹）
+                    if (entry.name.isNullOrBlank()) {
+                        return@forEach
+                    }
                     val targetFile = File(destinationDir, entry.name)
                     if (entry.isDirectory) {
                         targetFile.mkdirs()

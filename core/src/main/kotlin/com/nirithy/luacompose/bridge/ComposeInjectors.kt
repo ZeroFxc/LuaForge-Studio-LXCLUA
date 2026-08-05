@@ -1,10 +1,13 @@
 package com.nirithy.luacompose.bridge
 
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.DurationBasedAnimationSpec
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.nirithy.luacompose.*
 import com.nirithy.luacompose.animation.AnimationSpecs
@@ -12,6 +15,7 @@ import com.nirithy.luacompose.animation.EasingTable
 import com.nirithy.luacompose.animation.LuaAnimatable
 import com.nirithy.luacompose.coroutine.LuaCoroutineScope
 import com.nirithy.luacompose.draw.LuaPath
+import com.nirithy.luacompose.graphics.LuaBrush
 import com.nirithy.luacompose.graphics.LuaColor
 import com.nirithy.luacompose.graphics.LuaOffset
 import com.nirithy.luacompose.graphics.LuaRect
@@ -37,16 +41,183 @@ private const val TAG = "ComposeBridge"
 
 // ========== 核心状态工厂 ==========
 
-/** compose.Modifier() — 创建 ModifierChain 实例 */
+/**
+ * compose.Modifier() — 创建 ModifierChain 实例
+ * compose.Modifier.fillMaxWidth() — 创建并返回已应用 fillMaxWidth 的 ModifierChain
+ * 支持两种语法：
+ *   1. Modifier() 创建空修饰符链
+ *   2. Modifier.fillMaxWidth() 创建并应用修饰符（类似 Kotlin 扩展函数语法）
+ */
 internal fun ComposeBridgeInstance.registerModifierFactory(L: LuaState) {
+    // 创建 Modifier 表
+    L.newTable()
+
+    // 创建 __index 元表（包含所有修饰符方法）
+    L.newTable()
+    val metaIdx = L.getTop()
+
+    // 辅助函数：为每个修饰符方法创建 __index 条目
+    fun addModifierMethod(name: String, apply: (ModifierChain) -> Unit) {
+        L.pushJavaFunction(object : JavaFunction(L) {
+            override fun execute(): Int {
+                val chain = ModifierChain.create()
+                apply(chain)
+                L.pushJavaObject(chain)
+                return 1
+            }
+        })
+        L.setField(metaIdx, name)
+    }
+
+    // 无参数方法
+    addModifierMethod("fillMaxSize") { it.fillMaxSize() }
+    addModifierMethod("fillMaxWidth") { it.fillMaxWidth() }
+    addModifierMethod("fillMaxHeight") { it.fillMaxHeight() }
+    addModifierMethod("wrapContentWidth") { it.wrapContentWidth() }
+    addModifierMethod("wrapContentHeight") { it.wrapContentHeight() }
+    addModifierMethod("wrapContentSize") { it.wrapContentSize() }
+    addModifierMethod("animateContentSize") { it.animateContentSize() }
+    addModifierMethod("circle") { it.circle() }
+    addModifierMethod("clipCircle") { it.clipCircle() }
+    addModifierMethod("verticalScroll") { it.verticalScroll() }
+    addModifierMethod("clickable") { it.clickable() }
+
+    // 单参数方法（从 Lua 栈读取参数）
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val chain = ModifierChain.create()
-            logV(TAG) { "[Modifier] 创建 ModifierChain 实例: ${chain.hashCode()}" }
+            val arg = L.toNumber(2).toFloat()
+            chain.padding(arg)
             L.pushJavaObject(chain)
             return 1
         }
     })
+    L.setField(metaIdx, "padding")
+
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            val arg = L.toNumber(2).toFloat()
+            chain.height(arg)
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "height")
+
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            val arg = L.toNumber(2).toFloat()
+            chain.width(arg)
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "width")
+
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            val arg = L.toNumber(2).toFloat()
+            chain.size(arg)
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "size")
+
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            val arg = L.toNumber(2).toFloat()
+            chain.alpha(arg)
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "alpha")
+
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            val arg = L.toNumber(2).toFloat()
+            chain.borderRadius(arg)
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "borderRadius")
+
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            val arg = L.toNumber(2).toFloat()
+            chain.shadow(arg)
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "shadow")
+
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            val arg = L.toNumber(2).toFloat()
+            chain.rotate(arg)
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "rotate")
+
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            val arg = L.toNumber(2).toFloat()
+            chain.aspectRatio(arg)
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "aspectRatio")
+
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            val arg = L.toNumber(2).toFloat()
+            chain.weight(arg)
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "weight")
+
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            val arg = L.toNumber(2).toFloat()
+            chain.clip(arg)
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "clip")
+
+    // 支持 Modifier() 语法（__call 元方法）
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val chain = ModifierChain.create()
+            L.pushJavaObject(chain)
+            return 1
+        }
+    })
+    L.setField(metaIdx, "__call")
+
+    // 设置元表
+    L.setMetaTable(-2)
+
+    logV(TAG) { "[Modifier] 注册完成，支持 Modifier() 和 Modifier.xxx() 语法" }
     L.setField(-2, "Modifier")
 }
 
@@ -59,21 +230,18 @@ internal fun ComposeBridgeInstance.registerStateFactory(L: LuaState) {
                 logW(TAG) { "[state] 未提供初始值，返回 nil" }
                 L.pushNil(); return 1
             }
-            val idx = stateIndex++
-            if (idx < stateCache.size) {
-                val cached = stateCache[idx]
-                logD(TAG) { "[state] 返回缓存状态 #$idx, 当前值=${cached.getValue()}" }
-                L.pushJavaObject(cached); return 1
-            }
             val obj = L.toJavaObject(2)
-            logD(TAG) { "[state] 创建响应式状态 #$idx, 初始值: $obj (${obj?.javaClass?.simpleName})" }
-            val wrapper = when (obj) {
-                is Boolean -> StateWrapper(obj) { scheduleRefresh() }
-                is Number -> StateWrapper(obj.toFloat()) { scheduleRefresh() }
-                is String -> StateWrapper(obj) { scheduleRefresh() }
-                else -> StateWrapper(obj) { scheduleRefresh() }
+            // 类型归一化：与旧代码保持一致，Number 统一为 Float
+            val normalized = when (obj) {
+                is Boolean -> obj
+                is Number -> obj.toFloat()
+                is String -> obj
+                else -> obj
             }
-            stateCache.add(wrapper)
+            logD(TAG) { "[state] 创建响应式状态, 初始值: $normalized (${normalized?.javaClass?.simpleName})" }
+            // ★ 通过 ComposeScope 管理状态生命周期
+            val scope = currentScope
+            val wrapper = scope.getOrCreateState(normalized) { scheduleRefresh() }
             L.pushJavaObject(wrapper); return 1
         }
     })
@@ -86,18 +254,17 @@ internal fun ComposeBridgeInstance.registerMutableState(L: LuaState) {
         override fun execute(): Int {
             val top = L.getTop()
             if (top < 2) { L.pushNil(); return 1 }
-            val idx = stateIndex++
-            if (idx < stateCache.size) {
-                L.pushJavaObject(stateCache[idx]); return 1
-            }
             val obj = L.toJavaObject(2)
-            val wrapper = when (obj) {
-                is Boolean -> StateWrapper(obj) { scheduleRefresh() }
-                is Number -> StateWrapper(obj.toFloat()) { scheduleRefresh() }
-                is String -> StateWrapper(obj) { scheduleRefresh() }
-                else -> StateWrapper(obj) { scheduleRefresh() }
+            // 类型归一化：与旧代码保持一致，Number 统一为 Float
+            val normalized = when (obj) {
+                is Boolean -> obj
+                is Number -> obj.toFloat()
+                is String -> obj
+                else -> obj
             }
-            stateCache.add(wrapper)
+            // ★ 通过 ComposeScope 管理状态生命周期
+            val scope = currentScope
+            val wrapper = scope.getOrCreateState(normalized) { scheduleRefresh() }
             L.pushJavaObject(wrapper); return 1
         }
     })
@@ -113,15 +280,15 @@ internal fun ComposeBridgeInstance.registerRememberFactory(L: LuaState) {
                 logW(TAG) { "[remember] 需要函数参数" }
                 L.pushNil(); return 1
             }
-            val idx = rememberIndex++
-            if (idx < rememberCache.size) {
-                L.pushJavaObject(rememberCache[idx]); return 1
-            }
-            L.pushValue(2)
-            val ok = L.pcall(0, 1, 0)
-            val result = if (ok == 0) L.toJavaObject(-1) else null
-            L.pop(if (ok == 0) 1 else 0)
-            rememberCache.add(result)
+            // ★ 通过 ComposeScope 管理 remember 缓存
+            val scope = currentScope
+            val result = scope.getOrCreateRemember(initFn = {
+                L.pushValue(2)
+                val ok = L.pcall(0, 1, 0)
+                val r = if (ok == 0) L.toJavaObject(-1) else null
+                L.pop(if (ok == 0) 1 else 0)
+                r
+            })
             L.pushJavaObject(result); return 1
         }
     })
@@ -138,7 +305,9 @@ internal fun ComposeBridgeInstance.registerDerivedStateFactory(L: LuaState) {
                 L.pushNil(); return 1
             }
             val computeFunc = L.getLuaObject(2)
-            val wrapper = StateWrapper.createDerived {
+            // ★ 通过 ComposeScope 管理派生状态生命周期
+            val scope = currentScope
+            val wrapper = scope.getOrCreateDerivedState {
                 try {
                     computeFunc.call()
                 } catch (e: Exception) {
@@ -154,11 +323,23 @@ internal fun ComposeBridgeInstance.registerDerivedStateFactory(L: LuaState) {
 
 // ========== 动画规格工厂（spring / tween） ==========
 
-/** compose.spring(dampingRatio, stiffness) — 创建弹簧动画规格 */
+/** compose.spring(dampingRatio, stiffness) 或 compose.spring { dampingRatio = ..., stiffness = ... } — 创建弹簧动画规格 */
 internal fun ComposeBridgeInstance.registerSpringFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
+            if (top >= 2 && L.isTable(2)) {
+                // Table 语法: spring { dampingRatio = ..., stiffness = ... }
+                L.getField(2, "dampingRatio")
+                val dampingRatio = if (L.isNumber(-1)) L.toNumber(-1).toFloat() else 0.55f
+                L.pop(1)
+                L.getField(2, "stiffness")
+                val stiffness = if (L.isNumber(-1)) L.toNumber(-1).toFloat() else 600f
+                L.pop(1)
+                L.pushJavaObject(androidx.compose.animation.core.spring<Float>(dampingRatio = dampingRatio, stiffness = stiffness))
+                return 1
+            }
+            // 函数调用语法: spring(dampingRatio, stiffness)
             val dampingRatio = if (top >= 2) L.toNumber(2).toFloat() else 0.55f
             val stiffness = if (top >= 3) L.toNumber(3).toFloat() else 600f
             L.newTable()
@@ -171,11 +352,34 @@ internal fun ComposeBridgeInstance.registerSpringFactory(L: LuaState) {
     L.setField(-2, "spring")
 }
 
-/** compose.tween(durationMs, easing) — 创建 tween 动画规格 */
+/** compose.tween(durationMs, easing) 或 compose.tween { durationMillis = ..., easing = ... } — 创建 tween 动画规格 */
 internal fun ComposeBridgeInstance.registerTweenFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
+            if (top >= 2 && L.isTable(2)) {
+                // Table 语法: tween { durationMillis = ..., easing = ... }
+                L.getField(2, "durationMillis")
+                val durationMs = if (L.isNumber(-1)) L.toNumber(-1).toInt() else 300
+                L.pop(1)
+                L.getField(2, "easing")
+                val easing: androidx.compose.animation.core.Easing = if (L.isString(-1)) {
+                    when (L.toString(-1)) {
+                        "Linear" -> androidx.compose.animation.core.LinearEasing
+                        "FastOutSlowIn" -> androidx.compose.animation.core.FastOutSlowInEasing
+                        "FastOutLinearIn" -> androidx.compose.animation.core.FastOutLinearInEasing
+                        "LinearOutSlowIn" -> androidx.compose.animation.core.LinearOutSlowInEasing
+                        else -> androidx.compose.animation.core.FastOutSlowInEasing
+                    }
+                } else {
+                    try { L.toJavaObject(-1) as? androidx.compose.animation.core.Easing } catch (e: Exception) { null }
+                        ?: androidx.compose.animation.core.FastOutSlowInEasing
+                }
+                L.pop(1)
+                L.pushJavaObject(androidx.compose.animation.core.tween<Float>(durationMillis = durationMs, easing = easing))
+                return 1
+            }
+            // 函数调用语法: tween(durationMs, easing)
             val durationMs = if (top >= 2) L.toNumber(2).toInt() else 300
             val easing = if (top >= 3) L.toString(3) else "FastOutSlowIn"
             L.newTable()
@@ -513,6 +717,157 @@ internal fun ComposeBridgeInstance.registerLocalDensity(L: LuaState) {
     L.setField(-2, "LocalDensity")
 }
 
+/** compose.MaterialTheme.typography — Material3 主题排版系统，支持 labelSmall 等字体样式访问 */
+internal fun ComposeBridgeInstance.registerMaterialThemeTypography(L: LuaState) {
+    // MaterialTheme 外部表
+    L.newTable()
+    val mtIdx = L.getTop()
+
+    // typography 子表
+    L.newTable()
+    val typoIdx = L.getTop()
+
+    // typography 的 __index 元表，按 key 返回对应的字体样式属性表
+    L.newTable()
+    val handler = object : JavaFunction(L) {
+        override fun execute(): Int {
+            val key = L.toString(3)
+            // 返回一个包含 fontSize / fontWeight / lineHeight 等属性的表
+            L.newTable()
+            when (key) {
+                "labelSmall" -> {
+                    L.pushNumber(11.0); L.setField(-2, "fontSize")
+                    L.pushInteger(500L); L.setField(-2, "fontWeight")
+                    L.pushNumber(16.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.5); L.setField(-2, "letterSpacing")
+                }
+                "labelMedium" -> {
+                    L.pushNumber(12.0); L.setField(-2, "fontSize")
+                    L.pushInteger(500L); L.setField(-2, "fontWeight")
+                    L.pushNumber(16.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.5); L.setField(-2, "letterSpacing")
+                }
+                "labelLarge" -> {
+                    L.pushNumber(14.0); L.setField(-2, "fontSize")
+                    L.pushInteger(500L); L.setField(-2, "fontWeight")
+                    L.pushNumber(20.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.1); L.setField(-2, "letterSpacing")
+                }
+                "bodySmall" -> {
+                    L.pushNumber(12.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(16.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.4); L.setField(-2, "letterSpacing")
+                }
+                "bodyMedium" -> {
+                    L.pushNumber(14.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(20.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.25); L.setField(-2, "letterSpacing")
+                }
+                "bodyLarge" -> {
+                    L.pushNumber(16.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(24.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.5); L.setField(-2, "letterSpacing")
+                }
+                "titleSmall" -> {
+                    L.pushNumber(14.0); L.setField(-2, "fontSize")
+                    L.pushInteger(500L); L.setField(-2, "fontWeight")
+                    L.pushNumber(20.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.1); L.setField(-2, "letterSpacing")
+                }
+                "titleMedium" -> {
+                    L.pushNumber(16.0); L.setField(-2, "fontSize")
+                    L.pushInteger(500L); L.setField(-2, "fontWeight")
+                    L.pushNumber(24.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.15); L.setField(-2, "letterSpacing")
+                }
+                "titleLarge" -> {
+                    L.pushNumber(22.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(28.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.0); L.setField(-2, "letterSpacing")
+                }
+                "headlineSmall" -> {
+                    L.pushNumber(24.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(32.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.0); L.setField(-2, "letterSpacing")
+                }
+                "headlineMedium" -> {
+                    L.pushNumber(28.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(36.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.0); L.setField(-2, "letterSpacing")
+                }
+                "headlineLarge" -> {
+                    L.pushNumber(32.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(40.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.0); L.setField(-2, "letterSpacing")
+                }
+                "displaySmall" -> {
+                    L.pushNumber(36.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(44.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.0); L.setField(-2, "letterSpacing")
+                }
+                "displayMedium" -> {
+                    L.pushNumber(45.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(52.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.0); L.setField(-2, "letterSpacing")
+                }
+                "displayLarge" -> {
+                    L.pushNumber(57.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(64.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(-0.25); L.setField(-2, "letterSpacing")
+                }
+                else -> {
+                    // 默认返回 bodyMedium 样式
+                    L.pushNumber(14.0); L.setField(-2, "fontSize")
+                    L.pushInteger(400L); L.setField(-2, "fontWeight")
+                    L.pushNumber(20.0); L.setField(-2, "lineHeight")
+                    L.pushNumber(0.25); L.setField(-2, "letterSpacing")
+                }
+            }
+            return 1
+        }
+    }
+    LazyNamespace.pushLuaIndexWrapper(L, handler)
+    L.setField(-2, "__index")
+    L.setMetaTable(typoIdx)
+
+    // typography 表设置到 MaterialTheme 中
+    L.setField(-2, "typography")
+
+    // MaterialTheme 的 __index 元表（支持未来扩展其他属性如 colorScheme）
+    L.newTable()
+    val mtHandler = object : JavaFunction(L) {
+        override fun execute(): Int {
+            val key = L.toString(3)
+            when (key) {
+                "typography" -> {
+                    // 返回 typography 子表
+                    L.getField(2, "typography")
+                    return 1
+                }
+                else -> {
+                    L.pushNil()
+                    return 1
+                }
+            }
+        }
+    }
+    LazyNamespace.pushLuaIndexWrapper(L, mtHandler)
+    L.setField(-2, "__index")
+    L.setMetaTable(mtIdx)
+
+    L.setField(-2, "MaterialTheme")
+}
+
 // ========== 枚举表 ==========
 
 /** compose.FontWeight — 字重枚举表 */
@@ -749,7 +1104,7 @@ internal fun ComposeBridgeInstance.registerSpringConstants(L: LuaState) {
 
 // ========== 图形首类对象 ==========
 
-/** 注册图形首类对象工厂：Color, Offset, Size, Rect */
+/** 注册图形首类对象工厂：Color, Offset, Size, Rect, IntOffset */
 internal fun ComposeBridgeInstance.registerGraphicsFactories(L: LuaState) {
     // compose.Color(argb)
     L.pushJavaFunction(object : JavaFunction(L) {
@@ -762,7 +1117,7 @@ internal fun ComposeBridgeInstance.registerGraphicsFactories(L: LuaState) {
     })
     L.setField(-2, "Color")
 
-    // compose.Offset(x, y)
+    // compose.Offset(x, y) — 先注册工厂函数，再增强为带 __call 的表
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -771,7 +1126,42 @@ internal fun ComposeBridgeInstance.registerGraphicsFactories(L: LuaState) {
             L.pushJavaObject(LuaOffset(x, y)); return 1
         }
     })
+    // 增强 Offset: 创建带 __call 元方法的表，同时添加 Zero 和 VectorConverter 静态字段
+    val offsetFactoryIdx = L.getTop()  // 保存工厂函数在栈上的位置
+    L.newTable()
+    val offsetTableIdx = L.getTop()
+    // 添加 Zero 静态值
+    L.pushJavaObject(LuaOffset(0.0, 0.0)); L.setField(-2, "Zero")
+    // 添加 VectorConverter（TwoWayConverter<Offset, AnimationVector2D> 实例）
+    L.pushJavaObject(com.nirithy.luacompose.animation.OffsetVectorConverter); L.setField(-2, "VectorConverter")
+    // 设置 __call 元方法
+    L.newTable()
+    L.pushValue(offsetFactoryIdx); L.setField(-2, "__call")
+    L.setMetaTable(offsetTableIdx)
+    L.pop(1)  // 弹出工厂函数
     L.setField(-2, "Offset")
+
+    // compose.IntOffset(x, y) — 整数偏移量工厂
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val x = if (top >= 2) L.toNumber(2).toInt() else 0
+            val y = if (top >= 3) L.toNumber(3).toInt() else 0
+            L.pushJavaObject(IntOffset(x, y)); return 1
+        }
+    })
+    // 增强 IntOffset: 创建带 __call 和 Zero 静态字段的表
+    val intOffsetFactoryIdx = L.getTop()
+    L.newTable()
+    val intOffsetTableIdx = L.getTop()
+    // 添加 Zero 静态值
+    L.pushJavaObject(IntOffset.Zero); L.setField(-2, "Zero")
+    // 设置 __call 元方法
+    L.newTable()
+    L.pushValue(intOffsetFactoryIdx); L.setField(-2, "__call")
+    L.setMetaTable(intOffsetTableIdx)
+    L.pop(1)  // 弹出工厂函数
+    L.setField(-2, "IntOffset")
 
     // compose.Size(width, height)
     L.pushJavaFunction(object : JavaFunction(L) {
@@ -878,11 +1268,18 @@ internal fun ComposeBridgeInstance.registerCoroutineScopeFactory(L: LuaState) {
     L.setField(-2, "rememberCoroutineScope")
 }
 
-/** compose.Animatable(initialValue) — 创建 Animatable 实例 */
+/** compose.Animatable(initialValue, vectorConverter?) — 创建 Animatable 实例，支持 Float 和 Offset 类型 */
 internal fun ComposeBridgeInstance.registerAnimatableFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
+            if (top >= 3) {
+                // 两个参数：initialValue 和 vectorConverter（Offset 类型动画）
+                val initial = try { L.toJavaObject(2) } catch (e: Exception) { 0f }
+                val converter = try { L.toJavaObject(3) } catch (e: Exception) { null }
+                L.pushJavaObject(LuaAnimatable(initial ?: 0f, converter)); return 1
+            }
+            // 单参数：Float 类型动画
             val initial = if (top >= 2) L.toNumber(2).toFloat() else 0f
             L.pushJavaObject(LuaAnimatable(initial)); return 1
         }
@@ -904,6 +1301,19 @@ internal fun ComposeBridgeInstance.registerEasingTable(L: LuaState) {
     L.pushJavaObject(EasingTable.EaseOutCubic); L.setField(-2, "EaseOutCubic")
     L.pushJavaObject(EasingTable.EaseInOutCubic); L.setField(-2, "EaseInOutCubic")
     L.setField(-2, "Easing")
+
+    // compose.CubicBezierEasing(a, b, c, d) — 三次贝塞尔缓动函数工厂
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val a = if (top >= 2) L.toNumber(2).toFloat() else 0f
+            val b = if (top >= 3) L.toNumber(3).toFloat() else 0f
+            val c = if (top >= 4) L.toNumber(4).toFloat() else 1f
+            val d = if (top >= 5) L.toNumber(5).toFloat() else 1f
+            L.pushJavaObject(CubicBezierEasing(a, b, c, d)); return 1
+        }
+    })
+    L.setField(-2, "CubicBezierEasing")
 }
 
 // =====================================================================
@@ -1041,13 +1451,13 @@ internal fun ComposeBridgeInstance.registerWithContext(L: LuaState) {
  * compose.gestures.detectTapGestures({ onTap=..., onDoubleTap=..., onLongPress=... })
  * compose.gestures.detectDragGestures({ onDragStart=..., onDrag=..., onDragEnd=..., onDragCancel=... })
  *
- * 返回一个 Lua 表，存储手势配置，供 ModifierChain 消费
+ * 直接设置当前 GestureConfig 的回调（由 applyGestures 在 pointerInput 块中调用 gestureBlock 时使用）
  */
 internal fun ComposeBridgeInstance.registerGesturesNamespace(L: LuaState) {
     L.newTable()
     val gesturesIdx = L.getTop()
 
-    // detectTapGestures
+    // detectTapGestures — 从配置表中提取回调，直接设置到当前 GestureConfig
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -1055,26 +1465,26 @@ internal fun ComposeBridgeInstance.registerGesturesNamespace(L: LuaState) {
                 logW(TAG) { "[gestures.detectTapGestures] 需要配置表" }
                 L.pushNil(); return 1
             }
-            L.newTable()
-            val resultIdx = L.getTop()
+            val config = currentGestureConfig
+            if (config != null) {
+                L.getField(2, "onTap")
+                if (L.isFunction(-1)) config.onTap = L.getLuaObject(-1)
+                L.pop(1)
 
-            L.pushNil()
-            while (L.next(2) != 0) {
-                val key = L.toString(-2)
-                if (L.isFunction(-1)) {
-                    L.pushString(key)
-                    L.pushValue(-2)  // 函数
-                    L.setTable(resultIdx)
-                }
+                L.getField(2, "onDoubleTap")
+                if (L.isFunction(-1)) config.onDoubleTap = L.getLuaObject(-1)
+                L.pop(1)
+
+                L.getField(2, "onLongPress")
+                if (L.isFunction(-1)) config.onLongPress = L.getLuaObject(-1)
                 L.pop(1)
             }
-            L.pushString("_type"); L.pushString("tapGestures"); L.setTable(resultIdx)
-            return 1
+            return 0
         }
     })
     L.setField(-2, "detectTapGestures")
 
-    // detectDragGestures
+    // detectDragGestures — 从配置表中提取回调，直接设置到当前 GestureConfig
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
@@ -1082,21 +1492,25 @@ internal fun ComposeBridgeInstance.registerGesturesNamespace(L: LuaState) {
                 logW(TAG) { "[gestures.detectDragGestures] 需要配置表" }
                 L.pushNil(); return 1
             }
-            L.newTable()
-            val resultIdx = L.getTop()
+            val config = currentGestureConfig
+            if (config != null) {
+                L.getField(2, "onDragStart")
+                if (L.isFunction(-1)) config.onDragStart = L.getLuaObject(-1)
+                L.pop(1)
 
-            L.pushNil()
-            while (L.next(2) != 0) {
-                val key = L.toString(-2)
-                if (L.isFunction(-1)) {
-                    L.pushString(key)
-                    L.pushValue(-2)
-                    L.setTable(resultIdx)
-                }
+                L.getField(2, "onDrag")
+                if (L.isFunction(-1)) config.onDrag = L.getLuaObject(-1)
+                L.pop(1)
+
+                L.getField(2, "onDragEnd")
+                if (L.isFunction(-1)) config.onDragEnd = L.getLuaObject(-1)
+                L.pop(1)
+
+                L.getField(2, "onDragCancel")
+                if (L.isFunction(-1)) config.onDragCancel = L.getLuaObject(-1)
                 L.pop(1)
             }
-            L.pushString("_type"); L.pushString("dragGestures"); L.setTable(resultIdx)
-            return 1
+            return 0
         }
     })
     L.setField(-2, "detectDragGestures")
@@ -1117,67 +1531,40 @@ internal fun ComposeBridgeInstance.registerRememberKeysFactory(L: LuaState) {
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
-            // 最后一个参数必须是函数
             if (top < 2) {
                 logW(TAG) { "[rememberKeys] 需要至少一个参数" }
                 L.pushNil(); return 1
             }
 
-            val lastIdx = top
-            if (!L.isFunction(lastIdx)) {
-                // 单参数无函数，回退到基础 remember
-                logW(TAG) { "[rememberKeys] 最后一个参数不是函数，可能有key参数" }
-                // 检查是否有函数
-                var foundFunc = false
-                for (i in 2..top) {
-                    if (L.isFunction(i)) {
-                        foundFunc = true
-                        L.pushValue(i); L.pcall(0, 1, 0); return 1
-                    }
-                }
-                if (!foundFunc) { L.pushNil(); return 1 }
+            // 找到最后一个函数参数
+            var lastFuncIdx = -1
+            for (i in top downTo 2) {
+                if (L.isFunction(i)) { lastFuncIdx = i; break }
+            }
+            if (lastFuncIdx < 0) {
+                logW(TAG) { "[rememberKeys] 未找到函数参数" }
+                L.pushNil(); return 1
             }
 
-            // 收集所有 key 值（栈位置 2 ~ top-1）
+            // 收集所有 key 值（函数之前的参数）
             val keys = mutableListOf<Any?>()
-            for (i in 2 until lastIdx) {
+            for (i in 2 until lastFuncIdx) {
                 keys.add(try { L.toJavaObject(i) } catch (e: Exception) { L.toString(i) })
             }
 
-            // 用 key 的 hash 和值做缓存
-            val idx = rememberIndex++
-            // 检查缓存
-            if (idx < rememberCache.size) {
-                val cached = rememberCache[idx]
-                if (cached is RememberKeyEntry && cached.keysMatch(keys)) {
-                    L.pushJavaObject(cached.value); return 1
-                }
-            }
-
-            // 执行函数
-            L.pushValue(lastIdx)
-            val ok = L.pcall(0, 1, 0)
-            val result = if (ok == 0) L.toJavaObject(-1) else null
-            L.pop(if (ok == 0) 1 else 0)
-
-            // 存储
-            while (rememberCache.size <= idx) rememberCache.add(null)
-            rememberCache[idx] = RememberKeyEntry(keys, result)
+            // ★ 通过 ComposeScope 管理带 key 的 remember 缓存
+            val scope = currentScope
+            val result = scope.getOrCreateRemember(keys = keys, initFn = {
+                L.pushValue(lastFuncIdx)
+                val ok = L.pcall(0, 1, 0)
+                val r = if (ok == 0) L.toJavaObject(-1) else null
+                L.pop(if (ok == 0) 1 else 0)
+                r
+            })
             L.pushJavaObject(result); return 1
         }
     })
     L.setField(-2, "rememberKeys")
-}
-
-/** remember 缓存条目，支持 key 比较 */
-data class RememberKeyEntry(val keys: List<Any?>, val value: Any?) {
-    fun keysMatch(other: List<Any?>): Boolean {
-        if (keys.size != other.size) return false
-        for (i in keys.indices) {
-            if (keys[i] != other[i]) return false
-        }
-        return true
-    }
 }
 
 // ========== 高优 7/8: LaunchedEffect / coroutineScope.launch ==========
@@ -1410,15 +1797,71 @@ internal fun ComposeBridgeInstance.registerBrushRadialGradient(L: LuaState) {
     L.newTable()
     val brushIdx = L.getTop()
 
-    // radialGradient(centerX, centerY, radius, colors, stops)
+    // radialGradient(colorStops, center, radius) 或 radialGradient({centerX, centerY, radius, colors})
+    // 支持两种调用方式：
+    //   1. 三参数: Brush.radialGradient({[0.0]=Color(...), [0.3]=Color(...), ...}, Offset(...), radius)
+    //   2. 单表参数: Brush.radialGradient({centerX=..., centerY=..., radius=..., colors={...}})
     L.pushJavaFunction(object : JavaFunction(L) {
         override fun execute(): Int {
             val top = L.getTop()
-            if (top < 2 || !L.isTable(2)) {
+            if (top < 2) {
+                logW(TAG) { "[Brush.radialGradient] 需要参数" }
+                L.pushNil(); return 1
+            }
+            
+            // 判断调用方式：如果第二个参数是 table 且没有 'centerX' 字段，则为三参数模式
+            val isThreeParamMode = top >= 3 && L.isTable(2) && !hasCenterXField(L, 2)
+            
+            if (isThreeParamMode && top >= 4) {
+                // 三参数模式：radialGradient(colorStopsTable, centerOffset, radius)
+                // 从颜色映射表中提取颜色和位置
+                val colorStops = mutableListOf<Pair<Float, Long>>()
+                L.pushNil()
+                while (L.next(2) != 0) {
+                    // 键是位置（0.0, 0.3, 0.7, 1.0），值是 LuaColor 对象
+                    val stopPosition = L.toNumber(-2).toFloat()
+                    val colorObj = try { L.toJavaObject(-1) } catch (e: Exception) { null }
+                    val colorLong = when (colorObj) {
+                        is LuaColor -> colorObj.toArgb()
+                        is Number -> colorObj.toLong()
+                        else -> {
+                            // 尝试从栈上读取数字
+                            try { L.toNumber(-1).toLong() } catch (e: Exception) { 0xFF000000L }
+                        }
+                    }
+                    colorStops.add(Pair(stopPosition, colorLong))
+                    L.pop(1)
+                }
+                // 按位置排序
+                colorStops.sortBy { it.first }
+                val colors = colorStops.map { it.second }
+                val stops = colorStops.map { it.first }
+                
+                // 第二个参数：中心点 Offset
+                val centerObj = try { L.toJavaObject(3) } catch (e: Exception) { null }
+                val cx: Double
+                val cy: Double
+                when (centerObj) {
+                    is LuaOffset -> { cx = centerObj.x; cy = centerObj.y }
+                    else -> { cx = 0.0; cy = 0.0 }
+                }
+                
+                // 第三个参数：半径
+                val radius = if (top >= 4) L.toNumber(4) else 1.0
+                
+                L.pushJavaObject(LuaBrush(
+                    type = "radialGradient",
+                    centerX = cx, centerY = cy, radius = radius,
+                    colors = colors,
+                    colorStops = stops
+                )); return 1
+            }
+            
+            // 单表参数模式（向后兼容）
+            if (!L.isTable(2)) {
                 logW(TAG) { "[Brush.radialGradient] 需要配置表" }
                 L.pushNil(); return 1
             }
-            // 直接从配置表中提取参数，包装为 LuaBrush 对象
             L.getField(2, "centerX"); val cx = if (L.isNumber(-1)) L.toNumber(-1) else 0.5; L.pop(1)
             L.getField(2, "centerY"); val cy = if (L.isNumber(-1)) L.toNumber(-1) else 0.5; L.pop(1)
             L.getField(2, "radius"); val radius = if (L.isNumber(-1)) L.toNumber(-1) else 1.0; L.pop(1)
@@ -1436,10 +1879,18 @@ internal fun ComposeBridgeInstance.registerBrushRadialGradient(L: LuaState) {
             }
             L.pop(1)
 
-            L.pushJavaObject(com.nirithy.luacompose.graphics.LuaBrush(
+            L.pushJavaObject(LuaBrush(
                 type = "radialGradient",
                 centerX = cx, centerY = cy, radius = radius, colors = colors
             )); return 1
+        }
+        
+        /** 检查 table 是否包含 'centerX' 字段（用于区分单表和三参数模式） */
+        private fun hasCenterXField(L: LuaState, tableIdx: Int): Boolean {
+            L.getField(tableIdx, "centerX")
+            val has = L.isNumber(-1)
+            L.pop(1)
+            return has
         }
     })
     L.setField(-2, "radialGradient")
@@ -1883,4 +2334,143 @@ internal fun ComposeBridgeInstance.registerShowSnackbar(L: LuaState) {
         }
     })
     L.setField(-2, "showSnackbar")
+}
+
+// ========== RuntimeShader / RenderEffect 着色器效果 ==========
+
+/**
+ * compose.RuntimeShader(skslSource) — 创建 RuntimeShader 实例
+ * compose.RenderEffect.createRuntimeShaderEffect(shader, uniformName) — 创建着色器渲染效果
+ * compose.RenderEffect.createBlurEffect(radiusX, radiusY) — 创建模糊效果
+ * compose.RenderEffect.createOffsetEffect(offsetX, offsetY) — 创建偏移效果
+ * compose.RenderEffect.createChainEffect(outer, inner) — 创建链式效果
+ *
+ * Lua 用法:
+ *   local shader = compose.RuntimeShader([[
+ *     uniform float2 size;
+ *     half4 main(float2 coord) {
+ *       return half4(coord.x/size.x, coord.y/size.y, 0.5, 1.0);
+ *     }
+ *   ]])
+ *   shader:setFloatUniform("size", width, height)
+ *   local effect = compose.RenderEffect.createRuntimeShaderEffect(shader, "size")
+ *   -- 然后通过 graphicsLayer { renderEffect = effect } 使用
+ */
+internal fun ComposeBridgeInstance.registerRuntimeShaderApi(L: LuaState) {
+    // compose.RuntimeShader(skslSource)
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val skslSource = if (top >= 2 && L.isString(2)) L.toString(2) else ""
+            if (skslSource.isEmpty()) {
+                logW(TAG) { "[RuntimeShader] 需要 SKSL 着色器源码" }
+                L.pushNil(); return 1
+            }
+            try {
+                val shader = android.graphics.RuntimeShader(skslSource)
+                L.pushJavaObject(shader); return 1
+            } catch (e: Exception) {
+                logW(TAG) { "[RuntimeShader] 创建失败: ${e.message}" }
+                L.pushNil(); return 1
+            }
+        }
+    })
+    L.setField(-2, "RuntimeShader")
+
+    // compose.RenderEffect 命名空间
+    L.newTable()
+    val renderEffectIdx = L.getTop()
+
+    // RenderEffect.createRuntimeShaderEffect(shader, uniformName)
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val shader = if (top >= 2) {
+                try { L.toJavaObject(2) as? android.graphics.RuntimeShader } catch (e: Exception) { null }
+            } else null
+            val uniformName = if (top >= 3 && L.isString(3)) L.toString(3) else ""
+
+            if (shader == null) {
+                logW(TAG) { "[RenderEffect.createRuntimeShaderEffect] 需要 RuntimeShader 对象" }
+                L.pushNil(); return 1
+            }
+
+            try {
+                val effect = if (uniformName.isNotEmpty()) {
+                    android.graphics.RenderEffect.createRuntimeShaderEffect(shader, uniformName)
+                } else {
+                    android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "")
+                }
+                L.pushJavaObject(effect); return 1
+            } catch (e: Exception) {
+                logW(TAG) { "[RenderEffect.createRuntimeShaderEffect] 创建失败: ${e.message}" }
+                L.pushNil(); return 1
+            }
+        }
+    })
+    L.setField(-2, "createRuntimeShaderEffect")
+
+    // RenderEffect.createBlurEffect(radiusX, radiusY, edgeTreatment)
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val radiusX = if (top >= 2) L.toNumber(2).toFloat() else 0f
+            val radiusY = if (top >= 3) L.toNumber(3).toFloat() else radiusX
+            try {
+                val effect = android.graphics.RenderEffect.createBlurEffect(
+                    radiusX, radiusY,
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+                L.pushJavaObject(effect); return 1
+            } catch (e: Exception) {
+                logW(TAG) { "[RenderEffect.createBlurEffect] 创建失败: ${e.message}" }
+                L.pushNil(); return 1
+            }
+        }
+    })
+    L.setField(-2, "createBlurEffect")
+
+    // RenderEffect.createOffsetEffect(offsetX, offsetY)
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val offsetX = if (top >= 2) L.toNumber(2).toFloat() else 0f
+            val offsetY = if (top >= 3) L.toNumber(3).toFloat() else 0f
+            try {
+                val effect = android.graphics.RenderEffect.createOffsetEffect(offsetX, offsetY)
+                L.pushJavaObject(effect); return 1
+            } catch (e: Exception) {
+                logW(TAG) { "[RenderEffect.createOffsetEffect] 创建失败: ${e.message}" }
+                L.pushNil(); return 1
+            }
+        }
+    })
+    L.setField(-2, "createOffsetEffect")
+
+    // RenderEffect.createChainEffect(outer, inner)
+    L.pushJavaFunction(object : JavaFunction(L) {
+        override fun execute(): Int {
+            val top = L.getTop()
+            val outer = if (top >= 2) {
+                try { L.toJavaObject(2) as? android.graphics.RenderEffect } catch (e: Exception) { null }
+            } else null
+            val inner = if (top >= 3) {
+                try { L.toJavaObject(3) as? android.graphics.RenderEffect } catch (e: Exception) { null }
+            } else null
+            if (outer == null || inner == null) {
+                logW(TAG) { "[RenderEffect.createChainEffect] 需要两个 RenderEffect 对象" }
+                L.pushNil(); return 1
+            }
+            try {
+                val effect = android.graphics.RenderEffect.createChainEffect(outer, inner)
+                L.pushJavaObject(effect); return 1
+            } catch (e: Exception) {
+                logW(TAG) { "[RenderEffect.createChainEffect] 创建失败: ${e.message}" }
+                L.pushNil(); return 1
+            }
+        }
+    })
+    L.setField(-2, "createChainEffect")
+
+    L.setField(-2, "RenderEffect")
 }

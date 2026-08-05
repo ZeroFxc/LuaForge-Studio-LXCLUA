@@ -7,6 +7,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.nirithy.luacompose.graphics.LuaBrush
+import com.nirithy.luacompose.graphics.LuaColor
+import com.nirithy.luacompose.graphics.LuaOffset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -33,8 +36,9 @@ private const val TAG = "DrawScope"
  */
 class DrawScopeWrapper(private val drawScope: DrawScope) {
 
-    /** 将 Lua 传入的 Number 转为 Compose Color */
+    /** 将 Lua 传入的 Number 或 LuaColor 转为 Compose Color */
     private fun toColor(value: Any?): Color = when (value) {
+        is LuaColor -> value.toComposeColor()
         is Long -> Color(value.toInt())
         is Double -> Color(value.toLong().toInt())
         is Int -> Color(value)
@@ -158,6 +162,30 @@ class DrawScopeWrapper(private val drawScope: DrawScope) {
         )
     }
 
+    /** drawLine table 语法：{ color, start(LuaOffset), ["end"](LuaOffset), strokeWidth?, cap? } */
+    fun drawLine(config: LuaObject) {
+        try {
+            val colorValue = getFieldValue(config, "color")
+            val color = toColor(colorValue)
+
+            val startOffset = getOffsetFromConfig(config, "start") ?: Offset.Zero
+            val endOffset = getOffsetFromConfig(config, "end") ?: Offset.Zero
+
+            val strokeWidth = getFieldNumber(config, "strokeWidth")?.toFloat() ?: 1f
+            val cap = getStrokeCapFromConfig(config, "cap")
+
+            drawScope.drawLine(
+                color = color,
+                start = startOffset,
+                end = endOffset,
+                strokeWidth = strokeWidth,
+                cap = cap
+            )
+        } catch (e: Exception) {
+            logW(TAG) { "[drawLine] table 语法失败: ${e.message}" }
+        }
+    }
+
     // ========== 绘制弧线（7参数）==========
     fun drawArc(left: Double, top: Double, right: Double, bottom: Double, startAngle: Double, sweepAngle: Double, color: Any) {
         drawScope.drawArc(
@@ -214,6 +242,34 @@ class DrawScopeWrapper(private val drawScope: DrawScope) {
         drawRectVerticalGradient(left.toDouble(), top.toDouble(), right.toDouble(), bottom.toDouble(), color1, color2)
     }
 
+    /** drawRect table 语法：{ brush(LuaBrush/Brush) 或 color } */
+    fun drawRect(config: LuaObject) {
+        try {
+            // 优先尝试 brush
+            val brushField = config.getField("brush")
+            if (brushField != null && !brushField.isNil()) {
+                val brushObj = try { brushField.getObject() } catch (_: Exception) { null }
+                val brush: Brush? = when (brushObj) {
+                    is LuaBrush -> brushObj.toComposeBrush()
+                    is Brush -> brushObj
+                    else -> null
+                }
+                if (brush != null) {
+                    drawScope.drawRect(brush = brush)
+                    return
+                }
+            }
+
+            // 回退到 color
+            val colorValue = getFieldValue(config, "color")
+            if (colorValue != null) {
+                drawScope.drawRect(color = toColor(colorValue))
+            }
+        } catch (e: Exception) {
+            logW(TAG) { "[drawRect] table 语法失败: ${e.message}" }
+        }
+    }
+
     // ========== 绘制圆形（带径向渐变Brush）==========
     fun drawCircleRadial(centerX: Double, centerY: Double, radius: Double, color1: Any, color2: Any) {
         drawScope.drawCircle(
@@ -232,6 +288,62 @@ class DrawScopeWrapper(private val drawScope: DrawScope) {
         "round" -> StrokeCap.Round
         "square" -> StrokeCap.Square
         else -> StrokeCap.Butt
+    }
+
+    /** 从 LuaObject 字段中提取 Java 对象值（用于 LuaColor 等） */
+    private fun getFieldValue(config: LuaObject, key: String): Any? {
+        return try {
+            val field = config.getField(key) ?: return null
+            if (field.isNil()) return null
+            val obj = try { field.getObject() } catch (_: Exception) { null }
+            obj ?: try { field.getNumber() } catch (_: Exception) { null }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** 从 LuaObject 字段中提取 Double 数值 */
+    private fun getFieldNumber(config: LuaObject, key: String): Double? {
+        return try {
+            val field = config.getField(key) ?: return null
+            if (field.isNil()) return null
+            field.getNumber()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** 从 LuaObject 字段中提取 LuaOffset → Compose Offset */
+    private fun getOffsetFromConfig(config: LuaObject, key: String): Offset? {
+        return try {
+            val field = config.getField(key) ?: return null
+            if (field.isNil()) return null
+            val obj = field.getObject()
+            when (obj) {
+                is LuaOffset -> obj.toComposeOffset()
+                else -> null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** 从 LuaObject 字段中提取 StrokeCap（支持枚举对象或字符串） */
+    private fun getStrokeCapFromConfig(config: LuaObject, key: String): StrokeCap {
+        return try {
+            val field = config.getField(key) ?: return StrokeCap.Butt
+            if (field.isNil()) return StrokeCap.Butt
+            val obj = try { field.getObject() } catch (_: Exception) { null }
+            when (obj) {
+                is StrokeCap -> obj
+                else -> {
+                    val str = try { field.getString() } catch (_: Exception) { null }
+                    toStrokeCap(str ?: "butt")
+                }
+            }
+        } catch (_: Exception) {
+            StrokeCap.Butt
+        }
     }
 
     // ========== 绘制 Path ==========
@@ -262,6 +374,29 @@ class DrawScopeWrapper(private val drawScope: DrawScope) {
             }
         } catch (e: Exception) {
             logW(TAG) { "[drawPath] 失败: ${e.message}" }
+        }
+    }
+
+    /** drawPath table 语法：{ path(LuaPath/Path), color } */
+    fun drawPath(config: LuaObject) {
+        try {
+            val pathField = config.getField("path")
+            val javaPath: Path? = if (pathField != null && !pathField.isNil()) {
+                val obj = try { pathField.getObject() } catch (_: Exception) { null }
+                when (obj) {
+                    is LuaPath -> obj.path
+                    is Path -> obj
+                    else -> null
+                }
+            } else null
+
+            val colorValue = getFieldValue(config, "color")
+
+            if (javaPath != null) {
+                drawScope.drawPath(path = javaPath, color = toColor(colorValue), style = Fill)
+            }
+        } catch (e: Exception) {
+            logW(TAG) { "[drawPath] table 语法失败: ${e.message}" }
         }
     }
 
@@ -308,6 +443,58 @@ class DrawScopeWrapper(private val drawScope: DrawScope) {
         drawScope.drawContext.transform.translate(pivotX.toFloat(), pivotY.toFloat())
         drawScope.drawContext.transform.rotate(degrees.toFloat())
         drawScope.drawContext.transform.translate(-pivotX.toFloat(), -pivotY.toFloat())
+    }
+
+    /** rotate table 语法：{ degrees, pivot?(LuaOffset), block?(function) } */
+    fun rotate(config: LuaObject) {
+        try {
+            val degrees = getFieldNumber(config, "degrees") ?: 0.0
+            val pivot = getOffsetFromConfig(config, "pivot")
+            val blockField = config.getField("block")
+
+            save()
+            if (pivot != null) {
+                drawScope.drawContext.transform.translate(pivot.x.toFloat(), pivot.y.toFloat())
+            }
+            drawScope.drawContext.transform.rotate(degrees.toFloat())
+            if (pivot != null) {
+                drawScope.drawContext.transform.translate(-pivot.x.toFloat(), -pivot.y.toFloat())
+            }
+            if (blockField != null && blockField.isFunction()) {
+                blockField.call(DrawScopeWrapper(drawScope))
+            }
+            restore()
+        } catch (e: Exception) {
+            logW(TAG) { "[rotate] table 语法失败: ${e.message}" }
+        }
+    }
+
+    /** clipPath table 语法：{ path(LuaPath/Path), block(function) } */
+    fun clipPath(config: LuaObject) {
+        try {
+            val pathField = config.getField("path")
+            val path: Path? = if (pathField != null && !pathField.isNil()) {
+                val obj = try { pathField.getObject() } catch (_: Exception) { null }
+                when (obj) {
+                    is LuaPath -> obj.path
+                    is Path -> obj
+                    else -> null
+                }
+            } else null
+
+            val blockField = config.getField("block")
+
+            if (path != null) {
+                save()
+                drawScope.drawContext.canvas.clipPath(path)
+                if (blockField != null && blockField.isFunction()) {
+                    blockField.call(DrawScopeWrapper(drawScope))
+                }
+                restore()
+            }
+        } catch (e: Exception) {
+            logW(TAG) { "[clipPath] table 语法失败: ${e.message}" }
+        }
     }
 
     // ========== 文本绘制 ==========

@@ -1,5 +1,6 @@
 package com.nirithy.luacompose.plugin
 
+import com.luajava.LuaState
 import com.nirithy.luacompose.logD
 import com.nirithy.luacompose.logI
 import com.nirithy.luacompose.render.ComponentRegistry
@@ -42,10 +43,12 @@ object PluginRegistry {
     }
 
     /**
-     * 批量注册插件
+     * 批量注册插件（幂等：多次调用不会重复添加）
      * @param pluginList 插件列表
      */
     fun registerAll(vararg pluginList: ComposePlugin) {
+        // 清理旧插件，避免每次 inject() 调用时累积
+        _plugins.clear()
         pluginList.forEach { register(it) }
     }
 
@@ -63,6 +66,31 @@ object PluginRegistry {
             }
         }
         logI(TAG) { "插件注入完成，ComponentRegistry 共 ${ComponentRegistry.componentCount()} 个组件" }
+    }
+
+    /**
+     * 调用所有插件的 injectGlobals，向 compose 全局表注入 API
+     * @param L LuaState
+     * @param composeTableIdx compose 表在栈中的索引
+     */
+    fun injectGlobalsAll(L: LuaState, composeTableIdx: Int) {
+        logI(TAG) { "开始注入 ${_plugins.size} 个插件的全局 API..." }
+        for (plugin in _plugins) {
+            plugin.injectGlobals(L, composeTableIdx)
+            logD(TAG) { "  ${plugin.namespace ?: "root"}: injectGlobals 完成" }
+        }
+        logI(TAG) { "插件全局 API 注入完成" }
+    }
+
+    /**
+     * 调用所有插件的 injectLocals，向 compose 全局表注入局部值
+     * @param L LuaState
+     * @param composeTableIdx compose 表在栈中的索引
+     */
+    fun injectLocalsAll(L: LuaState, composeTableIdx: Int) {
+        for (plugin in _plugins) {
+            plugin.injectLocals(L, composeTableIdx)
+        }
     }
 
     /**

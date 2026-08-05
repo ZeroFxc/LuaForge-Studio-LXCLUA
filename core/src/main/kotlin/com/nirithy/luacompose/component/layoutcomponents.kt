@@ -3,9 +3,6 @@ package com.nirithy.luacompose.component
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowColumn
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -16,7 +13,6 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import com.nirithy.luacompose.bridge.ComposeBridgeInstance
@@ -30,6 +26,8 @@ import com.luajava.LuaObject
 
 /**
  * 布局组件插件：Column、Row、Box、LazyColumn、LazyRow
+ *
+ * FlowRow/FlowColumn 已由 KSP 渲染器接管（通过 registerKspShortNames 别名映射）
  */
 object LayoutComponents : ComposePlugin {
     override val namespace = "layout"
@@ -38,8 +36,6 @@ object LayoutComponents : ComposePlugin {
         "Column" to { node -> ColumnLayout(node) },
         "Row" to { node -> RowLayout(node) },
         "Box" to { node -> BoxLayout(node) },
-        "FlowRow" to { node -> FlowRowLayout(node) },
-        "FlowColumn" to { node -> FlowColumnLayout(node) },
         "LazyColumn" to { node -> LazyColumnLayout(node) },
         "LazyRow" to { node -> LazyRowLayout(node) },
         "LazyVerticalGrid" to { node -> LazyVerticalGridLayout(node) },
@@ -50,8 +46,8 @@ object LayoutComponents : ComposePlugin {
     private fun ColumnLayout(node: ComposeNode) {
         Column(
             modifier = ComposeRenderer.resolveModifier(node),
-            verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
-            horizontalAlignment = resolveHorizontalAlignment(node.stringProp("horizontalAlignment"))
+            verticalArrangement = resolveVerticalArrangement(node.prop<Any?>("verticalArrangement")),
+            horizontalAlignment = resolveHorizontalAlignment(node.prop<Any?>("horizontalAlignment"))
         ) {
             if (node.childrenFunc != null) {
                 ComposeRenderer.RenderChildren(node)
@@ -67,8 +63,8 @@ object LayoutComponents : ComposePlugin {
     private fun RowLayout(node: ComposeNode) {
         Row(
             modifier = ComposeRenderer.resolveModifier(node),
-            horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
-            verticalAlignment = resolveVerticalAlignment(node.stringProp("verticalAlignment"))
+            horizontalArrangement = resolveHorizontalArrangement(node.prop<Any?>("horizontalArrangement")),
+            verticalAlignment = resolveVerticalAlignment(node.prop<Any?>("verticalAlignment"))
         ) {
             if (node.childrenFunc != null) {
                 ComposeRenderer.RenderChildren(node)
@@ -84,7 +80,7 @@ object LayoutComponents : ComposePlugin {
     private fun BoxLayout(node: ComposeNode) {
         Box(
             modifier = ComposeRenderer.resolveModifier(node),
-            contentAlignment = resolveContentAlignment(node.stringProp("contentAlignment")) ?: Alignment.TopStart
+            contentAlignment = resolveContentAlignment(node.prop<Any?>("contentAlignment")) ?: Alignment.TopStart
         ) {
             if (node.childrenFunc != null) {
                 ComposeRenderer.RenderChildren(node)
@@ -96,48 +92,12 @@ object LayoutComponents : ComposePlugin {
         }
     }
 
-    @OptIn(ExperimentalLayoutApi::class)
-    @Composable
-    private fun FlowRowLayout(node: ComposeNode) {
-        FlowRow(
-            modifier = ComposeRenderer.resolveModifier(node),
-            horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
-            verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
-        ) {
-            if (node.childrenFunc != null) {
-                ComposeRenderer.RenderChildren(node)
-            } else {
-                for (child in node.children) {
-                    ComposeRenderer.RenderNode(child)
-                }
-            }
-        }
-    }
-
-    @OptIn(ExperimentalLayoutApi::class)
-    @Composable
-    private fun FlowColumnLayout(node: ComposeNode) {
-        FlowColumn(
-            modifier = ComposeRenderer.resolveModifier(node),
-            verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
-            horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
-        ) {
-            if (node.childrenFunc != null) {
-                ComposeRenderer.RenderChildren(node)
-            } else {
-                for (child in node.children) {
-                    ComposeRenderer.RenderNode(child)
-                }
-            }
-        }
-    }
-
     @Composable
     private fun LazyColumnLayout(node: ComposeNode) {
         LazyColumn(
             modifier = ComposeRenderer.resolveModifier(node),
-            verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
-            horizontalAlignment = resolveHorizontalAlignment(node.stringProp("horizontalAlignment"))
+            verticalArrangement = resolveVerticalArrangement(node.prop<Any?>("verticalArrangement")),
+            horizontalAlignment = resolveHorizontalAlignment(node.prop<Any?>("horizontalAlignment"))
         ) {
             renderLazyItems(node)
         }
@@ -147,8 +107,8 @@ object LayoutComponents : ComposePlugin {
     private fun LazyRowLayout(node: ComposeNode) {
         LazyRow(
             modifier = ComposeRenderer.resolveModifier(node),
-            horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
-            verticalAlignment = resolveVerticalAlignment(node.stringProp("verticalAlignment"))
+            horizontalArrangement = resolveHorizontalArrangement(node.prop<Any?>("horizontalArrangement")),
+            verticalAlignment = resolveVerticalAlignment(node.prop<Any?>("verticalAlignment"))
         ) {
             renderLazyItems(node)
         }
@@ -160,8 +120,8 @@ object LayoutComponents : ComposePlugin {
         LazyVerticalGrid(
             columns = columns,
             modifier = ComposeRenderer.resolveModifier(node),
-            verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
-            horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
+            verticalArrangement = resolveVerticalArrangement(node.prop<Any?>("verticalArrangement")),
+            horizontalArrangement = resolveHorizontalArrangement(node.prop<Any?>("horizontalArrangement")),
         ) {
             renderLazyGridItems(node)
         }
@@ -173,8 +133,8 @@ object LayoutComponents : ComposePlugin {
         LazyHorizontalGrid(
             rows = rows,
             modifier = ComposeRenderer.resolveModifier(node),
-            verticalArrangement = resolveVerticalArrangement(node.stringProp("verticalArrangement")),
-            horizontalArrangement = resolveHorizontalArrangement(node.stringProp("horizontalArrangement")),
+            verticalArrangement = resolveVerticalArrangement(node.prop<Any?>("verticalArrangement")),
+            horizontalArrangement = resolveHorizontalArrangement(node.prop<Any?>("horizontalArrangement")),
         ) {
             renderLazyGridItems(node)
         }
@@ -262,25 +222,45 @@ object LayoutComponents : ComposePlugin {
         }
     }
 
-    private fun resolveVerticalArrangement(name: String?): Arrangement.Vertical = when (name) {
-        "Center" -> Arrangement.Center; "Top" -> Arrangement.Top; "Bottom" -> Arrangement.Bottom
-        "SpaceAround" -> Arrangement.SpaceAround; "SpaceBetween" -> Arrangement.SpaceBetween
-        "SpaceEvenly" -> Arrangement.SpaceEvenly; else -> Arrangement.Top
+    private fun resolveVerticalArrangement(prop: Any?): Arrangement.Vertical = when {
+        prop is Arrangement.Vertical -> prop
+        prop is String -> when (prop) {
+            "Center" -> Arrangement.Center; "Top" -> Arrangement.Top; "Bottom" -> Arrangement.Bottom
+            "SpaceAround" -> Arrangement.SpaceAround; "SpaceBetween" -> Arrangement.SpaceBetween
+            "SpaceEvenly" -> Arrangement.SpaceEvenly; else -> Arrangement.Top
+        }
+        else -> Arrangement.Top
     }
-    private fun resolveHorizontalArrangement(name: String?): Arrangement.Horizontal = when (name) {
-        "Center" -> Arrangement.Center; "Start" -> Arrangement.Start; "End" -> Arrangement.End
-        "SpaceAround" -> Arrangement.SpaceAround; "SpaceBetween" -> Arrangement.SpaceBetween
-        "SpaceEvenly" -> Arrangement.SpaceEvenly; else -> Arrangement.Start
+    private fun resolveHorizontalArrangement(prop: Any?): Arrangement.Horizontal = when {
+        prop is Arrangement.Horizontal -> prop
+        prop is String -> when (prop) {
+            "Center" -> Arrangement.Center; "Start" -> Arrangement.Start; "End" -> Arrangement.End
+            "SpaceAround" -> Arrangement.SpaceAround; "SpaceBetween" -> Arrangement.SpaceBetween
+            "SpaceEvenly" -> Arrangement.SpaceEvenly; else -> Arrangement.Start
+        }
+        else -> Arrangement.Start
     }
-    private fun resolveHorizontalAlignment(name: String?): Alignment.Horizontal = when (name) {
-        "CenterHorizontally" -> Alignment.CenterHorizontally; "Start" -> Alignment.Start; "End" -> Alignment.End; else -> Alignment.Start
+    private fun resolveHorizontalAlignment(prop: Any?): Alignment.Horizontal = when {
+        prop is Alignment.Horizontal -> prop
+        prop is String -> when (prop) {
+            "CenterHorizontally" -> Alignment.CenterHorizontally; "Start" -> Alignment.Start; "End" -> Alignment.End; else -> Alignment.Start
+        }
+        else -> Alignment.Start
     }
-    private fun resolveVerticalAlignment(name: String?): Alignment.Vertical = when (name) {
-        "CenterVertically" -> Alignment.CenterVertically; "Top" -> Alignment.Top; "Bottom" -> Alignment.Bottom; else -> Alignment.CenterVertically
+    private fun resolveVerticalAlignment(prop: Any?): Alignment.Vertical = when {
+        prop is Alignment.Vertical -> prop
+        prop is String -> when (prop) {
+            "CenterVertically" -> Alignment.CenterVertically; "Top" -> Alignment.Top; "Bottom" -> Alignment.Bottom; else -> Alignment.CenterVertically
+        }
+        else -> Alignment.CenterVertically
     }
-    private fun resolveContentAlignment(name: String?): Alignment? = when (name) {
-        "Center" -> Alignment.Center; "TopStart" -> Alignment.TopStart; "TopCenter" -> Alignment.TopCenter
-        "TopEnd" -> Alignment.TopEnd; "CenterStart" -> Alignment.CenterStart; "CenterEnd" -> Alignment.CenterEnd
-        "BottomStart" -> Alignment.BottomStart; "BottomCenter" -> Alignment.BottomCenter; "BottomEnd" -> Alignment.BottomEnd; else -> null
+    private fun resolveContentAlignment(prop: Any?): Alignment? = when {
+        prop is Alignment -> prop
+        prop is String -> when (prop) {
+            "Center" -> Alignment.Center; "TopStart" -> Alignment.TopStart; "TopCenter" -> Alignment.TopCenter
+            "TopEnd" -> Alignment.TopEnd; "CenterStart" -> Alignment.CenterStart; "CenterEnd" -> Alignment.CenterEnd
+            "BottomStart" -> Alignment.BottomStart; "BottomCenter" -> Alignment.BottomCenter; "BottomEnd" -> Alignment.BottomEnd; else -> null
+        }
+        else -> null
     }
 }

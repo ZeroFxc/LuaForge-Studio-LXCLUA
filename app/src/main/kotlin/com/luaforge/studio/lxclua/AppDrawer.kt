@@ -13,6 +13,9 @@ import androidx.core.content.getSystemService
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatDelegate
@@ -508,14 +511,38 @@ class MainActivity : ComponentActivity() {
         com.luaforge.studio.lxclua.plugin.state.EventManager.fireEvent(
             com.luaforge.studio.lxclua.plugin.state.PluginEvents.ON_APP_RESUME
         )
+        // 从后台恢复时，如果保活总开关开启且后台保活关闭，则重启广播服务器
+        val config = com.luaforge.studio.lxclua.ai.AIConfigManager.currentConfig
+        if (config.keepAliveEnabled && !config.keepAliveInBackground) {
+            CoroutineScope(Dispatchers.IO).launch {
+                com.luaforge.studio.lxclua.mcp.MCPManager.refreshBroadcast()
+            }
+        }
+        // 隐藏保活通知（停止前台服务）
+        if (config.keepAliveNotification) {
+            com.luaforge.studio.lxclua.mcp.KeepAliveNotification.hide(this)
+        }
     }
-    
+
     override fun onPause() {
         super.onPause()
         com.luaforge.studio.lxclua.plugin.state.EventManager.fireEvent(
             com.luaforge.studio.lxclua.plugin.state.PluginEvents.ON_APP_PAUSE
         )
         com.luaforge.studio.lxclua.plugin.PluginManager.currentActivity = null
+        // 应用切到后台时，根据保活设置决定是否停止广播服务器
+        val config = com.luaforge.studio.lxclua.ai.AIConfigManager.currentConfig
+        if (config.keepAliveEnabled) {
+            if (config.keepAliveInBackground) {
+                // 后台保活开启：启动前台服务保持运行
+                if (config.keepAliveNotification) {
+                    com.luaforge.studio.lxclua.mcp.KeepAliveNotification.show(this)
+                }
+            } else {
+                // 后台保活关闭：停止广播服务器
+                com.luaforge.studio.lxclua.mcp.MCPManager.stopAllLocalServers()
+            }
+        }
     }
 
     override fun onDestroy() {

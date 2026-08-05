@@ -166,6 +166,7 @@ enum class LuaTokenTypes {
     IMPLEMENTS,        // implements
     INTERFACE,         // interface
     NEW,               // new
+    OVERRIDE,          // override
     SUPER,             // super
     PRIVATE,           // private
     PROTECTED,         // protected

@@ -265,6 +265,7 @@ Number = {DecNumber} | {HexNumber} | {BinNumber}
   "implements"              { return IMPLEMENTS; }
   "interface"               { return INTERFACE; }
   "new"                     { return NEW; }
+  "override"                { return OVERRIDE; }
   "super"                   { return SUPER; }
   "private"                 { return PRIVATE; }
   "protected"               { return PROTECTED; }

@@ -736,6 +736,10 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
         
         val luaLanguage = createLuaLanguageWithCompletion(pluginSyntaxRules)
 
+        // 仅 .lua 和 .aly 文件启用 JNI 语法诊断，其他文件类型跳过
+        val fileExt = state.file.extension.lowercase()
+        luaLanguage.setJniDiagnosticsEnabled(fileExt == "lua" || fileExt == "aly")
+
         val editor = CodeEditor(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1082,14 +1086,20 @@ class EditorViewModel : ViewModel(), CompletionDataManager.OnCompletionDataListe
     private suspend fun openFileInternal(file: File): Boolean {
         return try {
             val (cursorLine, cursorColumn) = getFileCursorPosition(file.absolutePath)
-            val content = withContext(KotlinDispatchers.IO) {
-                try {
-                    if (file.length() > 1024 * 1024) "文件过大" else file.readText(Charsets.UTF_8)
-                } catch (e: Exception) {
-                    "无法读取文件: ${e.message}"
+            val isMedia = com.luaforge.studio.lxclua.ui.editor.components.isMediaFile(file.name)
+            val content = if (isMedia) {
+                // 媒体文件不读取文本内容
+                ""
+            } else {
+                withContext(KotlinDispatchers.IO) {
+                    try {
+                        if (file.length() > 1024 * 1024) "文件过大" else file.readText(Charsets.UTF_8)
+                    } catch (e: Exception) {
+                        "无法读取文件: ${e.message}"
+                    }
                 }
             }
-            val languageType = getLanguageType(file.extension)
+            val languageType = if (isMedia) "media" else getLanguageType(file.extension)
             val newState = CodeEditorState(file = file, languageType = languageType)
             newState.onContentLoaded(content)
             openFiles = openFiles + newState

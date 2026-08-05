@@ -48,6 +48,27 @@ import com.nirithy.luacompose.draw.DrawScopeWrapper
 import com.nirithy.luacompose.gesture.GestureConfig
 
 /**
+ * graphicsLayer lambda 作用域包装对象
+ *
+ * Lua 回调中设置此对象的属性（如 renderEffect、scaleX 等），
+ * 然后在 graphicsLayer lambda 中读取并应用到 Compose 的 GraphicsLayerScope。
+ */
+class GraphicsLayerScopeWrapper {
+    var scaleX: Float = 1f
+    var scaleY: Float = 1f
+    var alpha: Float = 1f
+    var rotationX: Float = 0f
+    var rotationY: Float = 0f
+    var rotationZ: Float = 0f
+    var translationX: Float = 0f
+    var translationY: Float = 0f
+    var shadowElevation: Float = 0f
+    var cameraDistance: Float = 0f
+    var renderEffect: Any? = null  // android.graphics.RenderEffect
+    var shape: Boolean = false
+}
+
+/**
  * 链式 Modifier 构造器
  *
  * 每个方法返回自身，支持链式调用。
@@ -173,6 +194,13 @@ class ModifierChain {
         }
         return this
     }
+    /**
+     * 动态偏移（Lua 版本），offsetLua 别名，兼容 Lua 侧直接调用 .offset(fn)
+     * Lua 回调应返回 IntOffset 或 {x=..., y=...} 表
+     */
+    fun offsetLua(callback: LuaObject): ModifierChain {
+        return offsetLambda(callback)
+    }
     /** 旋转（度数） */
     fun rotate(degrees: Float): ModifierChain {
         modifier = modifier.rotate(degrees); return this
@@ -234,6 +262,54 @@ class ModifierChain {
                     this.scaleY = ((it["scaleY"] as? Number)?.toFloat() ?: 1f)
                     this.alpha = ((it["alpha"] as? Number)?.toFloat() ?: 1f)
                     this.rotationZ = ((it["rotationZ"] as? Number)?.toFloat() ?: 0f)
+                }
+            } catch (_: Exception) {}
+        }
+        return this
+    }
+
+    /**
+     * graphicsLayer Lua 回调版本
+     *
+     * Lua 回调接收一个 GraphicsLayerScopeWrapper 对象，在回调中设置其属性（如 renderEffect），
+     * 然后在 graphicsLayer lambda 中读取并应用到 Compose 的 GraphicsLayerScope。
+     *
+     * Lua 用法: .graphicsLayerLua(function(scope) scope.renderEffect = RenderEffect.createRuntimeShaderEffect(...) end)
+     * 读取 recomposeTrigger 确保 Compose 在 mutableState 变更时重新计算变换
+     */
+    fun graphicsLayerLua(callback: LuaObject): ModifierChain {
+        modifier = modifier.graphicsLayer {
+            @Suppress("UNUSED_EXPRESSION")
+            ComposeBridgeInstance.current.recomposeTrigger.value
+            try {
+                val scope = GraphicsLayerScopeWrapper()
+                synchronized(ComposeBridgeInstance.current.luaLock) { callback.call(scope) }
+                // 将 scope 中设置的属性应用到 Compose 的 GraphicsLayerScope
+                this.scaleX = scope.scaleX
+                this.scaleY = scope.scaleY
+                this.alpha = scope.alpha
+                this.rotationX = scope.rotationX
+                this.rotationY = scope.rotationY
+                this.rotationZ = scope.rotationZ
+                this.translationX = scope.translationX
+                this.translationY = scope.translationY
+                this.shadowElevation = scope.shadowElevation
+                if (scope.cameraDistance != 0f) this.cameraDistance = scope.cameraDistance
+                // 应用 renderEffect（Android 12+ 运行时着色器效果）
+                scope.renderEffect?.let { effect ->
+                    if (effect is android.graphics.RenderEffect) {
+                        try {
+                            // RenderEffect 是 @JvmInline value class，构造函数为 internal
+                            // 通过反射调用 box-impl 静态方法创建实例
+                            val renderEffectClass = Class.forName("androidx.compose.ui.graphics.RenderEffect")
+                            val boxImpl = renderEffectClass.getDeclaredMethod("box-impl", android.graphics.RenderEffect::class.java)
+                            boxImpl.isAccessible = true
+                            @Suppress("UNCHECKED_CAST")
+                            this.renderEffect = boxImpl.invoke(null, effect) as androidx.compose.ui.graphics.RenderEffect
+                        } catch (_: Exception) {
+                            // 反射失败时静默降级，renderEffect 不生效
+                        }
+                    }
                 }
             } catch (_: Exception) {}
         }
@@ -329,7 +405,7 @@ class ModifierChain {
         this.weightProportion = proportion; return this
     }
     /** 对齐（Box 子项），调用后由 Box 渲染时消费 */
-    fun align(alignment: String?): ModifierChain {
+    fun align(alignment: Any?): ModifierChain {
         if (alignment != null) this.alignment = resolveAlignment(alignment)
         return this
     }
@@ -421,11 +497,11 @@ class ModifierChain {
 
     /** 绑定指针输入手势（detectDragGestures 等），由 applyGestures 在 Composable 中消费 */
     fun pointerInput(onDrag: LuaObject): ModifierChain {
-        ensureGestureConfig().onDrag = onDrag; return this
+        ensureGestureConfig().gestureBlock = onDrag; return this
     }
     /** 多参数绑定（Lua: pointerInput(key1, key2, callback)），key1/key2 用于稳定 key，忽略 */
     fun pointerInput(key1: Float, key2: Float, onDrag: LuaObject): ModifierChain {
-        ensureGestureConfig().onDrag = onDrag; return this
+        ensureGestureConfig().gestureBlock = onDrag; return this
     }
     /** 完整手势绑定（onDragStart, onDrag, onDragEnd） */
     fun pointerInputFull(onDragStart: LuaObject, onDrag: LuaObject, onDragEnd: LuaObject): ModifierChain {
@@ -433,6 +509,32 @@ class ModifierChain {
         cfg.onDragStart = onDragStart
         cfg.onDrag = onDrag
         cfg.onDragEnd = onDragEnd
+        return this
+    }
+
+    // ========== pointerInput 多参数重载（String key 版本） ==========
+
+    /** 指针输入（String key + 回调），key 用于稳定 pointerInput 协程 */
+    fun pointerInput(key1: String, callback: LuaObject): ModifierChain {
+        val cfg = ensureGestureConfig()
+        cfg.pointerInputKeys = listOf(key1)
+        cfg.gestureBlock = callback
+        return this
+    }
+
+    /** 指针输入（String key + Float key + 回调） */
+    fun pointerInput(key1: String, key2: Float, callback: LuaObject): ModifierChain {
+        val cfg = ensureGestureConfig()
+        cfg.pointerInputKeys = listOf(key1, key2)
+        cfg.gestureBlock = callback
+        return this
+    }
+
+    /** 指针输入（String key + Float key + Float key + 回调） */
+    fun pointerInput(key1: String, key2: Float, key3: Float, callback: LuaObject): ModifierChain {
+        val cfg = ensureGestureConfig()
+        cfg.pointerInputKeys = listOf(key1, key2, key3)
+        cfg.gestureBlock = callback
         return this
     }
 
@@ -462,6 +564,10 @@ class ModifierChain {
         )
         return this
     }
+    /** 点击（带 Lua 回调），clickable 别名，兼容 Lua 侧直接调用 .clickable(fn) */
+    fun clickable(callback: LuaObject): ModifierChain {
+        return clickableLua(callback)
+    }
 
     // ========== 共享元素过渡 ==========
 
@@ -478,23 +584,29 @@ class ModifierChain {
     companion object {
         fun create(): ModifierChain = ModifierChain()
 
-        /** 对齐字符串解析，返回 Alignment 或 Alignment.Horizontal/Vertical */
-        fun resolveAlignment(name: String): Any = when (name) {
-            "Center" -> Alignment.Center
-            "TopStart" -> Alignment.TopStart
-            "TopCenter" -> Alignment.TopCenter
-            "TopEnd" -> Alignment.TopEnd
-            "CenterStart" -> Alignment.CenterStart
-            "CenterEnd" -> Alignment.CenterEnd
-            "BottomStart" -> Alignment.BottomStart
-            "BottomCenter" -> Alignment.BottomCenter
-            "BottomEnd" -> Alignment.BottomEnd
-            "Start" -> Alignment.Start
-            "End" -> Alignment.End
-            "Top" -> Alignment.Top
-            "Bottom" -> Alignment.Bottom
-            "CenterHorizontally" -> Alignment.CenterHorizontally
-            "CenterVertically" -> Alignment.CenterVertically
+        /** 对齐解析，支持 Java 对象直接匹配和字符串回退 */
+        fun resolveAlignment(prop: Any?): Any = when {
+            prop is Alignment -> prop
+            prop is Alignment.Horizontal -> prop
+            prop is Alignment.Vertical -> prop
+            prop is String -> when (prop) {
+                "Center" -> Alignment.Center
+                "TopStart" -> Alignment.TopStart
+                "TopCenter" -> Alignment.TopCenter
+                "TopEnd" -> Alignment.TopEnd
+                "CenterStart" -> Alignment.CenterStart
+                "CenterEnd" -> Alignment.CenterEnd
+                "BottomStart" -> Alignment.BottomStart
+                "BottomCenter" -> Alignment.BottomCenter
+                "BottomEnd" -> Alignment.BottomEnd
+                "Start" -> Alignment.Start
+                "End" -> Alignment.End
+                "Top" -> Alignment.Top
+                "Bottom" -> Alignment.Bottom
+                "CenterHorizontally" -> Alignment.CenterHorizontally
+                "CenterVertically" -> Alignment.CenterVertically
+                else -> Alignment.TopStart
+            }
             else -> Alignment.TopStart
         }
     }

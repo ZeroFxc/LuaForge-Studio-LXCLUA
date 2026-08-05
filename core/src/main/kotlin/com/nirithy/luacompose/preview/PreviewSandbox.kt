@@ -477,7 +477,15 @@ class PreviewSandbox(context: Context) {
                         previewBridge.animDpIndex = 0
                         previewBridge.animColorIndex = 0
                         previewBridge.navBackStackIndex = 0
-                        com.nirithy.luacompose.state.StateWrapper.syncBuildCycle(previewBridge.stateCache)
+
+                        // ★ ComposeScope：开始新的渲染周期
+                        previewBridge.currentScope = previewBridge.rootScope
+                        previewBridge.rootScope.beginCycle()
+                        com.nirithy.luacompose.state.StateWrapper.globalBuildCycle++
+                        val allStates = previewBridge.rootScope.collectAllStates()
+                        for (sw in allStates) {
+                            sw.currentBuildCycle = com.nirithy.luacompose.state.StateWrapper.globalBuildCycle
+                        }
 
                         // 调用渲染函数获取节点树
                         val renderResult = try {
@@ -506,6 +514,9 @@ class PreviewSandbox(context: Context) {
                                 logW(TAG) { errorMessage!! }
                                 false
                             }
+                        }.also {
+                            // ★ ComposeScope：结束渲染周期，清理不再被访问的状态
+                            previewBridge.rootScope.endCycle(com.nirithy.luacompose.state.StateWrapper.globalBuildCycle)
                         }
                     }
                 }

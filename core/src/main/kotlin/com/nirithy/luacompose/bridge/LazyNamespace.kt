@@ -135,6 +135,18 @@ object LazyNamespace {
         private val isRoot: Boolean
     ) : JavaFunction(L) {
         override fun execute(): Int {
+            // 优先检查表中是否已存在该 key（如 Modifier 等通过 setField 注入的值）
+            // rawget 不会触发元方法，避免递归
+            L.pushValue(3)  // 推入 key 副本
+            L.rawGet(2)     // rawget(table, key) → 弹出 key 副本，推入值
+            if (L.type(-1) != LuaState.LUA_TNIL) {
+                // 表中已存在该 key，直接返回值
+                // Lua VM 会自动清理栈上的 self/table/key 参数，只取栈顶的 value 作为返回值
+                logI(TAG) { "[__index] rawget 命中 key, type=${L.typeName(L.type(-1))}" }
+                return 1
+            }
+            L.pop(1)  // 弹出 nil
+
             val key = try {
                 L.toString(3)
             } catch (e: Exception) {
@@ -147,6 +159,7 @@ object LazyNamespace {
 
             if (key.isNotEmpty() && key[0].isUpperCase()) {
                 // 大写 key → 尝试解析为类
+                logD(TAG) { "[__index] 大写 key='$key', 尝试解析为类, prefix=$prefix" }
                 val clazz = resolveClass(fullPath)
                 if (clazz != null) {
                     return pushClassResult(clazz, key, fullPath)

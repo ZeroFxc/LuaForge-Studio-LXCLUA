@@ -284,6 +284,10 @@ object PluginManager {
         }
         // 初始化 MCP 管理器（用于持久化配置）
         MCPManager.init(context)
+        // 自动启动已持久化的广播服务器（异步，不阻塞启动）
+        CoroutineScope(Dispatchers.IO).launch {
+            MCPManager.refreshBroadcast()
+        }
         // 配置就绪后再加载插件
         loadEnabledPlugins()
         // 自动连接已启用的远程 MCP 服务器（异步，不阻塞启动）

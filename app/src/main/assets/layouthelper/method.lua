@@ -24,7 +24,9 @@ function _M.dumplayout(t, indent, isRoot)
   table.insert(ret, currentIndent .. "{\n")
 
   -- 检查是否为视图表（第一个元素是类）
-  if type(t[1]) == "userdata" and t[1].getSimpleName then
+  -- 注：此 Lua 环境中 type() 对 Java 对象返回类名而非 "userdata"，
+  -- 故通过 getSimpleName 方法的存在性判断是否为 Java Class 对象
+  if t[1].getSimpleName then
     table.insert(ret, nextIndent .. tostring(t[1].getSimpleName()) .. ";\n")
    elseif type(t[1]) == "string" then
     -- 对于字符串数组等非视图表，直接输出第一个元素

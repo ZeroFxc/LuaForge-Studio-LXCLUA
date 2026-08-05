@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.nirithy.luacompose.modifier.ModifierChain
 import com.nirithy.luacompose.node.ComposeNode
+import com.nirithy.luacompose.reflect.TypeResolver
 import java.lang.reflect.Method
 
 /**
@@ -66,7 +67,11 @@ object DynamicRenderer {
     }
 
     /**
-     * 通过反射调用 @Composable 函数
+     * 通过反射调用 @Composable 函数（带 box-impl 装箱支持）
+     *
+     * 参考 LuaCompose-master 的 ComposeBridge.invokeSafe：
+     * Kotlin inline class 在反射调用时需要手动装箱，否则参数类型不匹配。
+     * 例如 Dp 是 inline class，传 Int 给 Dp 参数时需要调用 Dp.box-impl(Int)。
      */
     @Composable
     private fun invokeComposable(method: Method, node: ComposeNode) {
@@ -85,7 +90,51 @@ object DynamicRenderer {
             args[contentIdx] = createContentLambda(node)
         }
 
-        method.invoke(null, *args)
+        invokeSafe(method, null, args)
+    }
+
+    /**
+     * 安全反射调用，自动处理 Kotlin inline class 装箱
+     *
+     * 当参数是 inline class（如 Dp、TextUnit）时，通过 box-impl 静态方法装箱。
+     * 参考 LuaCompose-master 的 ComposeBridge.invokeSafe
+     */
+    private fun invokeSafe(method: Method, obj: Any?, args: Array<Any?>) {
+        val paramTypes = method.parameterTypes
+        for (i in args.indices) {
+            val arg = args[i]
+            val paramType = paramTypes.getOrNull(i) ?: continue
+            if (arg != null && paramType.name != arg.javaClass.name && !paramType.isPrimitive && paramType != Any::class.java) {
+                // 尝试 box-impl 装箱
+                args[i] = boxInlineClass(arg, paramType) ?: arg
+            }
+        }
+        method.invoke(obj, *args)
+    }
+
+    /**
+     * 尝试将原始类型值装箱为 Kotlin inline class
+     *
+     * @param arg 原始值（Int/Float/Long/Double/Boolean）
+     * @param paramType 目标参数类型（inline class）
+     * @return 装箱后的对象，失败返回 null
+     */
+    private fun boxInlineClass(arg: Any?, paramType: Class<*>): Any? {
+        if (arg == null) return null
+        val argPrimitiveType = when (arg) {
+            is Int -> Integer.TYPE
+            is Float -> java.lang.Float.TYPE
+            is Long -> java.lang.Long.TYPE
+            is Double -> java.lang.Double.TYPE
+            is Boolean -> java.lang.Boolean.TYPE
+            else -> return null
+        }
+        return try {
+            val boxMethod = paramType.getDeclaredMethod("box-impl", argPrimitiveType)
+            boxMethod.invoke(null, arg)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**
@@ -145,6 +194,7 @@ object DynamicRenderer {
 
     /**
      * 按参数类型推断值（兜底策略）
+     * 使用 TypeResolver.coerceArg 进行类型强制转换，减少硬编码 when 分支
      */
     private fun resolveByType(name: String, type: Class<*>, node: ComposeNode): Any? {
         val rawValue = node.props[name] ?: return null
@@ -173,15 +223,9 @@ object DynamicRenderer {
             // Modifier 类型
             Modifier::class.java.isAssignableFrom(type) && rawValue is ModifierChain ->
                 rawValue.build()
-            // 基础类型 — 直接使用原始值
+            // 基础类型 — 使用 TypeResolver 进行智能类型强制转换
             type == String::class.java -> rawValue.toString()
-            type == Boolean::class.javaPrimitiveType || type == Boolean::class.java -> rawValue as? Boolean
-            type == Int::class.javaPrimitiveType || type == Int::class.java -> (rawValue as? Number)?.toInt()
-            type == Float::class.javaPrimitiveType || type == Float::class.java -> (rawValue as? Number)?.toFloat()
-            type == Long::class.javaPrimitiveType || type == Long::class.java -> (rawValue as? Number)?.toLong()
-            type == Double::class.javaPrimitiveType || type == Double::class.java -> (rawValue as? Number)?.toDouble()
-            // 其他 — 直接传原始值
-            else -> rawValue
+            else -> TypeResolver.coerceArg(rawValue, type)
         }
     }
 

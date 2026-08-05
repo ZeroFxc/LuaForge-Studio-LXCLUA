@@ -368,6 +368,11 @@ object ProjectUtil {
         // 解压 zip 文件
         ZipFile(zipFile).use { zip ->
             for (entry in zip.entries()) {
+                // 跳过无效条目（entry.name 为 null 或空会导致创建 null 文件夹）
+                if (entry.name.isNullOrBlank()) {
+                    continue
+                }
+
                 // 跳过 Preview.png 文件
                 if (entry.name.equals("Preview.png", ignoreCase = true)) {
                     continue

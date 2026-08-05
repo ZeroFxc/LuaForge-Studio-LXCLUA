@@ -35,6 +35,7 @@ class LuaBrush(
     val centerY: Double = 0.5,
     val radius: Double = 1.0,
     val colors: List<Long> = emptyList(),
+    val colorStops: List<Float>? = null,  // 颜色停止位置，与 colors 一一对应
     val startX: Double = 0.0,
     val startY: Double = 0.0,
     val endX: Double = 0.0,
@@ -44,11 +45,23 @@ class LuaBrush(
     fun toComposeBrush(): androidx.compose.ui.graphics.Brush {
         return when (type) {
             "radialGradient" -> {
-                androidx.compose.ui.graphics.Brush.radialGradient(
-                    colors = colors.map { androidx.compose.ui.graphics.Color(it.toInt()) },
-                    center = androidx.compose.ui.geometry.Offset(centerX.toFloat(), centerY.toFloat()),
-                    radius = radius.toFloat()
-                )
+                if (colorStops != null && colorStops.isNotEmpty() && colors.size == colorStops.size) {
+                    // 带 color stops 的渐变
+                    val stops = colors.mapIndexed { i, c ->
+                        colorStops[i] to androidx.compose.ui.graphics.Color(c.toInt())
+                    }.toTypedArray()
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        colorStops = stops,
+                        center = androidx.compose.ui.geometry.Offset(centerX.toFloat(), centerY.toFloat()),
+                        radius = radius.toFloat()
+                    )
+                } else {
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = colors.map { androidx.compose.ui.graphics.Color(it.toInt()) },
+                        center = androidx.compose.ui.geometry.Offset(centerX.toFloat(), centerY.toFloat()),
+                        radius = radius.toFloat()
+                    )
+                }
             }
             "verticalGradient" -> {
                 androidx.compose.ui.graphics.Brush.verticalGradient(

@@ -438,6 +438,10 @@
     <string name="code_editor_clear_cache_failed">清理失败: %s</string>
     <string name="code_editor_more_tabs">更多标签</string>
     <string name="select_copy_format">选择复制格式</string>
+    <string name="copy_format_import_label">import 语句</string>
+    <string name="copy_format_import_desc">导入类，项目中可直接使用类名</string>
+    <string name="copy_format_bind_label">luajava.bindClass</string>
+    <string name="copy_format_bind_desc">绑定类到局部变量，仅当前文件可用</string>
     <string name="downloading_dependencies">正在下载依赖</string>
     <string name="download_progress_file">正在下载: %s</string>
     <string name="code_editor_analyzing_deps">正在分析项目依赖，请稍候...</string>

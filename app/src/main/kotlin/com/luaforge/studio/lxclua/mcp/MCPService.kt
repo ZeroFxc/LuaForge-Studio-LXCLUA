@@ -382,6 +382,271 @@ object MCPManager {
         refreshAllServers()
     }
 
+    // ========== 本地 MCP 服务器（局域网广播，每条目独立） ==========
+
+    /** 本地 HTTP 服务器实例映射: serverId -> MCPLocalServer */
+    private val localServers = ConcurrentHashMap<String, MCPLocalServer>()
+
+    /** NSD 广播服务实例映射: serverId -> MCPBroadcastService */
+    private val broadcastServices = ConcurrentHashMap<String, MCPBroadcastService>()
+
+    /** 实际使用的端口映射: serverId -> port */
+    private val actualPorts = ConcurrentHashMap<String, Int>()
+
+    /** 端口锁定状态映射: serverId -> portLocked */
+    private val portLockStates = ConcurrentHashMap<String, Boolean>()
+
+    /** 是否有任何广播服务器在运行 */
+    val isAnyBroadcastRunning: Boolean
+        get() = localServers.values.any { it.running }
+
+    /**
+     * 刷新广播状态：根据所有已启用服务器的 broadcastEnabled 字段
+     * 为每个启用了广播的条目启动独立的 HTTP 服务器和 NSD 广播
+     * 端口由条目 broadcastPort 指定（0 = 随机端口）
+     */
+    suspend fun refreshBroadcast() {
+        val config = AIConfigManager.currentConfig
+        val broadcastEntries = config.mcpServers.filter { it.enabled && it.broadcastEnabled }
+        android.util.Log.i("MCPManager", "[refreshBroadcast] 开始: 总服务器=${config.mcpServers.size}, 广播条目=${broadcastEntries.size}, ids=${broadcastEntries.map { it.id }}")
+        val broadcastIds = broadcastEntries.map { it.id }.toSet()
+
+        // 停止已取消广播的条目
+        val toStop = localServers.keys.filter { it !in broadcastIds }
+        for (id in toStop) {
+            stopServerForEntry(id)
+        }
+
+        // 启动/更新广播条目
+        for (entry in broadcastEntries) {
+            val existingServer = localServers[entry.id]
+            if (existingServer != null && existingServer.running) {
+                // 已在运行，检查端口是否变了
+                val currentPort = actualPorts[entry.id] ?: 0
+                // 端口锁定状态变化或端口值变化时重启
+                val portChanged = entry.portLocked && entry.broadcastPort != currentPort
+                val lockStatusChanged = entry.portLocked != (portLockStates[entry.id] ?: false)
+                if (portChanged || lockStatusChanged) {
+                    android.util.Log.d("MCPManager", "[refreshBroadcast] ${entry.name} 端口变更: current=$currentPort, new=${entry.broadcastPort}, locked=${entry.portLocked}，重启")
+                    stopServerForEntry(entry.id)
+                    startServerForEntry(entry)
+                }
+            } else {
+                startServerForEntry(entry)
+            }
+        }
+        android.util.Log.i("MCPManager", "[refreshBroadcast] 完成: 运行中=${localServers.size}个, 条目: ${localServers.keys}")
+    }
+
+    /**
+     * 设置端口锁定状态（持久化到磁盘）
+     * @param serverId 服务器条目 ID
+     * @param locked 是否锁定
+     * @return 是否成功
+     */
+    fun setPortLocked(serverId: String, locked: Boolean): Boolean {
+        val config = AIConfigManager.currentConfig
+        val entry = config.mcpServers.find { it.id == serverId } ?: return false
+        val updated = entry.copy(portLocked = locked)
+        val newServers = config.mcpServers.map {
+            if (it.id == serverId) updated else it
+        }
+        val newConfig = config.copy(mcpServers = newServers)
+        AIConfigManager.updateInMemory(newConfig)
+        // 更新内存中的锁定状态
+        portLockStates[serverId] = locked
+        // 持久化到磁盘
+        persistConfig(newConfig)
+        android.util.Log.i("MCPManager", "[setPortLocked] $serverId -> locked=$locked (persisted)")
+        return true
+    }
+
+    /**
+     * 为单个条目启动 HTTP 服务器和 NSD 广播
+     * @param entry 服务器条目，broadcastPort=0 时自动分配随机端口；portLocked=true 时使用 broadcastPort
+     */
+    private suspend fun startServerForEntry(entry: MCPServerEntry) {
+        android.util.Log.i("MCPManager", "[startServer] 开始: entry.id=${entry.id}, name=${entry.name}, portLocked=${entry.portLocked}, broadcastPort=${entry.broadcastPort}")
+        val ctx = appContext ?: run {
+            android.util.Log.e("MCPManager", "appContext 未初始化，无法启动广播服务器")
+            return
+        }
+
+        // 端口选择策略：
+        // 1. portLocked=true 且 broadcastPort>0：使用锁定的端口
+        // 2. 其他情况：使用随机端口（OS 自动分配）
+        val port = if (entry.portLocked && entry.broadcastPort > 0) {
+            android.util.Log.i("MCPManager", "[startServer] 使用锁定端口: ${entry.broadcastPort}")
+            entry.broadcastPort
+        } else {
+            0
+        }
+
+        val server = MCPLocalServer(port)
+        // 初始化 WakeLock（必须在 start 前调用）
+        server.initWakeLock(ctx)
+        // 先存入 map，避免协程在 start() 返回后取消导致端口丢失
+        localServers[entry.id] = server
+        val started = server.start()
+        if (!started) {
+            localServers.remove(entry.id)
+            android.util.Log.e("MCPManager", "[startServer] ${entry.name} 启动失败: port=$port")
+            return
+        }
+
+        // 获取实际分配的端口（port=0 时系统自动分配）
+        val actualPort = server.actualPort
+        actualPorts[entry.id] = actualPort
+        portLockStates[entry.id] = entry.portLocked
+        android.util.Log.i("MCPManager", "[startServer] 存储端口: entry.id=${entry.id}, actualPort=$actualPort, portLocked=${entry.portLocked}, actualPorts=${actualPorts}")
+
+        // 启动 NSD 广播
+        val serviceName = "${MCPBroadcastService.SERVICE_NAME}-${entry.name}"
+        val broadcast = MCPBroadcastService(ctx, actualPort)
+        broadcast.register(serviceName)
+        broadcastServices[entry.id] = broadcast
+
+        // 更新配置中的端口（随机分配时记录实际端口，锁定端口时保持原值）
+        val config = AIConfigManager.currentConfig
+        val updated = config.mcpServers.map {
+            if (it.id == entry.id) {
+                // 如果是随机端口，更新实际分配的端口；如果锁定，保持原值
+                val newPort = if (entry.portLocked) it.broadcastPort else actualPort
+                it.copy(broadcastPort = newPort)
+            } else it
+        }
+        val newConfig = config.copy(mcpServers = updated)
+        AIConfigManager.updateInMemory(newConfig)
+        // 持久化到磁盘
+        persistConfig(newConfig)
+
+        android.util.Log.i("MCPManager", "[startServer] ${entry.name}: http://0.0.0.0:$actualPort/mcp, NSD=$serviceName")
+    }
+
+    /** 停止单个条目的服务器和广播 */
+    private fun stopServerForEntry(serverId: String) {
+        broadcastServices[serverId]?.unregister()
+        broadcastServices.remove(serverId)
+        localServers[serverId]?.stop()
+        localServers.remove(serverId)
+        actualPorts.remove(serverId)
+        portLockStates.remove(serverId)
+        android.util.Log.i("MCPManager", "[stopServer] $serverId 已停止")
+    }
+
+    /** 停止所有本地服务器和广播 */
+    fun stopAllLocalServers() {
+        for (id in localServers.keys.toList()) {
+            stopServerForEntry(id)
+        }
+        android.util.Log.i("MCPManager", "所有本地 MCP 服务器已停止")
+    }
+
+    /**
+     * 获取指定条目的广播地址列表
+     * @return 包含 127.0.0.1 和局域网 IP 的地址列表
+     */
+    suspend fun getBroadcastAddresses(serverId: String): List<String> {
+        val cachedPort = actualPorts[serverId]
+        val server = localServers[serverId]
+        val port = cachedPort ?: server?.getBoundPort() ?: run {
+            android.util.Log.w("MCPManager", "[getBroadcastAddresses] serverId=$serverId, actualPorts 无此条目, localServers 也无此条目, 所有key=${actualPorts.keys}")
+            return emptyList()
+        }
+        android.util.Log.d("MCPManager", "[getBroadcastAddresses] serverId=$serverId, port=$port, fromCache=${cachedPort != null}")
+        val addresses = mutableListOf<String>()
+
+        // 127.0.0.1 本地回环地址
+        addresses.add("http://127.0.0.1:$port/mcp")
+
+        // 局域网 IP
+        val broadcast = broadcastServices[serverId]
+        val lanIp = broadcast?.getLocalIpAddress()
+        if (lanIp != null) {
+            addresses.add("http://$lanIp:$port/mcp")
+        }
+
+        return addresses
+    }
+
+    /**
+     * 获取条目的广播端口
+     */
+    fun getBroadcastPort(serverId: String): Int {
+        return actualPorts[serverId] ?: 0
+    }
+
+    /**
+     * 获取所有启用了广播的服务器条目
+     */
+    fun getBroadcastEnabledServers(): List<MCPServerEntry> {
+        return AIConfigManager.currentConfig.mcpServers.filter { it.enabled && it.broadcastEnabled }
+    }
+
+    /**
+     * 获取广播条目的工具列表（供本地 HTTP 服务器 tools/list 使用）
+     * 只返回启用了广播的服务器中的已启用工具
+     */
+    fun getBroadcastTools(): List<MCPTool> {
+        val broadcastEntries = getBroadcastEnabledServers()
+        val result = mutableListOf<MCPTool>()
+
+        for (entry in broadcastEntries) {
+            if (entry.source == MCPServerSource.LOCAL_PLUGIN) {
+                // 插件服务：从 serviceRegistry 中获取已启用的工具
+                val serviceName = entry.id.removePrefix("plugin_service_")
+                val info = serviceRegistry[serviceName]
+                if (info != null && info.enabled) {
+                    for (tool in info.tools) {
+                        val state = info.toolStates[tool.name]
+                        if (state == null || state.enabled) {
+                            result.add(tool)
+                        }
+                    }
+                }
+            } else {
+                // 远程服务器：从缓存中获取工具
+                val tools = serverToolsCache[entry.id]
+                if (tools != null) {
+                    val toolStates = AIConfigManager.currentConfig.mcpToolStates[entry.name] ?: emptyMap()
+                    for (tool in tools) {
+                        val enabled = toolStates[tool.name] ?: true
+                        if (enabled) {
+                            result.add(tool)
+                        }
+                    }
+                }
+            }
+        }
+        android.util.Log.d("MCPManager", "[getBroadcastTools] 广播条目=${broadcastEntries.size}, 工具数=${result.size}")
+        return result
+    }
+
+    /**
+     * 调用广播工具（仅从广播条目中查找）
+     * 供本地 HTTP 服务器 tools/call 使用
+     * 使用 withContext 确保在 IO 线程执行，避免协程被挂起
+     */
+    suspend fun callBroadcastTool(toolName: String, args: Map<String, Any>): MCPToolCallResult {
+        return withContext(Dispatchers.IO) {
+            // 先检查插件工具
+            val pluginResult = callPluginTool(toolName, args)
+            if (pluginResult != null) {
+                return@withContext MCPToolCallResult(true, listOf(MCPContent(text = pluginResult)))
+            }
+            // 再检查远程服务器（仅广播启用的）
+            val broadcastEntries = getBroadcastEnabledServers().filter { it.source == MCPServerSource.REMOTE_URL }
+            for (entry in broadcastEntries) {
+                val cached = serverToolsCache[entry.id] ?: continue
+                if (cached.any { it.name == toolName }) {
+                    val svc = serverInstances[entry.id] ?: continue
+                    return@withContext svc.callTool(MCPToolCallRequest(toolName, args))
+                }
+            }
+            return@withContext MCPToolCallResult(false, error = "未找到广播工具: $toolName")
+        }
+    }
+
     // ========== 多服务器管理 ==========
 
     /** 多服务器实例映射: serverId -> MCP 服务实例 */
@@ -566,16 +831,20 @@ object MCPManager {
         toolNames.forEach { pluginTools.remove(it) }
     }
 
-    /** 将插件服务器添加到全局配置 */
+    /** 将插件服务器添加到全局配置（持久化） */
     private fun addPluginServerToConfig(entry: MCPServerEntry) {
         val config = AIConfigManager.currentConfig
         val existing = config.mcpServers.find { it.id == entry.id }
         if (existing == null) {
-            AIConfigManager.updateInMemory(config.copy(mcpServers = config.mcpServers + entry))
+            val newConfig = config.copy(mcpServers = config.mcpServers + entry)
+            AIConfigManager.updateInMemory(newConfig)
+            // 持久化到磁盘
+            persistConfig(newConfig)
+            android.util.Log.i("MCPManager", "[addPluginServerToConfig] 添加并持久化: ${entry.id}")
         }
     }
 
-    /** 将插件服务添加到全局配置的 MCP 服务器列表（供 UI 展示） */
+    /** 将插件服务添加到全局配置的 MCP 服务器列表（供 UI 展示，持久化） */
     fun addServiceToConfig(serviceName: String, serviceLabel: String) {
         android.util.Log.i("MCPManager", "[addServiceToConfig] 添加服务到配置: $serviceName ($serviceLabel)")
         val entry = MCPServerEntry(
@@ -595,10 +864,12 @@ object MCPManager {
         removePluginServerFromConfig("plugin_service_$serviceName")
     }
 
-    /** 从全局配置中移除插件服务器 */
+    /** 从全局配置中移除插件服务器（持久化） */
     private fun removePluginServerFromConfig(serverId: String) {
         val config = AIConfigManager.currentConfig
-        AIConfigManager.updateInMemory(config.copy(mcpServers = config.mcpServers.filter { it.id != serverId }))
+        val newConfig = config.copy(mcpServers = config.mcpServers.filter { it.id != serverId })
+        AIConfigManager.updateInMemory(newConfig)
+        persistConfig(newConfig)
     }
 
     /** 注销插件工具 */
@@ -615,23 +886,28 @@ object MCPManager {
         return pluginTools.values.toList()
     }
 
-    /** 调用插件工具 */
+    /**
+     * 调用插件工具
+     * 使用 withContext 确保在 IO 线程执行，避免协程被挂起
+     */
     suspend fun callPluginTool(name: String, args: Map<String, Any>): String? {
-        // 检查工具是否属于某个服务，以及服务/工具是否被禁用
-        val serviceName = toolToService[name]
-        if (serviceName != null) {
-            val serviceInfo = serviceRegistry[serviceName]
-            if (serviceInfo != null) {
-                if (!serviceInfo.enabled) {
-                    return "服务 [$serviceName] 已禁用"
-                }
-                val toolState = serviceInfo.toolStates[name]
-                if (toolState != null && !toolState.enabled) {
-                    return "工具 [$name] 在服务 [$serviceName] 中已被禁用"
+        return withContext(Dispatchers.IO) {
+            // 检查工具是否属于某个服务，以及服务/工具是否被禁用
+            val serviceName = toolToService[name]
+            if (serviceName != null) {
+                val serviceInfo = serviceRegistry[serviceName]
+                if (serviceInfo != null) {
+                    if (!serviceInfo.enabled) {
+                        return@withContext "服务 [$serviceName] 已禁用"
+                    }
+                    val toolState = serviceInfo.toolStates[name]
+                    if (toolState != null && !toolState.enabled) {
+                        return@withContext "工具 [$name] 在服务 [$serviceName] 中已被禁用"
+                    }
                 }
             }
+            return@withContext pluginToolHandlers[name]?.invoke(args)
         }
-        return pluginToolHandlers[name]?.invoke(args)
     }
 
     // ========== MCP 服务管理（工具组） ==========
@@ -639,11 +915,11 @@ object MCPManager {
     /**
      * 注册一个 MCP 服务（工具组）
      * 服务默认启用，所有工具默认启用
-     * 如果已持久化过状态，则恢复持久化的状态
+     * 如果已持久化过状态，则恢复持久化的状态（包括 portLocked 和 broadcastPort）
      */
     fun registerService(serviceName: String, serviceLabel: String, tools: List<MCPTool>) {
         val serverId = "plugin_service_$serviceName"
-        // 检查持久化的服务器启用状态
+        // 检查持久化的服务器配置
         val persistedEntry = com.luaforge.studio.lxclua.ai.AIConfigManager.currentConfig.mcpServers
             .find { it.id == serverId }
         val isEnabled = persistedEntry?.enabled ?: true
@@ -663,7 +939,18 @@ object MCPManager {
             tools = tools,
             toolStates = toolStates
         )
-        android.util.Log.i("MCPManager", "[registerService] $serviceName: enabled=$isEnabled, tools=${tools.size}, 持久化工具状态=${persistedToolStates?.size ?: 0}")
+        // 恢复端口锁定状态和广播端口
+        val portLocked = persistedEntry?.portLocked ?: false
+        val broadcastPort = persistedEntry?.broadcastPort ?: 0
+        // 同步到内存中的配置（确保 UI 和启动逻辑能看到）
+        if (persistedEntry != null) {
+            val config = AIConfigManager.currentConfig
+            val updated = config.mcpServers.map {
+                if (it.id == serverId) it.copy(portLocked = portLocked, broadcastPort = broadcastPort) else it
+            }
+            AIConfigManager.updateInMemory(config.copy(mcpServers = updated))
+        }
+        android.util.Log.i("MCPManager", "[registerService] $serviceName: enabled=$isEnabled, portLocked=$portLocked, broadcastPort=$broadcastPort, tools=${tools.size}")
     }
 
     /**
@@ -795,14 +1082,16 @@ object MCPManager {
         return true
     }
 
-    /** 同步服务启用状态到全局配置列表 */
+    /** 同步服务启用状态到全局配置列表（持久化） */
     private fun syncServiceEnabledToConfig(serviceName: String, enabled: Boolean) {
         val config = AIConfigManager.currentConfig
         val serverId = "plugin_service_$serviceName"
         val updated = config.mcpServers.map { entry ->
             if (entry.id == serverId) entry.copy(enabled = enabled) else entry
         }
-        AIConfigManager.updateInMemory(config.copy(mcpServers = updated))
+        val newConfig = config.copy(mcpServers = updated)
+        AIConfigManager.updateInMemory(newConfig)
+        persistConfig(newConfig)
     }
 
     /** 启用服务中的指定工具（插件和远程 MCP 均支持） */

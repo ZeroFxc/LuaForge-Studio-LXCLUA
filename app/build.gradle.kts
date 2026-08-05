@@ -14,8 +14,8 @@ android {
         applicationId = "com.luaforge.studio.lxclua"
         minSdk = 24
         targetSdk = 35
-        versionCode = 20260726
-        versionName = "1.3.0"
+        versionCode = 20260805
+        versionName = "1.3.4"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -253,5 +253,11 @@ dependencies {
     implementation("io.ktor:ktor-client-okhttp:3.5.0")
     implementation("io.ktor:ktor-client-content-negotiation:3.5.0")
     implementation("io.ktor:ktor-serialization-kotlinx-json:3.5.0")
+    
+    // Ktor Server 依赖，用于 MCP 局域网广播
+    implementation("io.ktor:ktor-server-core:3.5.0")
+    implementation("io.ktor:ktor-server-cio:3.5.0")
+    implementation("io.ktor:ktor-server-sse:3.5.0")
+    implementation("io.ktor:ktor-server-content-negotiation:3.5.0")
 
 }
