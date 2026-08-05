@@ -14,8 +14,8 @@ android {
         applicationId = "com.luaforge.studio.lxclua"
         minSdk = 24
         targetSdk = 35
-        versionCode = 20260805
-        versionName = "1.3.4"
+        versionCode = 20260806
+        versionName = "1.3.5"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -41,6 +41,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // JGit 依赖 java.nio.file，为 API 24/25 提供脱糖支持
+        isCoreLibraryDesugaringEnabled = true
     }
     
     kotlin {
@@ -117,7 +119,11 @@ android {
                 "**/*.proto",
                 "**/kotlin/**",
                 "**/*.version",
-                "**/androidsupportmultidexversion.txt"
+                "**/androidsupportmultidexversion.txt",
+                "META-INF/LICENSE.md",
+                "META-INF/NOTICE.md",
+                "META-INF/DEPENDENCIES",
+                "plugin.properties"
             )
         }
         jniLibs {
@@ -239,6 +245,13 @@ dependencies {
     api("org.eclipse.jdt:ecj:3.46.0")
     api("com.android.tools:r8:9.1.31")
     api("io.github.kyant0:backdrop-android:2.0.0-alpha01")
+
+    // JGit - Java 实现的 Git，用于项目侧滑文件树的 Git 功能
+    api(libs.jgit)
+    api(libs.slf4j.android)
+
+    // Core Library Desugaring (JGit 需要 java.nio.file)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     // MCP Kotlin SDK
     api(libs.mcp.kotlin.sdk)

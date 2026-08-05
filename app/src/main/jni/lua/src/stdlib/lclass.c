@@ -1148,10 +1148,15 @@ static int object_newindex(lua_State *L) {
     if (lua_isinteger(L, -1)) {
       int flags = (int)lua_tointeger(L, -1);
       if (flags & CLASS_FLAG_SEALED) {
+        /* 构造期豁免：init 运行期间允许初始化新字段 */
+        lua_pushstring(L, "__constructing");
+        lua_rawget(L, 1);
+        int constructing = lua_toboolean(L, -1);
+        lua_pop(L, 1);
         /* 检查键是否已存在于对象自身表中 */
         lua_pushvalue(L, 2);  /* 键 */
         lua_rawget(L, 1);
-        if (lua_isnil(L, -1)) {
+        if (!constructing && lua_isnil(L, -1)) {
           /* 键不存在于对象自身，是新增字段，报错 */
           const char *classname = get_class_name_str(L, lua_gettop(L) - 2);
           const char *key = lua_tostring(L, 2);
@@ -1360,6 +1365,28 @@ void luaC_newclass(lua_State *L, TString *name) {
 
   LUA_LOGD("[CLASS] luaC_newclass END, name='%s', class_idx=%d", getstr(name), class_idx);
   /* 类表现在栈顶 */
+}
+
+
+/*
+** 调用类的静态构造函数（__statics.init，无参）
+** 由 OP_STATICINIT 在类定义完成后触发
+*/
+void luaC_staticinit(lua_State *L, int class_idx) {
+  class_idx = absindex(L, class_idx);
+  if (!lua_istable(L, class_idx)) return;
+  lua_pushstring(L, CLASS_KEY_STATICS);
+  lua_rawget(L, class_idx);
+  if (lua_istable(L, -1)) {
+    lua_pushstring(L, CLASS_KEY_INIT);
+    lua_rawget(L, -2);
+    if (lua_isfunction(L, -1)) {
+      lua_call(L, 0, 0);  /* 调用静态构造函数，无参数 */
+    } else {
+      lua_pop(L, 1);
+    }
+  }
+  lua_pop(L, 1);  /* 弹出 __statics */
 }
 
 
@@ -2212,6 +2239,11 @@ void luaC_newobject(lua_State *L, int class_idx, int nargs) {
   /* 应用元表 */
   lua_setmetatable(L, obj_idx);
   
+  /* 构造期标记：允许 sealed 类在 init 中初始化字段 */
+  lua_pushstring(L, "__constructing");
+  lua_pushboolean(L, 1);
+  lua_rawset(L, obj_idx);
+  
   /* 创建临时标记表，用于跟踪已通过super调用的构造函数，避免双重调用 */
   lua_newtable(L);
   lua_pushstring(L, OBJ_KEY_INIT_CALLED);
@@ -2292,6 +2324,11 @@ void luaC_newobject(lua_State *L, int class_idx, int nargs) {
   lua_rawset(L, obj_idx);
   lua_pop(L, 1);  /* 弹出init_called表 */
   
+  /* 清除构造期标记（sealed 字段检查从此生效） */
+  lua_pushstring(L, "__constructing");
+  lua_pushnil(L);
+  lua_rawset(L, obj_idx);
+  
   /* 确保对象在栈顶 */
   lua_pushvalue(L, obj_idx);
   lua_remove(L, obj_idx);
@@ -2352,8 +2389,10 @@ void luaC_super(lua_State *L, int obj_idx, TString *method) {
       }
       lua_pop(L, 1);
     }
+    /* super.field 回退：父类无同名方法时读取实例自身字段 */
     lua_settop(L, entry_top);
-    lua_pushnil(L);
+    lua_pushlstring(L, getstr(method), tsslen(method));
+    lua_rawget(L, obj_idx);
     return;
   }
   int mro_len = (int)luaL_len(L, -1);
@@ -2430,9 +2469,11 @@ void luaC_super(lua_State *L, int obj_idx, TString *method) {
     lua_pop(L, 2);  /* methods, cand_class */
   }
 
-  /* 没找到父类方法，返回nil */
+  /* 没找到父类方法：super.field 回退读取实例自身字段（字段为实例共享，
+     super.tag 语义等同 self.tag）；若字段也不存在则得到 nil */
   lua_settop(L, entry_top);
-  lua_pushnil(L);
+  lua_pushlstring(L, getstr(method), tsslen(method));
+  lua_rawget(L, obj_idx);
 }
 
 
@@ -2487,8 +2528,9 @@ void luaC_setmethod(lua_State *L, int class_idx, TString *name, int func_idx) {
      注意：不同步覆盖已有值，避免 static function new 覆盖构造函数 init */
   if (strcmp(getstr(name), "new") == 0) {
     /* 设置 new 时同步 init：仅当 init 不存在时才同步，避免覆盖已有构造函数 */
+    /* 此时栈: [..., METHODS]，push key 后为 [..., METHODS, key]，故表在 -2 */
     lua_pushstring(L, CLASS_KEY_INIT);
-    lua_rawget(L, -3);  /* METHODS.init */
+    lua_rawget(L, -2);  /* METHODS.init */
     if (lua_isnil(L, -1)) {
       lua_pop(L, 1);
       lua_pushstring(L, CLASS_KEY_INIT);
@@ -2500,7 +2542,7 @@ void luaC_setmethod(lua_State *L, int class_idx, TString *name, int func_idx) {
   } else if (strcmp(getstr(name), CLASS_KEY_INIT) == 0) {
     /* 设置 init 时同步 new：仅当 new 不存在时才同步 */
     lua_pushliteral(L, "new");
-    lua_rawget(L, -3);  /* METHODS.new */
+    lua_rawget(L, -2);  /* METHODS.new */
     if (lua_isnil(L, -1)) {
       lua_pop(L, 1);
       lua_pushliteral(L, "new");
@@ -2512,7 +2554,7 @@ void luaC_setmethod(lua_State *L, int class_idx, TString *name, int func_idx) {
   } else if (strcmp(getstr(name), CLASS_KEY_INIT_LEGACY) == 0) {
     /* __init__ 已弃用：同时写入 init 和 new（仅当目标不存在时） */
     lua_pushstring(L, CLASS_KEY_INIT);
-    lua_rawget(L, -3);  /* METHODS.init */
+    lua_rawget(L, -2);  /* METHODS.init */
     if (lua_isnil(L, -1)) {
       lua_pop(L, 1);
       lua_pushstring(L, CLASS_KEY_INIT);
@@ -2522,7 +2564,7 @@ void luaC_setmethod(lua_State *L, int class_idx, TString *name, int func_idx) {
       lua_pop(L, 1);
     }
     lua_pushliteral(L, "new");
-    lua_rawget(L, -3);  /* METHODS.new */
+    lua_rawget(L, -2);  /* METHODS.new */
     if (lua_isnil(L, -1)) {
       lua_pop(L, 1);
       lua_pushliteral(L, "new");

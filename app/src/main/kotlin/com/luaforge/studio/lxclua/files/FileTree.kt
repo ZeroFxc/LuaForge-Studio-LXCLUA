@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -28,6 +29,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
@@ -37,6 +41,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Html
 import androidx.compose.material.icons.filled.Javascript
 import androidx.compose.material.icons.filled.Settings
@@ -107,6 +112,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.luaforge.studio.lxclua.R
+import com.luaforge.studio.lxclua.git.GitFileState
+import com.luaforge.studio.lxclua.ui.git.GitStateBadge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -156,7 +163,7 @@ fun getMaterialFileIcon(fileName: String): ImageVector {
         "yml", "yaml" -> Icons.Filled.Settings
         "properties" -> Icons.Filled.Settings
         "gradle" -> Icons.Filled.Build
-        "gitignore" -> Icons.Filled.Code
+        "gitignore" -> Icons.Filled.Block
         "aly" -> Icons.Filled.Code
         else -> Icons.Default.Description
     }
@@ -166,8 +173,13 @@ fun getMaterialFileIcon(fileName: String): ImageVector {
 @Composable
 fun FileTree(
     rootPath: String,
-    refreshTrigger: Int, // 刷新触发器
+    refreshTrigger: Int, // 刷新触发器（会重置展开状态）
     modifier: Modifier = Modifier,
+    watchTrigger: Int = 0, // 文件监听触发器（仅重新加载子项，不打开展开状态）
+    gitStates: Map<String, GitFileState> = emptyMap(),
+    onGitStage: ((File) -> Unit)? = null,
+    onGitUnstage: ((File) -> Unit)? = null,
+    onGitDiscard: ((File) -> Unit)? = null,
     onFileClick: (File) -> Unit,
     onFileRenamed: (oldFile: File, newFile: File) -> Unit = { _, _ -> },
     onFileDeleted: (File) -> Unit = { }
@@ -293,6 +305,8 @@ fun FileTree(
                         depth = 0,
                         expandedNodes = expandedNodes,
                         minWidth = minItemWidth,
+                        gitStates = gitStates,
+                        watchTrigger = watchTrigger,
                         onToggle = onSmartToggle,
                         onFileClick = onFileClick,
                         onLongClick = {
@@ -317,6 +331,10 @@ fun FileTree(
         ) {
             FileActionBottomSheet(
                 node = selectedFileNode!!,
+                gitState = gitStates[selectedFileNode!!.file.path],
+                onGitStage = onGitStage,
+                onGitUnstage = onGitUnstage,
+                onGitDiscard = onGitDiscard,
                 onDismiss = {
                     scope.launch { sheetState.hide() }
                         .invokeOnCompletion { if (!sheetState.isVisible) showBottomSheet = false }
@@ -603,6 +621,8 @@ private fun FileNodeItem(
     depth: Int,
     expandedNodes: Set<String>,
     minWidth: Dp,
+    gitStates: Map<String, GitFileState>,
+    watchTrigger: Int,
     onToggle: (FileNode) -> Unit,
     onFileClick: (File) -> Unit,
     onLongClick: (FileNode) -> Unit,
@@ -610,6 +630,7 @@ private fun FileNodeItem(
     onDisposed: (String) -> Unit
 ) {
     val isExpanded = expandedNodes.contains(node.file.path)
+    val gitState = gitStates[node.file.path]
 
     val animationSpec = tween<Float>(durationMillis = 150)
     val arrowRotation by animateFloatAsState(
@@ -618,9 +639,9 @@ private fun FileNodeItem(
         animationSpec = animationSpec
     )
 
-    var children by remember(isExpanded, node) { mutableStateOf<List<FileNode>>(emptyList()) }
+    var children by remember(isExpanded, node, watchTrigger) { mutableStateOf<List<FileNode>>(emptyList()) }
 
-    LaunchedEffect(isExpanded, node) {
+    LaunchedEffect(isExpanded, node, watchTrigger) {
         if (isExpanded && node.isDirectory) {
             withContext(Dispatchers.IO) {
                 val loaded = node.file.listFiles()
@@ -663,11 +684,22 @@ private fun FileNodeItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .onSizeChanged { onWidthMeasured(node.file.path, it.width) }
-                .padding(vertical = 10.dp, horizontal = 4.dp),
+                .padding(vertical = 8.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 缩进参考线
             if (depth > 0) {
-                Spacer(modifier = Modifier.width((depth * 20).dp))
+                repeat(depth) {
+                    Box(modifier = Modifier.width(20.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 9.dp)
+                                .width(1.dp)
+                                .height(32.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                        )
+                    }
+                }
             }
 
             // 展开箭头（仅文件夹） - 使用20dp大小
@@ -688,12 +720,21 @@ private fun FileNodeItem(
             Spacer(modifier = Modifier.width(2.dp))
 
             if (node.isDirectory) {
-                Icon(
-                    Icons.Default.Folder,
-                    contentDescription = stringResource(R.string.cd_project_folder),
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                if (node.file.name == ".git") {
+                    Icon(
+                        Icons.Filled.AccountTree,
+                        contentDescription = stringResource(R.string.cd_project_folder),
+                        modifier = Modifier.size(24.dp),
+                        tint = Color(0xFFE5733A)
+                    )
+                } else {
+                    Icon(
+                        if (isExpanded) Icons.Filled.FolderOpen else Icons.Default.Folder,
+                        contentDescription = stringResource(R.string.cd_project_folder),
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             } else if (isImageFile(node.file.name)) {
                 // 使用 Coil 加载图像文件
                 AsyncImage(
@@ -733,8 +774,20 @@ private fun FileNodeItem(
                 text = node.file.name,
                 maxLines = 1,
                 overflow = TextOverflow.Visible,
-                fontSize = 14.sp
+                fontSize = 14.sp,
+                color = gitState?.let { state ->
+                    when (state) {
+                        GitFileState.MODIFIED -> Color(0xFFFFA726)
+                        GitFileState.ADDED, GitFileState.CHANGED, GitFileState.UNTRACKED -> Color(0xFF66BB6A)
+                        GitFileState.DELETED, GitFileState.MISSING, GitFileState.CONFLICT -> Color(0xFFEF5350)
+                    }
+                } ?: LocalContentColor.current
             )
+
+            // Git 状态小图标徽标
+            if (gitState != null) {
+                GitStateBadge(gitState)
+            }
 
             Spacer(modifier = Modifier.width(24.dp))
         }
@@ -751,6 +804,8 @@ private fun FileNodeItem(
                         depth = depth + 1,
                         expandedNodes = expandedNodes,
                         minWidth = minWidth,
+                        gitStates = gitStates,
+                        watchTrigger = watchTrigger,
                         onToggle = onToggle,
                         onFileClick = onFileClick,
                         onLongClick = onLongClick,
@@ -793,6 +848,10 @@ fun FileActionBottomSheet(
     onCreateFileRequest: () -> Unit,
     onCreateFolderRequest: () -> Unit,
     onRenameRequest: () -> Unit,
+    gitState: GitFileState? = null,
+    onGitStage: ((File) -> Unit)? = null,
+    onGitUnstage: ((File) -> Unit)? = null,
+    onGitDiscard: ((File) -> Unit)? = null,
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -824,7 +883,45 @@ fun FileActionBottomSheet(
                 Toast.makeText(context, context.getString(R.string.filetree_path_copied), Toast.LENGTH_SHORT).show()
                 onDismiss()
             })
-        
+
+        // Git 操作区（仅当文件处于 Git 变更状态时显示）
+        if (gitState != null) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 8.dp),
+                thickness = DividerDefaults.Thickness,
+                color = DividerDefaults.color
+            )
+            val staged = gitState == GitFileState.ADDED || gitState == GitFileState.CHANGED || gitState == GitFileState.DELETED
+            if (staged && onGitUnstage != null) {
+                BottomSheetActionItem(
+                    Icons.Default.Close,
+                    stringResource(R.string.git_unstage),
+                    {
+                        onGitUnstage(node.file)
+                        onDismiss()
+                    })
+            } else if (onGitStage != null) {
+                BottomSheetActionItem(
+                    Icons.Default.AddCircle,
+                    stringResource(R.string.git_stage),
+                    {
+                        onGitStage(node.file)
+                        onDismiss()
+                    })
+            }
+            if (gitState == GitFileState.MODIFIED && onGitDiscard != null) {
+                BottomSheetActionItem(
+                    Icons.Default.Refresh,
+                    stringResource(R.string.git_discard),
+                    {
+                        onGitDiscard(node.file)
+                        onDismiss()
+                    },
+                    MaterialTheme.colorScheme.error
+                )
+            }
+        }
+
         val pluginMenuItems = com.luaforge.studio.lxclua.plugin.state.UIState.fileTreeMenuItems
         if (pluginMenuItems.isNotEmpty()) {
             HorizontalDivider(

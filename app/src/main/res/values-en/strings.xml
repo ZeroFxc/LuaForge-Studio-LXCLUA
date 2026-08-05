@@ -846,4 +846,124 @@
     <string name="settings_mcp_source_remote">Remote URL</string>
     <string name="settings_mcp_transport_streamable_http">Streamable HTTP</string>
     <string name="settings_mcp_transport_sse">SSE</string>
+
+    <!-- Git -->
+    <string name="git_title">Git</string>
+    <string name="git_refresh">Refresh</string>
+    <string name="git_confirm">OK</string>
+    <string name="git_create">Create</string>
+    <string name="git_init">Init Repository</string>
+    <string name="git_init_confirm">Initialize a new Git repository in the current project directory?</string>
+    <string name="git_clone">Clone Repository</string>
+    <string name="git_changes_count">%1$d changes</string>
+
+    <string name="git_tab_changes">Changes</string>
+    <string name="git_tab_log">History</string>
+    <string name="git_tab_branches">Branches</string>
+    <string name="git_tab_remote">Remote</string>
+    <string name="git_tab_tags">Tags</string>
+    <string name="git_tab_stash">Stash</string>
+    <string name="git_tab_settings">Settings</string>
+
+    <!-- Commit -->
+    <string name="git_message">Commit message</string>
+    <string name="git_author_name">Author name</string>
+    <string name="git_author_email">Author email</string>
+    <string name="git_amend">Amend last commit</string>
+    <string name="git_commit">Commit</string>
+    <string name="git_committing">Committing…</string>
+
+    <!-- Changes -->
+    <string name="git_staged">Staged (%1$d)</string>
+    <string name="git_unstaged">Unstaged (%1$d)</string>
+    <string name="git_untracked">Untracked (%1$d)</string>
+    <string name="git_untracked_stage_all">Stage all untracked</string>
+    <string name="git_untracked_delete_all">Delete all untracked</string>
+    <string name="git_untracked_delete_all_confirm">Delete all %1$d untracked files/directories? This cannot be undone.</string>
+    <string name="git_no_changes">No changes, working tree clean</string>
+    <string name="git_stage">Git Add</string>
+    <string name="git_unstage">Git Unstage</string>
+    <string name="git_stage_all">Stage All</string>
+    <string name="git_unstage_all">Unstage All</string>
+    <string name="git_staging">Staging…</string>
+    <string name="git_unstaging">Unstaging…</string>
+    <string name="git_discard">Discard Changes</string>
+    <string name="git_discard_confirm">Discard changes of %1$s? This cannot be undone.</string>
+    <string name="git_discarding">Discarding…</string>
+    <string name="git_diff">View Diff</string>
+    <string name="git_diff_empty">No diff</string>
+
+    <!-- History -->
+    <string name="git_no_commits">No commits yet</string>
+    <string name="git_checkout">Checkout</string>
+    <string name="git_checking_out">Checking out…</string>
+
+    <!-- Branches -->
+    <string name="git_new_branch">New Branch</string>
+    <string name="git_branch_name">Branch name</string>
+    <string name="git_start_point">Start point: %1$s</string>
+    <string name="git_checkout_after">Checkout after creation</string>
+    <string name="git_force">Force</string>
+    <string name="git_rename">Rename</string>
+    <string name="git_delete">Delete</string>
+    <string name="git_branch_op">Processing branch…</string>
+    <string name="git_branch_local">Local Branches (%1$d)</string>
+    <string name="git_branch_remote">Remote Branches (%1$d)</string>
+    <string name="git_delete_branch">Delete Branch</string>
+    <string name="git_delete_branch_confirm">Force delete branch %1$s?</string>
+    <string name="git_more">More actions</string>
+
+    <!-- Remote -->
+    <string name="git_remote_url">Repository URL</string>
+    <string name="git_username">Username</string>
+    <string name="git_token">Password / Token</string>
+    <string name="git_remotes">Remotes (%1$d)</string>
+    <string name="git_remote_add">Add Remote</string>
+    <string name="git_remote_edit">Edit Remote</string>
+    <string name="git_remote_delete">Remove Remote</string>
+    <string name="git_remote_delete_confirm">Remove remote %1$s?</string>
+    <string name="git_remote_name">Remote name</string>
+    <string name="git_remote_op">Processing remote…</string>
+    <string name="git_fetch">Fetch</string>
+    <string name="git_fetching">Fetching…</string>
+    <string name="git_pull">Pull</string>
+    <string name="git_pulling">Pulling…</string>
+    <string name="git_push">Push</string>
+    <string name="git_pushing">Pushing…</string>
+    <string name="git_push_force">Force push</string>
+
+    <!-- Tags -->
+    <string name="git_new_tag">New Tag</string>
+    <string name="git_tag_name">Tag name</string>
+    <string name="git_ref">Ref (branch/commit)</string>
+    <string name="git_tag_message">Tag message (optional)</string>
+    <string name="git_tags">Tags (%1$d)</string>
+    <string name="git_no_tags">No tags yet</string>
+    <string name="git_tag_op">Processing tag…</string>
+    <string name="git_delete_tag">Delete Tag</string>
+    <string name="git_delete_tag_confirm">Delete tag %1$s?</string>
+
+    <!-- Stash -->
+    <string name="git_stashes">Stashes (%1$d)</string>
+    <string name="git_no_stash">No stashes</string>
+    <string name="git_stash_create">New Stash</string>
+    <string name="git_stash_apply">Apply Stash</string>
+    <string name="git_stash_drop">Drop Stash</string>
+    <string name="git_stash_drop_confirm">Drop stash@{%1$d}?</string>
+    <string name="git_stash_op">Processing stash…</string>
+
+    <!-- Settings -->
+    <string name="git_config">User Config</string>
+    <string name="git_save">Save</string>
+    <string name="git_saving">Saving…</string>
+    <string name="git_danger_zone">Danger Zone</string>
+    <string name="git_reset">Reset</string>
+    <string name="git_resetting">Resetting…</string>
+    <string name="git_reset_soft_desc">Keep index and working tree</string>
+    <string name="git_reset_mixed_desc">Keep working tree, clear index</string>
+    <string name="git_reset_hard_desc">Discard all changes (irreversible)</string>
+    <string name="git_clean">Clean Untracked Files</string>
+    <string name="git_clean_confirm">Delete all untracked files and directories? This cannot be undone.</string>
+    <string name="git_cleaning">Cleaning…</string>
+    <string name="git_clean_result">Cleaned %1$d untracked items</string>
 </resources>

@@ -7,6 +7,7 @@ import android.content.Context.INPUT_METHOD_SERVICE
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.FileObserver
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -50,17 +51,25 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nirithy.lxclua.LuaActivity
 import com.luaforge.studio.lxclua.ProjectItem
 import com.luaforge.studio.lxclua.R
 import com.luaforge.studio.lxclua.files.FileTree
+import com.luaforge.studio.lxclua.git.GitFileState
+import com.luaforge.studio.lxclua.git.GitManager
+import com.luaforge.studio.lxclua.git.GitStatusSummary
 import com.luaforge.studio.lxclua.ui.analyse.AnalyseScreen
 import com.luaforge.studio.lxclua.ui.attribute.AttributeScreen
 import com.luaforge.studio.lxclua.ui.components.ColorPickerDialog
 import com.luaforge.studio.lxclua.ui.components.EdgeSwipeDismissibleDrawer
 import com.luaforge.studio.lxclua.ui.editor.viewmodel.EditorViewModel
+import com.luaforge.studio.lxclua.ui.git.GitCloneDialog
+import com.luaforge.studio.lxclua.ui.git.GitInitDialog
+import com.luaforge.studio.lxclua.ui.git.GitScreen
 import com.luaforge.studio.lxclua.ui.javaapi.JavaApiScreen
 import com.luaforge.studio.lxclua.ui.settings.SettingsManager
 import com.luaforge.studio.lxclua.utils.LogCatcher
@@ -69,6 +78,7 @@ import com.luaforge.studio.lxclua.utils.TransitionUtil
 import com.luaforge.studio.lxclua.plugin.state.EventManager
 import com.luaforge.studio.lxclua.plugin.state.PluginEvents
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -968,6 +978,113 @@ fun ProjectFileTree(
     refreshTrigger: Int
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // ===== Git 状态 =====
+    var gitRepoDir by remember(projectPath) { mutableStateOf<File?>(null) }
+    var gitBranch by remember { mutableStateOf("") }
+    var gitSummary by remember { mutableStateOf<GitStatusSummary?>(null) }
+    var gitStates by remember { mutableStateOf<Map<String, GitFileState>>(emptyMap()) }
+    var gitRefreshKey by remember { mutableIntStateOf(0) }
+    var showGitScreen by remember { mutableStateOf(false) }
+    var showGitInit by remember { mutableStateOf(false) }
+    var showGitClone by remember { mutableStateOf(false) }
+    var gitBusy by remember { mutableStateOf(false) }
+    var watchTrigger by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(projectPath, refreshTrigger, gitRefreshKey) {
+        GitManager.ensureTempDir(context)
+        val repo = withContext(Dispatchers.IO) {
+            // 清理历史遗留的误创建的空 "null" 文件夹
+            GitManager.cleanupNullFolder(File(projectPath))
+            GitManager.findRepositoryDir(File(projectPath))
+        }
+        gitRepoDir = repo
+        if (repo != null) {
+            try {
+                val st = withContext(Dispatchers.IO) { GitManager.status(repo) }
+                val br = withContext(Dispatchers.IO) { GitManager.currentBranch(repo) }
+                gitStates = st.fileStates.mapKeys { File(repo, it.key).path }
+                gitSummary = st.summary
+                gitBranch = br
+            } catch (_: Exception) {
+            }
+        } else {
+            gitStates = emptyMap()
+            gitSummary = null
+            gitBranch = ""
+        }
+    }
+
+    fun gitOp(block: suspend () -> Unit) {
+        if (gitBusy) return
+        scope.launch {
+            gitBusy = true
+            try {
+                GitManager.ensureTempDir(context)
+                withContext(Dispatchers.IO) { block() }
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(
+                    context, "Git: ${e.message ?: e.javaClass.simpleName}", android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } finally {
+                gitBusy = false
+                gitRefreshKey++
+            }
+        }
+    }
+
+    // ===== 文件系统实时监听：自动刷新文件树与 Git 状态 =====
+    DisposableEffect(projectPath) {
+        var structJob: Job? = null
+        var gitJob: Job? = null
+
+        fun handleEvent(event: Int, path: String?) {
+            // 忽略 .git 目录内部变化，避免 Git 操作自身触发噪声
+            if (path != null && (path == ".git" || path.startsWith(".git/") || path.startsWith(".git\\"))) return
+            scope.launch {
+                // 内容变化 → 防抖刷新 Git 状态徽标
+                gitJob?.cancel()
+                gitJob = launch {
+                    delay(500)
+                    gitRefreshKey++
+                }
+                // 结构变化 → 防抖重新加载文件列表（保持展开状态）
+                val type = event and 0xFFF
+                if (type == FileObserver.CREATE || type == FileObserver.DELETE ||
+                    type == FileObserver.MOVED_FROM || type == FileObserver.MOVED_TO
+                ) {
+                    structJob?.cancel()
+                    structJob = launch {
+                        delay(250)
+                        watchTrigger++
+                    }
+                }
+            }
+        }
+
+        val observer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // API 29+ 支持递归监听整个目录树
+            object : FileObserver(File(projectPath)) {
+                override fun onEvent(event: Int, path: String?) = handleEvent(event, path)
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            object : FileObserver(projectPath) {
+                override fun onEvent(event: Int, path: String?) = handleEvent(event, path)
+            }
+        }
+        observer.startWatching()
+
+        onDispose {
+            observer.stopWatching()
+            structJob?.cancel()
+            gitJob?.cancel()
+        }
+    }
+
+    val repo = gitRepoDir
+
     ModalDrawerSheet(modifier = Modifier.width(260.dp)) {
         Box(
             Modifier
@@ -981,18 +1098,171 @@ fun ProjectFileTree(
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
+
+        // ===== Git 状态栏 =====
+        if (repo != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .clickable {
+                        showGitScreen = true
+                        scope.launch { drawerState.close() }
+                    },
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.AccountTree,
+                        contentDescription = stringResource(R.string.git_title),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            gitBranch.ifBlank { "HEAD" },
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        val summary = gitSummary
+                        if (summary != null && !summary.isClean) {
+                            Text(
+                                stringResource(R.string.git_changes_count, summary.totalChanges),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+                    }
+                    if (gitBusy) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    } else {
+                        val summary = gitSummary
+                        if (summary != null && !summary.isClean) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.tertiary,
+                                        shape = RoundedCornerShape(9.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    summary.totalChanges.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onTertiary,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 2.dp)
+            ) {
+                TextButton(onClick = { showGitInit = true }, enabled = !gitBusy) {
+                    Icon(
+                        Icons.Filled.AccountTree,
+                        null,
+                        Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.git_init), style = MaterialTheme.typography.labelMedium)
+                }
+                TextButton(onClick = { showGitClone = true }, enabled = !gitBusy) {
+                    Icon(
+                        Icons.Filled.CloudDownload,
+                        null,
+                        Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.git_clone), style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
         FileTree(
             rootPath = projectPath,
             refreshTrigger = refreshTrigger,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 4.dp),
+            watchTrigger = watchTrigger,
+            gitStates = gitStates,
+            onGitStage = { file ->
+                gitOp {
+                    val repoDir = gitRepoDir ?: return@gitOp
+                    val rel = GitManager.toRelativePath(repoDir, file.path) ?: return@gitOp
+                    if (gitStates[file.path] == GitFileState.MISSING) {
+                        GitManager.stageDeleted(repoDir, rel)
+                    } else {
+                        GitManager.stage(repoDir, rel)
+                    }
+                }
+            },
+            onGitUnstage = { file ->
+                gitOp {
+                    val repoDir = gitRepoDir ?: return@gitOp
+                    val rel = GitManager.toRelativePath(repoDir, file.path) ?: return@gitOp
+                    GitManager.unstage(repoDir, rel)
+                }
+            },
+            onGitDiscard = { file ->
+                gitOp {
+                    val repoDir = gitRepoDir ?: return@gitOp
+                    val rel = GitManager.toRelativePath(repoDir, file.path) ?: return@gitOp
+                    GitManager.discard(repoDir, rel)
+                }
+            },
             onFileClick = { file ->
                 viewModel.openFile(file, projectPath)
                 scope.launch { drawerState.close() }
             },
             onFileRenamed = { oldFile, _ -> viewModel.handleFileRenamed(oldFile) },
             onFileDeleted = { file -> viewModel.handleFileDeleted(file) }
+        )
+    }
+
+    // Git 全屏面板
+    if (showGitScreen && repo != null) {
+        GitScreen(
+            repoDir = repo,
+            onDismiss = { showGitScreen = false },
+            onRepoChanged = { gitRefreshKey++ }
+        )
+    }
+
+    // 初始化仓库
+    if (showGitInit) {
+        GitInitDialog(
+            onConfirm = {
+                showGitInit = false
+                gitOp { GitManager.init(File(projectPath)) }
+            },
+            onDismiss = { showGitInit = false }
+        )
+    }
+
+    // 克隆仓库
+    if (showGitClone) {
+        GitCloneDialog(
+            onClone = { url, username, password ->
+                showGitClone = false
+                gitOp {
+                    GitManager.cloneRepo(url, File(projectPath), username, password)
+                }
+            },
+            onDismiss = { showGitClone = false }
         )
     }
 }

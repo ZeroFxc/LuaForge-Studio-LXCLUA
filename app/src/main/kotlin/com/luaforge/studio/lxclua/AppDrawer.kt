@@ -431,6 +431,9 @@ class MainActivity : ComponentActivity() {
     com.luaforge.studio.lxclua.plugin.PluginManager.init(this)
     com.luaforge.studio.lxclua.plugin.PluginManager.currentActivity = this
 
+    // 修复 Android 上 java.io.tmpdir 为 null 导致 JGit 创建 "null" 文件夹的问题
+    com.luaforge.studio.lxclua.git.GitManager.ensureTempDir(this)
+
     // 触发应用启动事件
     com.luaforge.studio.lxclua.plugin.state.EventManager.fireEvent(
         com.luaforge.studio.lxclua.plugin.state.PluginEvents.ON_APP_START

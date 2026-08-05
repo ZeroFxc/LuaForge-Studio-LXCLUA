@@ -2382,7 +2382,7 @@ static void codegen_set_class_flag(CodegenState *cg, int class_reg, int flag_bit
   luaK_codeABC(fs, OP_GETFIELD, flags_reg, class_reg, flags_k);
   int bit_reg = fs->freereg;
   luaK_reserveregs(fs, 1);
-  luaK_codeABx(fs, OP_LOADI, bit_reg, flag_bits);
+  luaK_int(fs, bit_reg, flag_bits);
   luaK_codeABC(fs, OP_BOR, flags_reg, flags_reg, bit_reg);
   luaK_codeABC(fs, OP_MMBIN, flags_reg, flags_reg, TM_BOR);
   luaK_codeABC(fs, OP_SETFIELD, class_reg, flags_k, flags_reg);
@@ -2418,7 +2418,7 @@ static int codegen_class_members(CodegenState *cg, AstClassMember *members, int 
         int abs_sub = codegen_get_subtable(cg, class_reg, "__abstracts");
         int pc_reg = fs->freereg;
         luaK_reserveregs(fs, 1);
-        luaK_codeABx(fs, OP_LOADI, pc_reg, param_count);
+        luaK_int(fs, pc_reg, param_count);
         luaK_codeABC(fs, OP_SETFIELD, abs_sub, name_k, pc_reg);
         fs->freereg -= 2;
         has_abstract = 1;
@@ -2445,6 +2445,27 @@ static int codegen_class_members(CodegenState *cg, AstClassMember *members, int 
           expdesc v;
           init_exp(&v, VRELOC, luaK_codeABx(fs, OP_CLOSURE, 0, bx));
           luaK_exp2nextreg(fs, &v);
+
+          /* 应用成员装饰器：从最后一个开始依次包裹（与原版 apply_decorators_inline 一致） */
+          if (m->ndecorators > 0) {
+            int di;
+            int target_reg = v.u.info;
+            for (di = m->ndecorators - 1; di >= 0; di--) {
+              expdesc dec;
+              codegen_expr(cg, m->decorators[di], &dec);
+              luaK_exp2nextreg(fs, &dec);
+              int dec_reg = dec.u.info;
+              int call_base = fs->freereg;
+              luaK_reserveregs(fs, 2);
+              luaK_codeABC(fs, OP_MOVE, call_base, dec_reg, 0);
+              luaK_codeABC(fs, OP_MOVE, call_base + 1, target_reg, 0);
+              luaK_codeABC(fs, OP_CALL, call_base, 2, 2);
+              luaK_codeABC(fs, OP_MOVE, target_reg, call_base, 0);
+              fs->freereg -= 2;
+              fs->freereg--;  /* 释放装饰器寄存器 */
+            }
+            init_exp(&v, VNONRELOC, target_reg);
+          }
 
           /* override 检查 */
           if (m->is_override) {
@@ -2541,7 +2562,7 @@ static int codegen_class_members(CodegenState *cg, AstClassMember *members, int 
             int flags_reg = fs->freereg;
             luaK_reserveregs(fs, 1);
             luaK_codeABC(fs, OP_GETFIELD, flags_reg, nested_class_reg, flags_k);
-            luaK_codeABx(fs, OP_LOADI, fs->freereg, nested_class_flags);
+            luaK_int(fs, fs->freereg, nested_class_flags);
             luaK_reserveregs(fs, 1);
             luaK_codeABC(fs, OP_BOR, flags_reg, flags_reg, fs->freereg - 1);
             luaK_codeABC(fs, OP_MMBIN, flags_reg, flags_reg, TM_BOR);
@@ -4170,7 +4191,7 @@ static void codegen_stmt(CodegenState *cg, AstStmt *s) {
         /* 读取当前 flags: R[flags_reg] = R[class_reg].__flags */
         luaK_codeABC(fs, OP_GETFIELD, flags_reg, class_reg, flags_k);
         /* flags |= class_flags */
-        luaK_codeABx(fs, OP_LOADI, fs->freereg, class_flags);
+        luaK_int(fs, fs->freereg, class_flags);
         luaK_reserveregs(fs, 1);
         luaK_codeABC(fs, OP_BOR, flags_reg, flags_reg, fs->freereg - 1);
         luaK_codeABC(fs, OP_MMBIN, flags_reg, flags_reg, TM_BOR);

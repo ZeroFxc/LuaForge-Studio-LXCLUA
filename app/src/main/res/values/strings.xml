@@ -878,4 +878,124 @@
     <string name="category_manage">管理分类</string>
     <string name="category_add_project">添加项目到分类</string>
     <string name="category_all">全部</string>
+
+    <!-- Git 功能 -->
+    <string name="git_title">Git</string>
+    <string name="git_refresh">刷新</string>
+    <string name="git_confirm">确定</string>
+    <string name="git_create">创建</string>
+    <string name="git_init">初始化仓库</string>
+    <string name="git_init_confirm">在当前项目目录初始化一个新的 Git 仓库？</string>
+    <string name="git_clone">克隆仓库</string>
+    <string name="git_changes_count">%1$d 处变更</string>
+
+    <string name="git_tab_changes">更改</string>
+    <string name="git_tab_log">历史</string>
+    <string name="git_tab_branches">分支</string>
+    <string name="git_tab_remote">远程</string>
+    <string name="git_tab_tags">标签</string>
+    <string name="git_tab_stash">贮藏</string>
+    <string name="git_tab_settings">设置</string>
+
+    <!-- 提交 -->
+    <string name="git_message">提交信息</string>
+    <string name="git_author_name">作者名</string>
+    <string name="git_author_email">作者邮箱</string>
+    <string name="git_amend">修改上次提交 (amend)</string>
+    <string name="git_commit">提交</string>
+    <string name="git_committing">正在提交…</string>
+
+    <!-- 更改列表 -->
+    <string name="git_staged">已暂存 (%1$d)</string>
+    <string name="git_unstaged">未暂存 (%1$d)</string>
+    <string name="git_untracked">未跟踪 (%1$d)</string>
+    <string name="git_untracked_stage_all">一键添加全部未跟踪</string>
+    <string name="git_untracked_delete_all">一键删除全部未跟踪</string>
+    <string name="git_untracked_delete_all_confirm">确定删除全部 %1$d 个未跟踪文件/目录？此操作不可恢复。</string>
+    <string name="git_no_changes">没有变更，工作区干净</string>
+    <string name="git_stage">Git 添加</string>
+    <string name="git_unstage">Git 取消暂存</string>
+    <string name="git_stage_all">全部暂存</string>
+    <string name="git_unstage_all">全部取消暂存</string>
+    <string name="git_staging">正在暂存…</string>
+    <string name="git_unstaging">正在取消暂存…</string>
+    <string name="git_discard">放弃更改</string>
+    <string name="git_discard_confirm">确定放弃 %1$s 的更改？此操作不可恢复。</string>
+    <string name="git_discarding">正在放弃更改…</string>
+    <string name="git_diff">查看差异</string>
+    <string name="git_diff_empty">没有差异</string>
+
+    <!-- 历史 -->
+    <string name="git_no_commits">还没有任何提交</string>
+    <string name="git_checkout">检出</string>
+    <string name="git_checking_out">正在检出…</string>
+
+    <!-- 分支 -->
+    <string name="git_new_branch">新建分支</string>
+    <string name="git_branch_name">分支名称</string>
+    <string name="git_start_point">起点：%1$s</string>
+    <string name="git_checkout_after">创建后检出</string>
+    <string name="git_force">强制</string>
+    <string name="git_rename">重命名</string>
+    <string name="git_delete">删除</string>
+    <string name="git_branch_op">正在处理分支…</string>
+    <string name="git_branch_local">本地分支 (%1$d)</string>
+    <string name="git_branch_remote">远程分支 (%1$d)</string>
+    <string name="git_delete_branch">删除分支</string>
+    <string name="git_delete_branch_confirm">确定强制删除分支 %1$s？</string>
+    <string name="git_more">更多操作</string>
+
+    <!-- 远程 -->
+    <string name="git_remote_url">仓库地址 URL</string>
+    <string name="git_username">用户名</string>
+    <string name="git_token">密码 / 访问令牌</string>
+    <string name="git_remotes">远程仓库 (%1$d)</string>
+    <string name="git_remote_add">添加远程</string>
+    <string name="git_remote_edit">编辑远程</string>
+    <string name="git_remote_delete">删除远程</string>
+    <string name="git_remote_delete_confirm">确定删除远程仓库 %1$s？</string>
+    <string name="git_remote_name">远程名称</string>
+    <string name="git_remote_op">正在处理远程…</string>
+    <string name="git_fetch">拉取</string>
+    <string name="git_fetching">正在 Fetch…</string>
+    <string name="git_pull">合并拉取</string>
+    <string name="git_pulling">正在 Pull…</string>
+    <string name="git_push">推送</string>
+    <string name="git_pushing">正在 Push…</string>
+    <string name="git_push_force">强制推送</string>
+
+    <!-- 标签 -->
+    <string name="git_new_tag">新建标签</string>
+    <string name="git_tag_name">标签名称</string>
+    <string name="git_ref">引用 (分支/提交)</string>
+    <string name="git_tag_message">标签说明（可选）</string>
+    <string name="git_tags">标签 (%1$d)</string>
+    <string name="git_no_tags">还没有标签</string>
+    <string name="git_tag_op">正在处理标签…</string>
+    <string name="git_delete_tag">删除标签</string>
+    <string name="git_delete_tag_confirm">确定删除标签 %1$s？</string>
+
+    <!-- 贮藏 -->
+    <string name="git_stashes">贮藏列表 (%1$d)</string>
+    <string name="git_no_stash">没有贮藏记录</string>
+    <string name="git_stash_create">新建贮藏</string>
+    <string name="git_stash_apply">应用贮藏</string>
+    <string name="git_stash_drop">丢弃贮藏</string>
+    <string name="git_stash_drop_confirm">确定丢弃 stash@{%1$d}？</string>
+    <string name="git_stash_op">正在处理贮藏…</string>
+
+    <!-- 设置 -->
+    <string name="git_config">用户配置</string>
+    <string name="git_save">保存</string>
+    <string name="git_saving">正在保存…</string>
+    <string name="git_danger_zone">危险操作</string>
+    <string name="git_reset">重置</string>
+    <string name="git_resetting">正在重置…</string>
+    <string name="git_reset_soft_desc">保留暂存区和工作区</string>
+    <string name="git_reset_mixed_desc">保留工作区，清空暂存区</string>
+    <string name="git_reset_hard_desc">丢弃所有更改（不可恢复）</string>
+    <string name="git_clean">清理未跟踪文件</string>
+    <string name="git_clean_confirm">确定删除所有未跟踪的文件和目录？此操作不可恢复。</string>
+    <string name="git_cleaning">正在清理…</string>
+    <string name="git_clean_result">已清理 %1$d 个未跟踪项</string>
 </resources>

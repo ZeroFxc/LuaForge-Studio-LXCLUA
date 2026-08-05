@@ -523,6 +523,8 @@ typedef struct AstClassMember {
     AstExpr *property_value;   /**< 属性初始值 */
     AstStmt *nested_class;     /**< 嵌套类定义的 AST 语句节点 */
   } u;
+  AstExpr **decorators;    /**< 成员装饰器表达式列表（可为 NULL） */
+  int ndecorators;         /**< 装饰器个数 */
   int line;
 } AstClassMember;
 
