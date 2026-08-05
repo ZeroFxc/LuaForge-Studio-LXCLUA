@@ -151,10 +151,29 @@ suspend fun compileCurrentFile(
 
 /**
  * 构建项目核心逻辑
+ * @param logCallback 日志回调，将构建日志实时推送到 UI
  */
-suspend fun buildProject(context: Context, projectPath: String): String =
-    withContext(Dispatchers.IO) {
-        LogCatcher.i("CodeEditScreen", "开始构建项目，路径: $projectPath")
+suspend fun buildProject(
+    context: Context,
+    projectPath: String,
+    logCallback: (String) -> Unit = {}
+): String {
+    // 设置 LogCatcher 监听器，将构建日志推送到 UI
+    val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+    LogCatcher.setLogListener { level, tag, message ->
+        val time = timestamp.format(java.util.Date())
+        val levelTag = when (level) {
+            "ERROR" -> "[E]"
+            "WARN" -> "[W]"
+            "INFO" -> "[I]"
+            else -> "[D]"
+        }
+        logCallback("$time $levelTag $tag: $message")
+    }
+
+    return try {
+        withContext(Dispatchers.IO) {
+            LogCatcher.i("CodeEditScreen", "开始构建项目，路径: $projectPath")
 
         // 触发构建开始钩子
         EventManager.fireEvent(PluginEvents.ON_BUILD_START, projectPath, "project")
@@ -347,7 +366,11 @@ val mavenDependencies = try {
             EventManager.fireEvent(PluginEvents.ON_BUILD_ERROR, projectPath, errorResult, "project")
             errorResult
         }
+    } finally {
+        // 清除日志监听器
+        LogCatcher.setLogListener(null)
     }
+}
 
 /**
  * 备份项目核心逻辑

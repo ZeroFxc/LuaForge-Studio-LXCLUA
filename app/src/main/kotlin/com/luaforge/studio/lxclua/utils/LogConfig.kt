@@ -58,6 +58,20 @@ object LogCatcher {
     @Volatile
     private var isInitialized = false
 
+    /**
+     * 日志监听器，用于将日志实时推送到 UI（如构建日志面板）
+     */
+    @Volatile
+    private var logListener: ((level: String, tag: String, message: String) -> Unit)? = null
+
+    /**
+     * 设置日志监听器。在构建期间设置，构建完成后清除。
+     */
+    @JvmStatic
+    fun setLogListener(listener: ((level: String, tag: String, message: String) -> Unit)?) {
+        logListener = listener
+    }
+
     @JvmStatic
     fun updateConfig(config: LogConfigState) {
         logConfig = config
@@ -119,6 +133,7 @@ object LogCatcher {
     @JvmStatic
     fun d(tag: String, message: String) {
         android.util.Log.d(tag, message)
+        logListener?.invoke("DEBUG", tag, message)
         if (shouldLog()) {
             writeToFile("DEBUG", tag, message)
         }
@@ -127,6 +142,7 @@ object LogCatcher {
     @JvmStatic
     fun i(tag: String, message: String) {
         android.util.Log.i(tag, message)
+        logListener?.invoke("INFO", tag, message)
         if (shouldLog()) {
             writeToFile("INFO", tag, message)
         }
@@ -135,6 +151,7 @@ object LogCatcher {
     @JvmStatic
     fun w(tag: String, message: String) {
         android.util.Log.w(tag, message)
+        logListener?.invoke("WARN", tag, message)
         if (shouldLog()) {
             writeToFile("WARN", tag, message)
         }
@@ -144,9 +161,10 @@ object LogCatcher {
     @JvmOverloads
     fun e(tag: String, message: String, exception: Exception? = null) {
         android.util.Log.e(tag, message, exception)
+        val exceptionInfo =
+            exception?.let { " - ${it.message}\n${it.stackTraceToString()}" } ?: ""
+        logListener?.invoke("ERROR", tag, "$message$exceptionInfo")
         if (shouldLog()) {
-            val exceptionInfo =
-                exception?.let { " - ${it.message}\n${it.stackTraceToString()}" } ?: ""
             writeToFile("ERROR", tag, "$message$exceptionInfo")
         }
     }
