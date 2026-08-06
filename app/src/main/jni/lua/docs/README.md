@@ -738,6 +738,14 @@ int lua_dump_obfuscated(lua_State *L, lua_Writer writer, void *data,
 
 ## Detailed Documentation
 
+### Project-Level Documentation
+- [Project README](../README.md) -- Project overview, structure, and quick navigation
+- [Project Architecture](../PROJECT_ARCHITECTURE.md) -- Overall architecture design with UI-Business-Native layers
+- [Android Development Guide](../ANDROID_DEVELOPMENT.md) -- Android app development setup, patterns, and workflows
+- [Lua VM Integration](../LUA_VM_INTEGRATION.md) -- JNI bridge details, script execution, and Java↔Lua interaction
+- [Build and Debug Guide](../BUILD_AND_DEBUG.md) -- Build commands, debugging tools, and troubleshooting
+- [LuaCompose Examples](../luacompose_examples/README.md) -- 35 examples with complete API reference
+
 ### Getting Started
 - [README](README.md) -- Project overview, features, and syntax extensions
 - [Tutorial](TUTORIAL.md) -- Quick start and basic usage guide

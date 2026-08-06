@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import androidx.core.content.FileProvider
 import com.luaforge.studio.lxclua.R
 import com.luaforge.studio.lxclua.build.ApkBuilder
@@ -280,8 +281,8 @@ val mavenDependencies = try {
             return@withContext "error: ${context.getString(R.string.code_editor_main_lua_not_found)}"
         }
 
-        // 设置输出路径，使用应用外部存储目录
-        val buildDir = File(context.getExternalFilesDir(null), "build")
+        // 设置输出路径，使用公共存储目录 /sdcard/LXC-LUA/build/
+        val buildDir = File(Environment.getExternalStorageDirectory(), "LXC-LUA/build")
         if (!buildDir.exists()) {
             buildDir.mkdirs()
         }
@@ -379,8 +380,8 @@ val mavenDependencies = try {
 suspend fun backupProject(context: Context, projectPath: String): String = withContext(Dispatchers.IO) {
     LogCatcher.i("CodeEditScreen", "开始备份项目，路径: $projectPath")
 
-    // 创建备份目录
-    val backupDir = File(context.getExternalFilesDir(null), "backup")
+    // 创建备份目录，使用公共存储目录 /sdcard/LXC-LUA/backups/
+    val backupDir = File(Environment.getExternalStorageDirectory(), "LXC-LUA/backups")
     if (!backupDir.exists()) {
         val created = backupDir.mkdirs()
         if (!created) {
